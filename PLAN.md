@@ -2,7 +2,7 @@
 
 A staged path from an empty directory to a runnable gremlin: it converses, calls tools, follows skills, fires scheduled work via groundhog, and archives transcripts cleanly. That is the foundation. Everything else (Telegram bridges, attachments, voice, multi-gremlin delegation) is built on top without restructuring.
 
-The example gremlin is `.scribe/`. The example lives at the gremlin repo root for development; in real use a gremlin is dropped into any working directory.
+The repo dogfoods one gremlin at `.gremlin/` — the canonical reference. To run a gremlin of your own, you copy that folder into a host directory (`./init.sh ~/somewhere` or `cp -r`) and edit it there. **Don't run `say` against the repo's reference `.gremlin/`** — its purpose is to stay generic. See the README for the full convention.
 
 LLM-agnosticism is preserved by keeping every LLM-specific concern behind one helper (`bin/llm.sh`) and keeping skills as plain markdown.
 
@@ -10,7 +10,7 @@ LLM-agnosticism is preserved by keeping every LLM-specific concern behind one he
 
 | Stage | Outcome                                                                         |
 |-------|---------------------------------------------------------------------------------|
-| 1     | Skeleton: `.scribe/` laid down, nest and groundhog initialized, llm.sh stubbed. |
+| 1     | Skeleton: `.gremlin/` laid down, nest and groundhog initialized, llm.sh stubbed. |
 | 2     | Tend loop: claim items, build prompt, reply to `.nest/out/`, append transcript. |
 | 3     | Local CLI bridge (`say`): end-to-end conversation through the file system.      |
 | 4     | Runner: `run.sh` backgrounds loops; `.paused` flag for clean shutdown.          |
@@ -25,19 +25,21 @@ Each stage gets a thread in the loom. Stitches are prefixed `sNN-` so loose ends
 
 ## Stage 1 — skeleton
 
-**Outcome.** `.scribe/` exists with the canonical layout. Nothing runs yet. A `bash -n` clean across the stubs.
+**Outcome.** `.gremlin/` exists with the canonical layout. Nothing runs yet. A `bash -n` clean across the stubs.
 
 **Stitches.**
 
-- `s01-layout` — Create `.scribe/` with `bin/`, `tools/`, `skills/`, `transcript-archive/`. Touch empty `transcript.md`. Write a one-paragraph stub `tend.md`.
-  - *Verify:* `ls .scribe/` shows the canonical top-level entries.
-- `s02-nest-init` — Copy `nestling.sh` into `.scribe/.nest/`. Run its `ensure`.
-  - *Verify:* `ls .scribe/.nest/` shows `in/ out/ dropped/ nestling.sh`.
-- `s03-groundhog-init` — Copy `groundhog.sh` into `.scribe/.groundhog/`. Run its `init`.
-  - *Verify:* `ls .scribe/.groundhog/` shows `schedule/ out/ fired/ groundhog.sh`.
+- `s01-layout` — Create `.gremlin/` at the repo root with: a generic `gremlin.md` (placeholder identity), an empty `context/` folder, `bin/`, `tools/`, `skills/`, `transcript-archive/`, and an empty `transcript.md`.
+  - *Verify:* `ls .gremlin/` shows the canonical top-level entries.
+- `s02-nest-init` — Copy `nestling.sh` into `.gremlin/.nest/`. Run its `ensure`. Write `.gremlin/.nest/tend.md` describing the *tending process* for a gremlin's nest — generic, protocol-level, points at `../gremlin.md`, `../context/`, `../skills/INDEX.md`, `../tools/README.md`, `../transcript.md`. **Identity does not belong in `tend.md`.**
+  - *Verify:* `ls .gremlin/.nest/` shows `in/ out/ dropped/ nestling.sh tend.md`.
+- `s03-groundhog-init` — Copy `groundhog.sh` into `.gremlin/.groundhog/`. Run its `init`.
+  - *Verify:* `ls .gremlin/.groundhog/` shows `schedule/ out/ fired/ groundhog.sh`.
 - `s04-llm-helper` — `bin/llm.sh "<prompt>"`: read stdin or args, call the configured LLM CLI (default `claude -p`), print reply on stdout. Single seam.
   - *Verify:* `echo "say hi" | bin/llm.sh` returns a non-empty reply.
 - `s05-acceptance-1` — Walk the layout: every protocol's invariants hold; every script is `bash -n` clean.
+- `s05a-init-script` — Write `init.sh` at the repo root: a one-liner that places `.gremlin/` inside a target host directory (`cp -r "$(dirname "$0")/.gremlin" "$1/.gremlin"`). Document in the README that real use means running outside the repo, never against the reference instance.
+  - *Verify:* `./init.sh /tmp/test-host` produces `/tmp/test-host/.gremlin/`.
 
 ---
 
@@ -47,7 +49,7 @@ Each stage gets a thread in the loom. Stitches are prefixed `sNN-` so loose ends
 
 **Stitches.**
 
-- `s06-tend-loop` — `bin/tend-loop.sh`: list ready items, claim oldest, build prompt (`tend.md` + `transcript.md` + the item body), call `bin/llm.sh`, write reply to `.nest/out/<ts>.md` via `.landing` rename, append assistant turn to transcript, complete the item.
+- `s06-tend-loop` — `bin/tend-loop.sh`: list ready items, claim oldest, build prompt (`gremlin.md` + every `context/*.md` (sorted) + `transcript.md` + the item body — skills/tools join in later stages), call `bin/llm.sh`, write reply to `.nest/out/<ts>.md` via `.landing` rename, append assistant turn to transcript, complete the item. If `context/` is empty or absent, the concatenation is a no-op.
   - *Verify:* Manual end-to-end with one item.
 - `s07-transcript-format` — Settle the on-disk transcript format (`## user — <iso>`, `## assistant — <iso>`, blank line between). Single `>>` per turn so concurrent appends don't interleave.
   - *Verify:* Two consecutive items processed; transcript reads in order.
@@ -57,12 +59,12 @@ Each stage gets a thread in the loom. Stitches are prefixed `sNN-` so loose ends
 
 ## Stage 3 — local CLI bridge
 
-**Outcome.** `./.scribe/say "hello"` writes a message into `.nest/in/`, blocks until a reply lands in `.nest/out/`, prints the reply. End-to-end conversation without launching anything.
+**Outcome.** `./.gremlin/say "hello"` writes a message into `.nest/in/`, blocks until a reply lands in `.nest/out/`, prints the reply. End-to-end conversation without launching anything.
 
 **Stitches.**
 
 - `s09-say-input` — `say` script: take a message (arg or stdin), append a `## user` turn to `transcript.md`, write the message to `.nest/in/<ts>.md` via `.landing` rename.
-  - *Verify:* `./.scribe/say "hi"` produces a file in `in/` and a transcript entry.
+  - *Verify:* `./.gremlin/say "hi"` produces a file in `in/` and a transcript entry.
 - `s10-say-output` — Watch `.nest/out/` for new files (skip `.landing`). When one appears: print it, then `mv` it to `.nest/out/sent/` (so the same reply isn't reprinted).
   - *Verify:* Drop a file in `.nest/out/` by hand; `say` reads it once, prints it, moves it to `sent/`.
 - `s11-end-to-end` — Run `tend-loop.sh` in one terminal; `say "hi"` in another. Reply appears.
@@ -73,7 +75,7 @@ Each stage gets a thread in the loom. Stitches are prefixed `sNN-` so loose ends
 
 ## Stage 4 — runner
 
-**Outcome.** `./.scribe/run.sh` brings every loop up; SIGINT brings them down with no orphans. A `.paused` flag idles the loops without killing them.
+**Outcome.** `./.gremlin/run.sh` brings every loop up; SIGINT brings them down with no orphans. A `.paused` flag idles the loops without killing them.
 
 **Stitches.**
 
@@ -164,6 +166,6 @@ These are explicitly *not* in the foundation. Each is a clean addition once the 
 
 - **Telegram (or any other) bridge.** Replace `say` with `bin/bridge-in.sh` + `bin/bridge-out.sh` reading `meta.json`.
 - **Attachments.** Items in `.nest/in/` and `.nest/out/` become directories. The nest protocol already accepts both.
-- **Voice in/out.** A transcribe tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
+- **Voice in/out.** A trangremlin tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
 - **A second gremlin in the same parent.** `mkdir`, copy skeleton, edit `tend.md`. Maybe a delegate skill.
 - **Shared libraries across gremlins.** Symlinks. No protocol change.

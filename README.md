@@ -2,7 +2,7 @@
 
 A gremlin is a folder you can talk to.
 
-Drop a dot folder into any working directory and that directory now has an agent in it. Drop another dot folder next to the first and you have two agents. There is no supervisor, no canopy, no registry — composition is adjacency.
+Drop a `.gremlin/` into any directory and that directory now hosts an agent. Two host directories, side by side, each with their own `.gremlin/`, give you two agents. There is no supervisor, no canopy, no registry — composition is adjacency.
 
 Built on `nestlings`, `groundhog`, and `loom`. LLM-agnostic by construction: nothing in the layout depends on which model runs the tender.
 
@@ -10,36 +10,37 @@ Built on `nestlings`, `groundhog`, and `loom`. LLM-agnostic by construction: not
 
 The folder *is* the agent.
 
-- An incoming message becomes a file in `.<name>/.nest/in/`.
-- The tender reads `tend.md` and `transcript.md`, replies into `.nest/out/`.
+- An incoming message becomes a file in `.gremlin/.nest/in/`.
+- The tender reads the gremlin's identity, context, skills, tools, and transcript, replies into `.nest/out/`.
 - A bridge ships items between the outside world and the nest.
 - A groundhog provides scheduled messages and recurring tasks.
 - Tools are bash scripts. Skills are markdown procedures.
 
 No database, no queue, no MCP, no daemon coordination. Files and atomic moves.
 
-## A gremlin is a dot folder
+## A gremlin lives in `.gremlin/`
 
-Each gremlin is a single self-contained directory whose name starts with `.`. The dot is the convention: it marks the folder as a system folder, the way `.git/` and `.nest/` do. The folder name *is* the gremlin's name.
+`.gremlin/` is the protocol marker — same role as `.nest/`, `.loom/`, and `.groundhog/`. Any folder hosting a gremlin contains a `.gremlin/`. The **host folder's name** is the gremlin's identity from the outside; what's *inside* `.gremlin/` defines the agent.
 
 ```
-some-working-directory/
+~/Desktop/research/           # the host folder — gremlin's identity from outside
   ...your real files...
-  .scribe/              # one gremlin
-  .scout/               # another gremlin, same parent
+  .gremlin/                   # the agent itself
+  .loom/                      # (unrelated) you might also use loom for your own work here
 ```
 
-Each gremlin runs its own loops. Each has its own bot, its own nest, its own groundhog, its own transcript, its own tools and skills. Two gremlins in the same parent see each other through the file system — delegation is `mv item ../.scout/.nest/in/`.
+To have two gremlins, use two host folders, each with its own `.gremlin/`. They see each other through the file system: delegation is `mv item ../other-host/.gremlin/.nest/in/`. There is no shared state, no shared process — two gremlins in the same parent directory are independent agents that happen to share a filesystem.
 
-There is no enforced "shared/" folder. If two gremlins want to share a tool, symlink it. If you want a global library, keep it in `~/.config/gremlin/` and symlink from there. The protocol is silent on where shared things live.
+There is no enforced "shared/" folder for cross-gremlin tools or skills. If two gremlins want to share something, symlink it. The suggested convention for shared *context* (facts about you, your stakeholders, your environment) is `~/.gremlin/context/`, with each gremlin's `context/<file>.md` symlinking out to it. The protocol does not enforce this — it's a pointer, easy to ignore.
 
 ## Single gremlin layout (canonical)
 
 ```
-.scribe/
+.gremlin/
+  gremlin.md            # identity: personality, purpose, voice
+  context/              # optional: facts. user, stakeholders, environment, glossary
   run.sh                # backgrounds the loops; traps SIGINT
   say                   # local CLI bridge: write a message, get a reply
-  tend.md               # identity, scope, voice
   transcript.md         # append-only conversation log
   transcript-archive/   # rotated transcripts
   bin/
@@ -56,13 +57,25 @@ There is no enforced "shared/" folder. If two gremlins want to share a tool, sym
     <skill>.md          # one procedure per file
   .nest/
     nestling.sh
+    tend.md             # how to tend this nest (protocol-level, not identity)
     in/ out/ dropped/
   .groundhog/
     groundhog.sh
     schedule/ out/ fired/
 ```
 
-The top of `.scribe/` holds only what isn't owned by a nested protocol: the runner, the bridges, conversation state, and the libraries.
+The top of `.gremlin/` holds only what isn't owned by a nested protocol: the identity, the context, the runner, the bridges, conversation state, and the libraries.
+
+## Four kinds of writing, no overlap
+
+A gremlin is configured through four distinct files/folders. Knowing which goes where keeps each one short and stable.
+
+- **`gremlin.md`** — *who this gremlin is.* Personality, purpose, voice. Varies per gremlin. Always loaded.
+- **`context/*.md`** — *what this gremlin knows.* Facts: user profile, stakeholders, environment, glossary. Varies per gremlin (or shared via symlink). Always loaded. No frontmatter, no triggers, no index — every file in `context/` is concatenated into every prompt.
+- **`skills/<name>.md`** — *what this gremlin can do.* Procedures, with YAML triggers. Loaded selectively via `INDEX.md`.
+- **`.nest/tend.md`** — *how a gremlin's nest is tended.* The prompt-assembly recipe. Protocol-level, mostly stable across gremlins.
+
+Skill = procedure (when, how). Context = facts (always-on). Identity = self (always-on, framing). Tend = process (how to handle this kind of nest).
 
 ## The seams
 
@@ -102,7 +115,7 @@ When the user asks to be reminded, write a file at:
 ...
 ```
 
-`bin/index-skills.sh` walks `skills/*.md` and builds `skills/INDEX.md` — a list of triggers plus inlined `triggers: [always]` skills (identity, reply style, refusal policy). The tender's prompt always includes `INDEX.md` and reads individual skill files when a trigger matches.
+`bin/index-skills.sh` walks `skills/*.md` and builds `skills/INDEX.md` — a list of triggers plus inlined `triggers: [always]` skills (reply style, refusal policy). The tender's prompt always includes `INDEX.md` and reads individual skill files when a trigger matches.
 
 Tool vs skill: **tool = script you run, skill = procedure you follow.**
 
@@ -118,7 +131,7 @@ Each loop is a single shell script. They never call each other; they share the f
 
 1. List ready items via `.nest/nestling.sh list`; bail if empty.
 2. Claim the oldest item.
-3. Build the prompt: `tend.md` + `skills/INDEX.md` + `tools/README.md` + `transcript.md` + the item.
+3. Build the prompt: `gremlin.md` + `context/*.md` (sorted) + `skills/INDEX.md` + `tools/README.md` + `transcript.md` + the item.
 4. Pipe to `bin/llm.sh`; capture reply.
 5. Write reply to `.nest/out/<timestamp>.md` via `.landing` rename.
 6. Append `## assistant — <iso8601>\n<reply>\n\n` to `transcript.md`.
@@ -137,17 +150,34 @@ Backgrounds each loop, `trap 'kill 0' INT TERM`, `wait`. Runs the indexer at sta
 
 ## Files
 
-### `tend.md`
+### `gremlin.md`
 
-One paragraph telling the tender how to act in this nest. Read on every tend pass.
+The gremlin's identity. One short document covering personality, purpose, and voice. Read on every tend pass; sits at the top of the prompt because it frames how everything below is interpreted.
 
 ```markdown
-You are the scribe. You take notes for the user and recall them on demand.
+# gremlin
 
-Read skills/INDEX.md for the procedures available to you.
-Read tools/README.md for the scripts you can run.
-Reply briefly.
+You are a research assistant. You help the user keep track of papers, draft notes,
+and resurface ideas you've discussed before. You are concise, slightly wry, and you
+ask before doing anything that costs more than a second to undo.
 ```
+
+### `context/`
+
+Optional. Facts the gremlin should always know: a profile of the user, key stakeholders, environment notes, a glossary of project-specific terms. Every file in `context/*.md` is concatenated into every prompt — no frontmatter, no triggers, no index.
+
+If you want the same context across multiple gremlins, the suggested convention is `~/.gremlin/context/` as the shared library. Each gremlin's `context/user.md` (etc.) is a symlink:
+
+```
+~/Desktop/research/.gremlin/context/user.md  ->  ~/.gremlin/context/user.md
+~/Desktop/kitchen/.gremlin/context/user.md   ->  ~/.gremlin/context/user.md
+```
+
+The protocol does not enforce this location; it's a pointer. Symlink wherever makes sense.
+
+### `.nest/tend.md`
+
+The nest's tending instructions: how a gremlin's nest is processed, in protocol terms. Generic; mostly stable across gremlins. Tells the tender to assemble the prompt from `../gremlin.md`, `../context/*.md`, `../skills/INDEX.md`, `../tools/README.md`, `../transcript.md`, and the item — then call `../bin/llm.sh` and write the reply to `out/`. Identity does **not** belong here; that's `gremlin.md`'s job.
 
 ### `transcript.md`
 
@@ -168,7 +198,7 @@ There is no automatic rotation. To start a fresh session: `bin/archive.sh` touch
 ## Data flow
 
 **You send a message.**
-`say` → `.nest/in/` + `transcript.md` → `tend-loop.sh` reads transcript, skills, tools, replies → `.nest/out/` + `transcript.md` → `say` prints the reply.
+`say` → `.nest/in/` + `transcript.md` → `tend-loop.sh` reads identity, context, skills, tools, transcript, replies → `.nest/out/` + `transcript.md` → `say` prints the reply.
 
 **Scheduled outbound ("morning ping at 8am").**
 `.groundhog/schedule/daily/08/morning/message.md` → `tick-loop.sh` → `.nest/out/` → bridge. No agent invocation.
@@ -179,13 +209,35 @@ There is no automatic rotation. To start a fresh session: `bin/archive.sh` touch
 **Self-pacing follow-up.**
 Tender, mid-conversation, follows `skills/remind-me.md` and writes `.groundhog/schedule/once/2026-04-28/follow-up/instructions.md`. Surfaces tomorrow as scheduled tending.
 
+## Use a gremlin yourself
+
+This repo dogfoods one gremlin at `.gremlin/` — the canonical reference. To run a gremlin of your own, copy that folder into any host directory:
+
+```
+./init.sh ~/Desktop/research
+# or, equivalently:
+cp -r .gremlin ~/Desktop/research/.gremlin
+```
+
+Then edit your `gremlin.md`, drop facts into `context/`, and start it:
+
+```
+cd ~/Desktop/research
+./.gremlin/run.sh
+./.gremlin/say "hello"
+```
+
+**Don't run `say` against this repo's reference `.gremlin/`.** Its purpose is to be a clean, generic example you copy from. If you do run `say` against it, you'll see `transcript.md` change in `git status` — that's the visible signal to copy the gremlin out and run it there instead.
+
+This is the entire dev/use safety story: convention, not tooling. There is no `.gitignore`, no pre-commit hook, no sanitising script. The repo stays clean because nobody runs personal work against it.
+
 ## Composition
 
-A second gremlin is `mkdir .scout/`, copy the same skeleton, edit `tend.md`. Start its `run.sh`. Two folders, two loops, one parent directory.
+A second gremlin is a second host folder containing its own `.gremlin/`. Two parallel hosts; two `run.sh`s; one filesystem.
 
-Inter-gremlin delegation is one `mv`: `mv request.md ../.scout/.nest/in/`. The receiver picks it up next tend pass. Replies go to the requester's `in/`, never to one's own `out/` (that's the nestling protocol).
+Inter-gremlin delegation is one `mv`: `mv request.md ../other-host/.gremlin/.nest/in/`. The receiver picks it up next tend pass. Replies go to the requester's `.nest/in/`, never to one's own `out/` (that's the nestling protocol).
 
-There is no shared state, no shared process, no shared anything. Two gremlins in the same parent are independent agents that happen to share a file system.
+There is no shared state, no shared process, no shared anything. Composition is adjacency.
 
 ## What's foundational, what's an extension
 
@@ -196,13 +248,13 @@ Extensions slot in without restructuring:
 - **Telegram (or any other) bridge** — replace `say` with `bin/bridge-in.sh` + `bin/bridge-out.sh` reading `meta.json`.
 - **Attachments** — items in `.nest/in/` and `.nest/out/` become directories. The protocol already accepts both.
 - **Voice (whisper in, TTS out)** — a transcribe tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
-- **A second gremlin** — `mkdir`. Maybe a delegate skill.
+- **A second gremlin** — another host folder. Maybe a delegate skill.
 - **Shared libraries** — symlinks. No protocol change.
 
 ## Why this composes
 
 - **Bridges are dumb.** They translate bytes between a platform and the file system. They know nothing about the LLM, prompts, or context.
-- **The tender is platform-agnostic.** Swap the bridge to change platform; nests, groundhogs, transcripts, tools, and skills are unchanged.
+- **The tender is platform-agnostic.** Swap the bridge to change platform; nests, groundhogs, transcripts, tools, skills, identity, and context are unchanged.
 - **The tender is LLM-agnostic.** Skills are markdown, tools are bash, the prompt is a concatenation of files. Swap `llm.sh` to change models.
-- **Gremlins are siblings.** Each is a complete unit. Adding one is `mkdir`. Removing one is `rm -rf`. Cross-gremlin work is `mv`.
-- **Debugging is `ls` and `cat`.** Every piece of state — pending work, schedule, tools, skills, conversation — is a visible file.
+- **Gremlins are folders.** Each is a complete unit. Adding one is `cp -r`. Removing one is `rm -rf`. Cross-gremlin work is `mv`.
+- **Debugging is `ls` and `cat`.** Every piece of state — pending work, schedule, tools, skills, identity, context, conversation — is a visible file.
