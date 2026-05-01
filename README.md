@@ -93,7 +93,7 @@ Telegram, Discord, email, web — all later additions, each just another script 
 
 A tool is a bash script that takes args (or stdin) and writes text to stdout. Errors go to stderr with a non-zero exit. That's the whole interface. Pure functions of args → stdout; state lives in nests and transcripts.
 
-`tools/README.md` is the menu the tender reads. The runner invokes the tender with `--allowedTools "Bash(./tools/*)"` (or the LLM equivalent) so the agent never gets unrestricted shell.
+`tools/README.md` is the menu the tender reads. A gremlin's sandbox is its host directory — broad bash within is fine. `bin/llm.sh` invokes the tender with `--allowedTools "Bash"` (or the equivalent flag for whichever model CLI is wired in) so it can read skills on demand, run tools, and write scheduled work. Tools are the *named* surface; the rest of the host directory is the *implicit* one.
 
 ### Skills (`skills/<name>.md`)
 
@@ -197,17 +197,43 @@ There is no automatic rotation. To start a fresh session: `bin/archive.sh` touch
 
 ## Data flow
 
-**You send a message.**
-`say` → `.nest/in/` + `transcript.md` → `tend-loop.sh` reads identity, context, skills, tools, transcript, replies → `.nest/out/` + `transcript.md` → `say` prints the reply.
+Four flows compose the runtime. They share no state besides the file system; both loops honour `.paused`.
 
-**Scheduled outbound ("morning ping at 8am").**
-`.groundhog/schedule/daily/08/morning/message.md` → `tick-loop.sh` → `.nest/out/` → bridge. No agent invocation.
+**(1) `say` round-trip — you talk, the gremlin replies.**
 
-**Scheduled tending ("brief me at 9am").**
-`.groundhog/schedule/daily/09/briefing/instructions.md` → `tick-loop.sh` → `.nest/in/` → `tend-loop.sh` reads instructions, runs tools, replies.
+```
+  say "..."   ──►  transcript.md  (## user)
+              ──►  .nest/in/<ts>.md
+                                  ──(tend-loop)──►  .nest/out/<ts>.md
+                                                ──►  transcript.md  (## assistant)
+  say polls .nest/out/, prints the new file, moves it to out/sent/.
+```
 
-**Self-pacing follow-up.**
-Tender, mid-conversation, follows `skills/remind-me.md` and writes `.groundhog/schedule/once/2026-04-28/follow-up/instructions.md`. Surfaces tomorrow as scheduled tending.
+**(2) Scheduled outbound — a future message, no agent invocation.**
+
+```
+  .groundhog/schedule/once/<date>/foo/message.md
+       ──(groundhog tick)──►  .groundhog/out/foo-<date>/message.md
+       ──(tick-loop)──────►  .nest/out/<ts>.md
+       ──(say --listen / bridge)──►  delivered
+```
+
+**(3) Scheduled tending — a future request the gremlin acts on.**
+
+```
+  .groundhog/schedule/daily/09/briefing/instructions.md
+       ──(groundhog tick)──►  .groundhog/out/briefing-<date>/instructions.md
+       ──(tick-loop)──────►  .nest/in/briefing-<date>/
+       ──(tend-loop)──────►  .nest/out/<ts>.md   (assistant reply)
+```
+
+**(4) Self-pacing follow-up — the gremlin schedules its own future work.**
+
+```
+  say "remind me to ..."  ──(flow 1)──►  tend-loop runs `remind-me` skill,
+                                          writes .groundhog/schedule/once/<date>/<slug>/message.md
+  Tomorrow:  that file fires through flow (2) — user sees the reminder.
+```
 
 ## Use a gremlin yourself
 

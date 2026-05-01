@@ -33,4 +33,7 @@ trap shutdown INT TERM
 ( while sleep 5; do "$GREMLIN_DIR/bin/tend-loop.sh"; done ) &
 pids+=($!)
 
+( while sleep 60; do "$GREMLIN_DIR/bin/tick-loop.sh"; done ) &
+pids+=($!)
+
 wait
