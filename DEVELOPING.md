@@ -67,6 +67,21 @@ Acceptance stitches at the end of a thread are the gates.
 - **`git status` is the canary.** From `~/repos/gremlin`, if anything under the personal-leakable paths changes, you ran something against the wrong copy. `git checkout -- <path>` to discard.
 - **Personalisation lives only outside the repo.**
 
+## Real sandboxing (optional)
+
+The protocol does not enforce a sandbox; `bin/llm.sh` invokes claude with unrestricted bash. The convention is "host a gremlin in a directory where broad reach is acceptable" — fine for personal use, weak as security.
+
+If you want actual isolation, wrap `bin/llm.sh` (or `run.sh`) with one of:
+
+- **`sandbox-exec`** (macOS, built-in) — declarative profile language. Restrict file access to the host dir; deny everything else. Tightest fit, no install.
+- **`bwrap`** (Linux, bubblewrap) — user-namespace isolation. Bind-mount only the host dir into the sandbox.
+- **Container** (Docker / Podman) — heaviest but most portable. Bind-mount the host dir, run `run.sh` inside.
+- **Dedicated UNIX user** — `useradd`, `chown` the host dir, run `run.sh` via `sudo -u`. Filesystem permissions do the work; no extra tooling.
+- **`firejail`** (Linux) — profile-based, easier than bwrap.
+- **`chroot`** — old-school; filesystem-only.
+
+The seam is `bin/llm.sh`. Whichever you pick, the rest of the gremlin doesn't notice.
+
 ## Promoting personal-copy work to canonical
 
 When something in your personal copy is worth shipping:

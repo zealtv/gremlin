@@ -93,7 +93,7 @@ Telegram, Discord, email, web — all later additions, each just another script 
 
 A tool is a bash script that takes args (or stdin) and writes text to stdout. Errors go to stderr with a non-zero exit. That's the whole interface. Pure functions of args → stdout; state lives in nests and transcripts.
 
-`tools/README.md` is the menu the tender reads. A gremlin's sandbox is its host directory — broad bash within is fine. `bin/llm.sh` invokes the tender with `--allowedTools "Bash"` (or the equivalent flag for whichever model CLI is wired in) so it can read skills on demand, run tools, and write scheduled work. Tools are the *named* surface; the rest of the host directory is the *implicit* one.
+`tools/README.md` is the menu the tender reads. `bin/llm.sh` invokes the tender with `--allowedTools "Bash"` (unrestricted) so it can read skills on demand, run tools, and write scheduled work. There is **no enforced sandbox** — gremlins are gremlins. The convention is that you host one in a directory where broad bash is fine. Real isolation belongs outside the protocol (see "Sandboxing & sharing" and DEVELOPING.md). Tools are the *named* surface; the rest of the host directory is the *implicit* one.
 
 ### Skills (`skills/<name>.md`)
 
@@ -231,6 +231,25 @@ A second gremlin is a second host folder containing its own `.gremlin/`. Two par
 Inter-gremlin delegation is one `mv`: `mv request.md ../other-host/.gremlin/.nest/in/`. The receiver picks it up next tend pass. Replies go to the requester's `.nest/in/`, never to one's own `out/` (that's the nestling protocol).
 
 There is no shared state, no shared process, no shared anything. Composition is adjacency.
+
+### Sandboxing & sharing
+
+Sandboxing is convention, not enforcement. `bin/llm.sh` runs the model with unrestricted bash; the rule is "host a gremlin somewhere broad reach is acceptable." Anything stricter belongs outside the protocol — see DEVELOPING.md for OS-level options.
+
+When two gremlins should talk, or a gremlin should reach a shared resource, make the reach **visible** with a symlink. The link is the capability; removing it is revocation; `ls` is the audit trail.
+
+Sibling delegation:
+
+```
+~/Desktop/house/gremlin1/.gremlin/peers/gremlin2
+    →  ../../../gremlin2/.gremlin/.nest/in/
+```
+
+A skill in `gremlin1` writes to `peers/gremlin2/<item>` and the sibling picks it up next tend pass. Same shape with `children/` from a coordinator (a `house/` gremlin orchestrating its two children).
+
+Shared context follows the same pattern: `~/.gremlin/context/` is a personal library; each gremlin's `context/<file>.md` symlinks out to it.
+
+Prefer a coordinator over loose sibling-to-sibling links when coordination is non-trivial — the coordinator's transcript and skills become the place coordination logic lives, instead of being implicit in the filesystem reach.
 
 ## What's foundational, what's an extension
 
