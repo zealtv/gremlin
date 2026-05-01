@@ -38,6 +38,34 @@ print_and_archive() {
   mv "$f" "$SENT/"
 }
 
+# --- slash command dispatch ---------------------------------------------
+# Intercept /foo-prefixed messages: run commands/foo.sh with the rest as
+# args. Bypasses the LLM entirely — slash messages do not append to the
+# transcript and do not enter .nest/in/.
+if [ "$#" -gt 0 ] && [ "${1#/}" != "$1" ]; then
+  rest="$*"
+  rest="${rest#/}"
+  if [ -z "$rest" ]; then
+    echo "usage: $0 /<command> [args...]   (try /help)" >&2
+    exit 2
+  fi
+  cmd="${rest%% *}"
+  if [ "$cmd" = "$rest" ]; then
+    args=()
+  else
+    # shellcheck disable=SC2206
+    args=(${rest#"$cmd "})
+  fi
+  COMMANDS="$GREMLIN_DIR/commands"
+  script="$COMMANDS/$cmd.sh"
+  if [ -x "$script" ]; then
+    exec "$script" "${args[@]}"
+  fi
+  echo "unknown command: /$cmd" >&2
+  echo "try /help" >&2
+  exit 1
+fi
+
 # --- listen mode ---------------------------------------------------------
 if [ "${1:-}" = "--listen" ] || [ "${1:-}" = "-l" ]; then
   snapshot="$(mktemp)"
