@@ -13,4 +13,6 @@ Build the prompt by concatenating, in order:
 
 Pipe to `../bin/llm.sh`. Write the reply to `out/<ts>.md` via `.landing` rename. Append the assistant turn to `../transcript.md`.
 
+When a trigger listed in `skills/INDEX.md` matches the user's request, the tender should `cat ../skills/<name>.md` to read the full skill body before replying.
+
 This file is process, not identity. Identity lives in `../gremlin.md`.

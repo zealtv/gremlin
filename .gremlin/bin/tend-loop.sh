@@ -59,7 +59,10 @@ trap 'rm -f "$prompt_file" "$reply_file"' EXIT
       echo
     done
   fi
-  # Skills INDEX.md slots in here at stage 6.
+  if [ -f "$GREMLIN_DIR/skills/INDEX.md" ]; then
+    cat "$GREMLIN_DIR/skills/INDEX.md"
+    echo
+  fi
   if [ -f "$GREMLIN_DIR/tools/README.md" ]; then
     cat "$GREMLIN_DIR/tools/README.md"
     echo
