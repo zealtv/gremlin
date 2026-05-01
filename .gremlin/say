@@ -4,6 +4,9 @@
 # Usage:
 #   ./.gremlin/say "your message"     # send + wait for reply (default)
 #   echo "..." | ./.gremlin/say        # same, message via stdin
+#   ./.gremlin/say --repl              # interactive REPL: type, enter, see
+#                                      # the reply, repeat. /exit or Ctrl-D
+#                                      # to quit. Slash commands work too.
 #   ./.gremlin/say --listen            # passive listener: prints each new
 #                                      # file in .nest/out/ as it appears
 #                                      # and moves it to sent/. Blocks until
@@ -64,6 +67,25 @@ if [ "$#" -gt 0 ] && [ "${1#/}" != "$1" ]; then
   echo "unknown command: /$cmd" >&2
   echo "try /help" >&2
   exit 1
+fi
+
+# --- repl mode ----------------------------------------------------------
+# Interactive read-eval-print loop. Each turn shells back out to this same
+# script, so slash commands and the send-and-wait flow both work unchanged.
+if [ "${1:-}" = "--repl" ] || [ "${1:-}" = "-i" ]; then
+  echo "(/exit to quit; Ctrl-D works too. slash commands work inline.)"
+  while true; do
+    if ! IFS= read -r -e -p "> " line; then
+      echo
+      break
+    fi
+    [ -z "$line" ] && continue
+    case "$line" in
+      /exit|/quit) break ;;
+    esac
+    "$0" "$line" || true
+  done
+  exit 0
 fi
 
 # --- listen mode ---------------------------------------------------------
