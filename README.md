@@ -85,7 +85,7 @@ A gremlin has four small surfaces. Everything else is internals.
 
 A bridge moves bytes between the outside world and `.nest/`. Inbound bridges write into `.nest/in/`; outbound bridges read from `.nest/out/`. Bridges know nothing about the LLM, prompts, or skills.
 
-The MVP ships one bridge: a local CLI named `say`. `say "..."` writes your message into `.nest/in/`, waits for a reply in `.nest/out/`, prints it. `say --listen` blocks and prints whatever lands in `.nest/out/` — for scheduled outbound and as a side channel. Synchronous from your side, async from the gremlin's.
+The MVP ships one bridge: a local CLI named `say`. `say "..."` writes your message into `.nest/in/`, waits for a reply in `.nest/out/`, prints it. `say --repl` is an interactive loop — type, enter, see the reply, repeat; slash commands work inline; `/exit` or Ctrl-D quits. `say --listen` blocks and prints whatever lands in `.nest/out/` — for scheduled outbound and as a side channel. Synchronous from your side, async from the gremlin's.
 
 Telegram, Discord, email, web — all later additions, each just another script that talks to the same two folders. Swap the bridge, the gremlin doesn't notice.
 
