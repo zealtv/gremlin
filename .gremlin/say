@@ -36,9 +36,13 @@ snapshot_out() {
 
 print_and_archive() {
   local f="$1"
-  cat "$f"
   mkdir -p "$SENT"
-  mv "$f" "$SENT/"
+  local moved="$SENT/$(basename "$f")"
+  # Claim atomically. If another consumer (e.g. a concurrent --listen) got
+  # there first, mv fails — exit silently and let the winner print.
+  if mv "$f" "$moved" 2>/dev/null; then
+    cat "$moved"
+  fi
 }
 
 # --- slash command dispatch ---------------------------------------------

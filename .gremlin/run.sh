@@ -32,7 +32,13 @@ trap shutdown INT TERM
 ( while sleep 5; do "$GREMLIN_DIR/bin/tend-loop.sh"; done ) &
 pids+=($!)
 
-( while sleep 60; do "$GREMLIN_DIR/bin/tick-loop.sh"; done ) &
+# Align tick to wall-clock minute so groundhog's HH-MM schedules fire
+# near :00 of their target minute.
+( while :; do
+    sleep $(( 60 - $(date +%s) % 60 ))
+    "$GREMLIN_DIR/bin/tick-loop.sh"
+  done
+) &
 pids+=($!)
 
 wait
