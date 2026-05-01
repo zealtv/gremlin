@@ -85,7 +85,7 @@ A gremlin has four small surfaces. Everything else is internals.
 
 A bridge moves bytes between the outside world and `.nest/`. Inbound bridges write into `.nest/in/`; outbound bridges read from `.nest/out/`. Bridges know nothing about the LLM, prompts, or skills.
 
-The MVP ships one bridge: a local CLI named `say`. It writes your message into `.nest/in/`, then waits for a reply to appear in `.nest/out/` and prints it. Synchronous from your side, async from the gremlin's.
+The MVP ships one bridge: a local CLI named `say`. `say "..."` writes your message into `.nest/in/`, waits for a reply in `.nest/out/`, prints it. `say --listen` blocks and prints whatever lands in `.nest/out/` — for scheduled outbound and as a side channel. Synchronous from your side, async from the gremlin's.
 
 Telegram, Discord, email, web — all later additions, each just another script that talks to the same two folders. Swap the bridge, the gremlin doesn't notice.
 
@@ -146,42 +146,11 @@ Each loop is a single shell script. They never call each other; they share the f
 
 ### `run.sh`
 
-Backgrounds each loop, `trap 'kill 0' INT TERM`, `wait`. Runs the indexer at startup. Honours a `.paused` flag — loops idle when present so you can archive cleanly.
+Backgrounds each loop, traps SIGINT/SIGTERM, kills the children explicitly, `wait`s. Runs the indexer at startup. Honours a `.paused` flag — loops idle when present so you can archive cleanly.
 
-## Files
+## Transcript
 
-### `gremlin.md`
-
-The gremlin's identity. One short document covering personality, purpose, and voice. Read on every tend pass; sits at the top of the prompt because it frames how everything below is interpreted.
-
-```markdown
-# gremlin
-
-You are a research assistant. You help the user keep track of papers, draft notes,
-and resurface ideas you've discussed before. You are concise, slightly wry, and you
-ask before doing anything that costs more than a second to undo.
-```
-
-### `context/`
-
-Optional. Facts the gremlin should always know: a profile of the user, key stakeholders, environment notes, a glossary of project-specific terms. Every file in `context/*.md` is concatenated into every prompt — no frontmatter, no triggers, no index.
-
-If you want the same context across multiple gremlins, the suggested convention is `~/.gremlin/context/` as the shared library. Each gremlin's `context/user.md` (etc.) is a symlink:
-
-```
-~/Desktop/research/.gremlin/context/user.md  ->  ~/.gremlin/context/user.md
-~/Desktop/kitchen/.gremlin/context/user.md   ->  ~/.gremlin/context/user.md
-```
-
-The protocol does not enforce this location; it's a pointer. Symlink wherever makes sense.
-
-### `.nest/tend.md`
-
-The nest's tending instructions: how a gremlin's nest is processed, in protocol terms. Generic; mostly stable across gremlins. Tells the tender to assemble the prompt from `../gremlin.md`, `../context/*.md`, `../skills/INDEX.md`, `../tools/README.md`, `../transcript.md`, and the item — then call `../bin/llm.sh` and write the reply to `out/`. Identity does **not** belong here; that's `gremlin.md`'s job.
-
-### `transcript.md`
-
-Plain markdown, append-only. Two writers: the inbound bridge (user turns) and `tend-loop.sh` (assistant turns). Each writer does one `>>` append per message; concurrent small appends do not interleave on POSIX.
+`transcript.md` is plain markdown, append-only. Two writers: the inbound bridge (user turns) and `tend-loop.sh` (assistant turns). One `>>` per turn — concurrent small appends do not interleave on POSIX.
 
 ```markdown
 ## user — 2026-04-27T19:42:11Z
@@ -191,9 +160,7 @@ hello
 hi, what's up?
 ```
 
-### Archive
-
-There is no automatic rotation. To start a fresh session: `bin/archive.sh` touches `.paused`, moves `transcript.md` into `transcript-archive/<date>.md`, drops a fresh empty `transcript.md`, and removes `.paused`. Pending groundhog items survive — they live in `.groundhog/`, untouched.
+`bin/archive.sh` rotates `transcript.md` into `transcript-archive/<date>.md` when you want a fresh session. It pauses the loops via `.paused` so an in-flight tend pass isn't orphaned. Pending groundhog items survive — they live in `.groundhog/`, untouched.
 
 ## Data flow
 
