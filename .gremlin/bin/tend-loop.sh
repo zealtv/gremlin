@@ -12,6 +12,11 @@
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# .paused gate: while present, the loop is a no-op. Lets archive.sh (and
+# any other coordinator) freeze the gremlin without killing the runner.
+[ -e "$GREMLIN_DIR/.paused" ] && exit 0
+
 NEST="$GREMLIN_DIR/.nest"
 NESTLING="$NEST/nestling.sh"
 LLM="$GREMLIN_DIR/bin/llm.sh"
