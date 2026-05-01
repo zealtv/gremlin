@@ -19,15 +19,26 @@ Groundhog reads **local time**, and the user thinks in local time. Use local dat
 
 3. Pick a kebab-case slug summarising the reminder (e.g. `buy-milk`, `call-jess`, `submit-invoice`).
 
-4. Compose the reminder body — the message to deliver when the reminder fires. Write it in the user's voice (e.g. "buy milk at 9am"). If the user gave a time of day, include it here — groundhog's `once/` axis is per-day.
+4. Compose the reminder body — the message to deliver when the reminder fires. Write it in the user's voice (e.g. "buy milk", "call jess").
 
-5. Create the file with bash:
+5. Create the file with bash. The path encodes the time:
 
-   ```bash
-   mkdir -p .groundhog/schedule/once/<YYYY-MM-DD>/<slug>
-   cat > .groundhog/schedule/once/<YYYY-MM-DD>/<slug>/message.md <<'EOF'
-   <reminder body>
-   EOF
-   ```
+   - **With a time of day** (e.g. "9am", "14:30", "in 5 minutes"): use minute resolution. Format `HH-MM` (24-hour, dash, two digits).
+
+     ```bash
+     mkdir -p .groundhog/schedule/once/<YYYY-MM-DD>/<HH-MM>/<slug>
+     cat > .groundhog/schedule/once/<YYYY-MM-DD>/<HH-MM>/<slug>/message.md <<'EOF'
+     <reminder body>
+     EOF
+     ```
+
+   - **Without a time of day** (just "tomorrow", "next Friday"): per-day resolution; fires on the next tick after midnight local on that date.
+
+     ```bash
+     mkdir -p .groundhog/schedule/once/<YYYY-MM-DD>/<slug>
+     cat > .groundhog/schedule/once/<YYYY-MM-DD>/<slug>/message.md <<'EOF'
+     <reminder body>
+     EOF
+     ```
 
 6. Confirm to the user, **stating the resolved local date and the time-of-day text** verbatim from the body, so the user can spot a wrong resolution immediately.
