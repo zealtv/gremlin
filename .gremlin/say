@@ -75,7 +75,7 @@ fi
 if [ "${1:-}" = "--repl" ] || [ "${1:-}" = "-i" ]; then
   echo "(/exit to quit; Ctrl-D works too. slash commands work inline.)"
   while true; do
-    if ! IFS= read -r -e -p "> " line; then
+    if ! IFS= read -r -e -p "^**^ " line; then
       echo
       break
     fi
