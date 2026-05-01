@@ -17,6 +17,11 @@ GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # any other coordinator) freeze the gremlin without killing the runner.
 [ -e "$GREMLIN_DIR/.paused" ] && exit 0
 
+# Run from the gremlin root so the LLM's --allowedTools "Bash(./tools/*)"
+# pattern resolves to *this* gremlin's tools, regardless of where run.sh
+# was launched from.
+cd "$GREMLIN_DIR"
+
 NEST="$GREMLIN_DIR/.nest"
 NESTLING="$NEST/nestling.sh"
 LLM="$GREMLIN_DIR/bin/llm.sh"
@@ -54,7 +59,11 @@ trap 'rm -f "$prompt_file" "$reply_file"' EXIT
       echo
     done
   fi
-  # Skills INDEX.md and tools/README.md are added at stages 6 and 5.
+  # Skills INDEX.md slots in here at stage 6.
+  if [ -f "$GREMLIN_DIR/tools/README.md" ]; then
+    cat "$GREMLIN_DIR/tools/README.md"
+    echo
+  fi
   if [ -s "$TRANSCRIPT" ]; then
     cat "$TRANSCRIPT"
     echo
