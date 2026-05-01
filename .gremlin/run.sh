@@ -2,9 +2,8 @@
 # run.sh — supervisor for the gremlin's loops.
 #
 # Backgrounds each loop and shuts them all down cleanly on SIGINT/SIGTERM.
-# (The PLAN suggested `trap 'kill 0' INT TERM`; on macOS bash 3.2 that
-# segfaults the supervisor itself, so we track child PIDs and signal them
-# explicitly.)
+# Tracks child PIDs and signals them explicitly — `trap 'kill 0' INT TERM`
+# segfaults the supervisor itself on macOS bash 3.2.
 #
 # Loops:
 #   - tend-loop.sh (~5s) — process items in .nest/in/
