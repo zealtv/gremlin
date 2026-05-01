@@ -36,7 +36,9 @@ claimed_path="$("$NESTLING" claim "$name")"
 # Extract the item body. Items may be files or directories (attachments
 # extension). For directories, the convention is a message.md inside.
 if [ -d "$claimed_path" ]; then
-  if [ -f "$claimed_path/message.md" ]; then
+  if [ -f "$claimed_path/instructions.md" ]; then
+    body="$(cat "$claimed_path/instructions.md")"
+  elif [ -f "$claimed_path/message.md" ]; then
     body="$(cat "$claimed_path/message.md")"
   else
     body=""

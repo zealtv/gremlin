@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # say — local CLI bridge.
 #
-# Usage: ./.gremlin/say "your message"
-#        echo "your message" | ./.gremlin/say
-#
-# Appends a `## user` turn to transcript.md, drops the message into .nest/in/
-# for the tend loop, then waits up to 60s for a reply to land in .nest/out/.
-# Prints the reply and moves it to .nest/out/sent/ so it isn't reprinted.
+# Usage:
+#   ./.gremlin/say "your message"     # send + wait for reply (default)
+#   echo "..." | ./.gremlin/say        # same, message via stdin
+#   ./.gremlin/say --listen            # passive listener: prints each new
+#                                      # file in .nest/out/ as it appears
+#                                      # and moves it to sent/. Blocks until
+#                                      # Ctrl-C. Useful for scheduled
+#                                      # outbound and as a side channel.
 
 set -euo pipefail
 
@@ -20,6 +22,44 @@ TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 TIMEOUT_SECS=60
 POLL_SECS=0.5
 
+snapshot_out() {
+  local dest="$1"
+  if [ -d "$OUT" ]; then
+    ( cd "$OUT" && ls -A 2>/dev/null ) | sort > "$dest" || true
+  else
+    : > "$dest"
+  fi
+}
+
+print_and_archive() {
+  local f="$1"
+  cat "$f"
+  mkdir -p "$SENT"
+  mv "$f" "$SENT/"
+}
+
+# --- listen mode ---------------------------------------------------------
+if [ "${1:-}" = "--listen" ] || [ "${1:-}" = "-l" ]; then
+  snapshot="$(mktemp)"
+  trap 'rm -f "$snapshot"' EXIT
+  snapshot_out "$snapshot"
+
+  while true; do
+    for f in "$OUT"/*; do
+      [ -f "$f" ] || continue
+      base="$(basename "$f")"
+      case "$base" in
+        *.landing) continue ;;
+      esac
+      if ! grep -qx -- "$base" "$snapshot"; then
+        print_and_archive "$f"
+      fi
+    done
+    sleep "$POLL_SECS"
+  done
+fi
+
+# --- send + wait mode (default) -----------------------------------------
 if [ "$#" -gt 0 ]; then
   msg="$*"
 else
@@ -27,18 +67,14 @@ else
 fi
 
 if [ -z "$msg" ]; then
-  echo "usage: $0 <message>   (or pipe via stdin)" >&2
+  echo "usage: $0 <message>   (or pipe via stdin; or --listen)" >&2
   exit 2
 fi
 
-# Snapshot existing out/ filenames so we ignore replies from prior sessions.
 snapshot="$(mktemp)"
 tmp="$(mktemp)"
 trap 'rm -f "$tmp" "$snapshot"' EXIT
-
-if [ -d "$OUT" ]; then
-  ( cd "$OUT" && ls -A 2>/dev/null ) | sort > "$snapshot" || true
-fi
+snapshot_out "$snapshot"
 
 iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 fname_ts="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
@@ -49,8 +85,6 @@ printf '## user — %s\n%s\n\n' "$iso" "$msg" >> "$TRANSCRIPT"
 printf '%s\n' "$msg" > "$tmp"
 "$NESTLING" ingest "$tmp" "$fname_ts.md" >/dev/null
 
-# Wait for a reply: a file in OUT whose name isn't in the snapshot and
-# isn't a `.landing` placeholder.
 deadline=$(( $(date +%s) + TIMEOUT_SECS ))
 reply=""
 while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -73,6 +107,4 @@ if [ -z "$reply" ]; then
   exit 1
 fi
 
-cat "$reply"
-mkdir -p "$SENT"
-mv "$reply" "$SENT/"
+print_and_archive "$reply"
