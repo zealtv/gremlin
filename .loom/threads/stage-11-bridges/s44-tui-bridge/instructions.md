@@ -1,4 +1,4 @@
-# s47-tui-bridge
+# s44-tui-bridge
 
 First proper bridge. Replaces the three-terminal `run.sh` + `say --repl` + `say --listen` workflow with a single terminal running the TUI alongside `run.sh`.
 
@@ -24,21 +24,20 @@ bridges/
 
 ## Inbound (user types)
 
-- On submit, write the message to `.nest/in/<iso>.md`. Same path `say` uses today. The runner's tend-loop will pick it up.
-- Render the user's line immediately in the transcript pane with a *pending* affordance (spinner / dim styling). This is local, not from the file.
-- Reconcile when the matching `## user — <iso>` turn appears in `transcript.md`. The pending line is replaced/promoted to a confirmed turn. The file write is the source of truth.
-- Slash commands (`/foo bar`) dispatch the same way `say` does today: shell out to `commands/<cmd>.sh` with args. **Slash command output renders ephemerally in the transcript pane and is not written to `transcript.md`.** Exception: a future command may opt in to transcript writes itself; default is ephemeral.
+- On submit, write the message to `.nest/in/<iso>.md`. **Do not** append to `transcript.md` — the tender owns transcript writes (per stage-11 goal).
+- The user's submitted line stays visible in the input field with a *processing* affordance (spinner / dim styling) until it appears in `transcript.md` as a `## user —` turn (the tender will write it at claim time). When that happens, clear the input field; the line is now in the transcript pane via the normal tail path.
+- Slash commands (`/foo bar`) dispatch the same way `say` does today: shell out to `commands/<cmd>.sh` with args. **Slash command output renders ephemerally in the transcript pane and is not written to `transcript.md`.** Slash dispatch is synchronous and quick — the input field clears immediately on dispatch (no processing affordance needed). A future command may opt in to transcript writes itself; default is ephemeral.
 
 ## Outbound (agent replies, scheduled pushes)
 
 - Tail `transcript.md`. Whenever a new `## assistant — <iso>` turn appears past the cursor, render it.
-- This covers both regular replies *and* groundhog-fired proactive messages, because s48 routes both through the transcript.
+- This covers both regular replies *and* groundhog-fired proactive messages, because s43 routes both through the transcript.
 - Bridge does not consume `.nest/out/`.
 
 ## Cursor
 
 - File: `bridges/tui/.cursor`.
-- Contents: the iso timestamp (or byte offset — pick one and document) of the last turn rendered.
+- Contents: the iso timestamp of the last turn rendered. Human-readable; matches transcript format.
 - On startup: read cursor; render nothing already past it; render new turns as they arrive; advance cursor as each is rendered.
 - If cursor is missing on first launch: render nothing historical. The user starts fresh. (Alternative: render the last N turns. Decide during build; default is fresh.)
 
@@ -53,7 +52,7 @@ bridges/
 ## Verify
 
 1. With `run.sh` running, launch `bridges/tui/tui.sh`.
-2. Type `hi` in the input. The line appears immediately in the pane (pending). Within seconds, it firms up as a `## user` turn, and an assistant reply follows.
+2. Type `hi` in the input. The line stays in the input field with a processing affordance. Within seconds, the input clears and the `## user` turn appears in the transcript pane (written by the tender at claim time), followed by the assistant reply.
 3. Issue `/help`. Output renders in-pane. `transcript.md` is unchanged by the slash command.
 4. Schedule a reminder for one minute from now via natural language.
 5. Wait. The reminder appears in the TUI pane as an assistant turn, with no user prompt preceding it. `transcript.md` contains the proactive `## assistant — <iso>` entry.
@@ -62,4 +61,4 @@ bridges/
 
 ## Dependencies
 
-- s48 must land first (or in lockstep). Without s48, scheduled proactive messages don't reach `transcript.md` and the TUI won't see them.
+- s43 must land first (or in lockstep). Without s43, scheduled proactive messages don't reach `transcript.md` and the TUI won't see them.

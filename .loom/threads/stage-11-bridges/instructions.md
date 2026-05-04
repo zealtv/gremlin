@@ -4,6 +4,8 @@
 
 **This is the goal stitch only.** Child stitches need their own `instructions.md` before being claimed.
 
+Implementation order is encoded in stitch numbers across all in-flight threads: s41–s46 are the bridges/models/update sequence, with stage-11's children at s43–s46. Stage-10's memory work picks up at s47–s52 and lands last on a settled core.
+
 ## Strategy
 
 **Bridges fan out from the transcript.**
@@ -12,11 +14,17 @@
 - Each bridge has the same shape: tail `transcript.md` for assistant turns → render/push to its channel; accept user input → write to `.nest/in/<ts>.md`.
 - No bridge consumes `.nest/out/`. That surface is internal to the runner.
 
+**The tender owns all transcript writes.**
+
+- Inbound from any bridge drops a message into `.nest/in/<ts>.md` and nothing else. Bridges do not append to `transcript.md` themselves.
+- The tender appends both `## user — <iso>` (at claim time) and `## assistant — <iso>` (after the LLM call). Single owner for transcript writes; bridges fan out by tailing.
+- The 0–5s gap between submission and the user turn appearing in transcript is hidden per-bridge: the TUI holds the user's line in the input field with a processing affordance until it appears; Telegram naturally shows the user's own message in the chat already; future bridges decide their own.
+
 **The runner owns outbound.**
 
-- `tick-loop.sh` already classifies groundhog items by structure: `message.md` is a pre-baked turn, `instructions.md` is a thinking task. Today the message branch routes to `.nest/out/`; this stage retargets it to `transcript.md` directly (appended as `## assistant — <ts>`).
-- `tend-loop.sh` already writes to `transcript.md`; its parallel write into `.nest/out/` becomes redundant and is removed.
-- Net effect: `.nest/out/` retires entirely. Bridges have one input (`transcript.md`) and one output (`.nest/in/`).
+- `tick-loop.sh` already classifies groundhog items by structure: `message.md` is a pre-baked turn, `instructions.md` is a thinking task. Today the message branch routes to `.nest/out/`; this stage retargets it to `transcript.md` directly (appended as `## assistant — <ts>`). Groundhog's own `.groundhog/fired/` is the archive for that branch.
+- `tend-loop.sh` keeps its `nestling complete` call — `.nest/out/` is preserved as the protocol-aligned per-item archive of completed nestlings, not as a delivery surface.
+- Net effect: bridges have one read surface (`transcript.md`) and one write surface (`.nest/in/`). `.nest/out/` is archive only, no bridge reads it. `nestling sweep` and `groundhog sweep` keep the archives bounded.
 
 **At-least-once and replay.**
 
@@ -27,7 +35,7 @@
 
 ## Surgical changes
 
-### TUI (s47)
+### TUI (s44)
 
 - New `bridges/tui/` folder. First inhabitant of the bridges convention.
 - Two-pane layout: scrolling transcript view above, single-line input field below.
@@ -37,7 +45,7 @@
 - Library-agnostic at this stage. Pick when implementing.
 - Cursor convention: `bridges/tui/.cursor` records last rendered turn so restart doesn't re-render the entire transcript.
 
-### Runner / nest (s48)
+### Runner / nest (s43)
 
 - `tick-loop.sh`: `message.md` branch appends to `transcript.md` as `## assistant — <iso>` instead of moving into `.nest/out/`.
 - `tend-loop.sh`: drop the `.nest/out/` write; transcript append is the only outbound.
@@ -60,13 +68,12 @@ End-to-end with TUI as the only bridge:
 6. `.nest/out/` is gone or untouched throughout.
 7. Slash commands (`/help`, `/model`) work in the TUI; their output does not appear in `transcript.md`.
 
-## Suggested child stitches (need their own instructions.md before being claimed)
+## Child stitches (in order)
 
-Order: **s48 → s47 → s49.**
-
-1. `s48-runner-owns-outbound` — retire `.nest/out/`. Move tick-loop's message branch to transcript append. Remove `--repl`/`--listen` from `say`. Update README's scheduled-outbound section. Foundational; everything else assumes the single-surface contract.
-2. `s47-tui-bridge` — implement the TUI as the first bridge. Establishes `bridges/<name>/` convention and the `.cursor` file pattern. Validates the new model end-to-end locally before going remote.
-3. `s49-telegram-bridge` — second bridge over Telegram Bot API. Reuses the convention from s47. Demonstrates fan-out (TUI + Telegram both fire on every assistant turn).
+1. `s43-runner-owns-outbound` — reframe `.nest/out/` as nestling-protocol archive, not a delivery surface. Move tick-loop's message branch to transcript append. Remove `--repl`/`--listen` from `say`. Update README and DEVELOPING. Foundational; everything else assumes the single-read-surface contract.
+2. `s44-tui-bridge` — implement the TUI as the first bridge. Establishes `bridges/<name>/` convention and the `.cursor` file pattern. Validates the new model end-to-end locally before going remote.
+3. `s45-telegram-bridge` — second bridge over Telegram Bot API. Reuses the convention from s44. Demonstrates fan-out (TUI + Telegram both fire on every assistant turn).
+4. `s46-sweep-command` — `/sweep` slash command fanning out to `nestling sweep` and `groundhog sweep`. Strictly after s43.
 
 ## Decisions deferred to those child stitches
 

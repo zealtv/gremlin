@@ -1,6 +1,6 @@
-# s49-telegram-bridge
+# s45-telegram-bridge
 
-Second bridge. Slots into the `bridges/<name>/` convention established by s47. A Telegram bot becomes a remote channel: messages sent to the bot land in `.nest/in/`; assistant turns from `transcript.md` get pushed back to the chat.
+Second bridge. Slots into the `bridges/<name>/` convention established by s44. A Telegram bot becomes a remote channel: messages sent to the bot land in `.nest/in/`; assistant turns from `transcript.md` get pushed back to the chat.
 
 ## Layout
 
@@ -33,6 +33,7 @@ bridges/
 - For each update from the configured chat:
   - Extract message text.
   - Write to `.nest/in/<iso>.md` (same path the TUI and `say` use).
+  - **Do not** append to `transcript.md` — the tender owns transcript writes (per stage-11 goal). The user's own message is already visible in their Telegram chat, so no per-bridge processing affordance is needed; the next assistant turn the bridge pushes is the visible reply.
   - Persist the update's `update_id + 1` to `.update-offset` so we don't reprocess.
 - Ignore non-text updates (photos, stickers) for this stitch. Log a one-liner, don't crash.
 
@@ -44,11 +45,11 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
   - `POST https://api.telegram.org/bot<token>/sendMessage` with `chat_id` and `text` (turn body).
   - On success, advance `.cursor` to that turn's iso.
   - On failure (network, rate limit), retry with backoff; do not advance the cursor until success.
-- Cursor format matches s47's choice (timestamp).
+- Cursor format: iso timestamp (matches s44).
 
 ## Cursor / restart semantics
 
-- Same convention as s47: `bridges/telegram/.cursor` records the last successfully pushed turn.
+- Same convention as s44: `bridges/telegram/.cursor` records the last successfully pushed turn.
 - On startup: read cursor, push everything after it, advance as we go. A restart mid-conversation does not duplicate.
 - Missing cursor on first launch: do **not** push the entire transcript history to Telegram. Initialise the cursor to "now" and only push turns from this point forward. (Different default than the TUI, because pushing 500 historical turns to a chat is noisy and possibly rate-limited.)
 
@@ -67,8 +68,8 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
 
 ## Dependencies
 
-- **s48** must land first. Without transcript-as-single-surface, the bridge contract doesn't hold.
-- **s47** establishes the `bridges/<name>/` folder convention and cursor file pattern. s49 follows that pattern; if s49 lands first it has to invent it instead, so prefer s47 first.
+- **s43** must land first. Without transcript-as-single-surface, the bridge contract doesn't hold.
+- **s44** establishes the `bridges/<name>/` folder convention and cursor file pattern. s45 follows that pattern; if s45 lands first it has to invent it instead, so prefer s44 first.
 
 ## Verify
 
@@ -82,6 +83,6 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
 ## Notes
 
 The bot token is sensitive. The stitch must:
-- Add `bridges/*/config` to `.gitignore`.
+- Add `bridges/*/config` to the **canonical** `.gitignore` (the personal copy isn't a tracked repo, but contributors working on canonical must not accidentally commit a config).
 - Document in the bridge's README that `config` should never be committed.
 - Mention rotation: if the token leaks, regenerate via @BotFather and replace.

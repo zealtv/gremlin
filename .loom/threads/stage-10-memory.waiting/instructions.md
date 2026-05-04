@@ -50,12 +50,12 @@ If step 6 works, it's memory. If not, it's a filing cabinet.
 
 ## Suggested child stitches (need their own instructions.md before being claimed)
 
-- `s41-vendor-scribble` — copy scribble.sh + README into `.gremlin/.scribble/`, ship a default `dream.md`.
-- `s42-init-wires-scribble` — `init.sh` runs scribble's init for new gremlins.
-- `s43-stdin-ingest` *(scribble repo)* — `scribble.sh ingest <id> -` accepts stdin.
-- `s44-dream-skill` — `skills/dream.md` with tight triggers + the procedure.
-- `s45-sync-excludes` — update DEVELOPING.md sync helper template to exclude scribble runtime state.
-- `s46-acceptance-memory` — the cold-start recall gate.
+- `s47-vendor-scribble` — copy scribble.sh + README into `.gremlin/.scribble/`, ship a default `dream.md`.
+- `s48-init-wires-scribble` — `init.sh` runs scribble's init for new gremlins.
+- `s49-stdin-ingest` *(scribble repo)* — `scribble.sh ingest <id> -` accepts stdin.
+- `s50-dream-skill` — `skills/dream.md` with tight triggers + the procedure.
+- `s51-sync-excludes` — update DEVELOPING.md sync helper template to exclude scribble runtime state.
+- `s52-acceptance-memory` — the cold-start recall gate.
 
 ## Decisions deferred to those child stitches
 
