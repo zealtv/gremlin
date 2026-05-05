@@ -11,15 +11,26 @@ if [ -f "$ACTIVE_FILE" ]; then
   [ -n "$candidate" ] && active="$candidate"
 fi
 
+# Label = first `# ...` comment line after the shebang. If absent, blank.
+preset_label() {
+  awk '
+    NR == 1 && /^#!/ { next }
+    /^#[[:space:]]/ { sub(/^#[[:space:]]*/, ""); print; exit }
+    /^[^#[:space:]]/ { exit }
+  ' "$1"
+}
+
 list_presets() {
-  for f in "$MODELS_DIR"/*.env; do
+  for f in "$MODELS_DIR"/*.sh; do
     [ -e "$f" ] || continue
-    name="$(basename "$f" .env)"
-    model="$( ( grep -E '^[[:space:]]*MODEL=' "$f" | head -1 | sed 's/^[[:space:]]*MODEL=//; s/"//g' ) || true )"
-    if [ "$name" = "$active" ]; then
-      printf '* %s — %s\n' "$name" "$model"
+    name="$(basename "$f" .sh)"
+    label="$(preset_label "$f")"
+    marker="  "
+    [ "$name" = "$active" ] && marker="* "
+    if [ -n "$label" ]; then
+      printf '%s%s — %s\n' "$marker" "$name" "$label"
     else
-      printf '  %s — %s\n' "$name" "$model"
+      printf '%s%s\n' "$marker" "$name"
     fi
   done
 }
@@ -30,7 +41,7 @@ if [ "$#" -eq 0 ]; then
 fi
 
 target="$1"
-preset="$MODELS_DIR/$target.env"
+preset="$MODELS_DIR/$target.sh"
 if [ ! -f "$preset" ]; then
   {
     echo "no preset '$target'. available:"
