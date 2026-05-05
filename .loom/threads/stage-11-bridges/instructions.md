@@ -28,8 +28,8 @@ Implementation order is encoded in stitch numbers across all in-flight threads: 
 
 **At-least-once and replay.**
 
-- Tailing transcript means bridges must persist a cursor so a restart doesn't re-push history. Cursor lives at `bridges/<name>/.cursor`. Each bridge owns its own.
-- Cursor format established by s44: byte offset into `transcript.md`, not turn timestamp. Byte offsets avoid same-second timestamp collisions and match the bridge's actual tailing behavior.
+- Tailing transcript means bridges that push to external channels must persist a cursor so a restart doesn't re-push history. Cursor lives at `bridges/<name>/.cursor`. Each bridge owns its own.
+- Cursor format for bridges that need one: byte offset into `transcript.md`, not turn timestamp. Byte offsets avoid same-second timestamp collisions and match the bridge's actual tailing behavior. The TUI intentionally does not persist a cursor; it replays transcript history on launch.
 - All bridges always fire. Every channel gets every assistant turn. Per-message routing (Telegram only, not TUI) is explicitly out of scope; revisit if a real need surfaces.
 
 **Routing concern deferred.** Once a real need exists, a frontmatter field on the transcript turn (`target: telegram`) is the lightest way in. Don't pre-design.
@@ -44,7 +44,7 @@ Implementation order is encoded in stitch numbers across all in-flight threads: 
 - Tail `transcript.md` for new turns; render assistant turns as they appear.
 - Slash commands dispatch the same way `say` does (`commands/<cmd>.sh`); output renders ephemerally in the TUI pane, **not** written to `transcript.md`.
 - Library-agnostic at this stage. Pick when implementing.
-- Cursor convention: `bridges/tui/.cursor` records the last rendered transcript byte offset so restart doesn't re-render already-seen transcript content.
+- TUI replay convention: no persisted cursor; on launch it renders transcript history, then tails new content for the lifetime of the process.
 
 ### Runner / nest (s43)
 
@@ -65,22 +65,22 @@ End-to-end with TUI as the only bridge:
 2. Type a message in the TUI. Assistant reply renders in the TUI. Both turns are in `transcript.md`.
 3. Schedule a reminder via the TUI ("remind me in 1 minute").
 4. Wait. Reminder fires. It appears in the TUI **and** is present in `transcript.md` as `## assistant`.
-5. Restart the TUI. It does not re-render the whole transcript (cursor honoured).
+5. Restart the TUI. It replays transcript history locally, without duplicating anything in `transcript.md`.
 6. `.nest/out/` is gone or untouched throughout.
 7. Slash commands (`/help`, `/model`) work in the TUI; their output does not appear in `transcript.md`.
 
 ## Child stitches (in order)
 
 1. `s43-runner-owns-outbound` — reframe `.nest/out/` as nestling-protocol archive, not a delivery surface. Move tick-loop's message branch to transcript append. Remove `--repl`/`--listen` from `say`. Update README and DEVELOPING. Foundational; everything else assumes the single-read-surface contract.
-2. `s44-tui-bridge` — implement the TUI as the first bridge. Establishes `bridges/<name>/` convention and the `.cursor` file pattern. Validates the new model end-to-end locally before going remote.
-3. `s45-telegram-bridge` — second bridge over Telegram Bot API. Reuses the convention from s44. Demonstrates fan-out (TUI + Telegram both fire on every assistant turn).
+2. `s44-tui-bridge` — implement the TUI as the first bridge. Establishes `bridges/<name>/` convention. Validates the new model end-to-end locally before going remote.
+3. `s45-telegram-bridge` — second bridge over Telegram Bot API. Reuses the bridges convention from s44 and adds persisted cursor state for a push channel. Demonstrates fan-out (TUI + Telegram both fire on every assistant turn).
 4. `s46-sweep-command` — `/sweep` slash command fanning out to `nestling sweep` and `groundhog sweep`. Strictly after s43.
 
 ## Decisions deferred to those child stitches
 
 - TUI library / framework choice.
 - Exact pending-affordance for the user's submitted-but-not-yet-ingested line.
-- Cursor format: decided in s44 as byte offset.
+- Cursor format for push bridges: byte offset.
 - Whether `.nest/out/` is removed from disk or just left empty.
 - Whether `say` survives at all post-stage, or only as inbound-only one-shot for scripts.
 - Slash-command output styling in the TUI pane.

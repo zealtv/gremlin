@@ -12,7 +12,6 @@ New folder: `.gremlin/bridges/tui/`. This is also where the bridges convention i
 bridges/
   tui/
     tui.sh           # entry point; long-running daemon
-    .cursor          # last rendered transcript turn (created at runtime)
     README.md        # what the bridge is, how to launch
 ```
 
@@ -30,17 +29,16 @@ bridges/
 
 ## Outbound (agent replies, scheduled pushes)
 
-- Tail `transcript.md`. Whenever a new `## assistant — <iso>` turn appears past the cursor, render it.
+- Tail `transcript.md`. Whenever a new `## assistant — <iso>` turn appears past the in-process offset, render it.
 - This covers both regular replies *and* groundhog-fired proactive messages, because s43 routes both through the transcript.
 - Bridge does not consume `.nest/out/`.
 
 ## Cursor
 
-- File: `bridges/tui/.cursor`.
-- Contents: byte offset into `transcript.md`. This deliberately differs from the original timestamp sketch: byte offsets avoid same-second timestamp collisions and match how the bridge tails the file.
-- On startup: read cursor; render content after it; render new turns as they arrive; advance cursor to the transcript size after each poll.
-- If cursor is missing on first launch: replay transcript history from the beginning, then save the byte offset.
-- If the transcript is archived or truncated and the saved cursor is past EOF, reset to the beginning.
+- The TUI does not persist a cursor.
+- On startup: replay transcript history from the beginning.
+- While running: track an in-memory byte offset so polling only processes new transcript content.
+- If the transcript is archived or truncated while running, reset the in-memory offset and replay the current transcript from the beginning.
 
 ## Out of scope
 
@@ -57,7 +55,7 @@ bridges/
 3. Issue `/help`. Output renders in-pane. `transcript.md` is unchanged by the slash command.
 4. Schedule a reminder for one minute from now via natural language.
 5. Wait. The reminder appears in the TUI pane as an assistant turn, with no user prompt preceding it. `transcript.md` contains the proactive `## assistant — <iso>` entry.
-6. Quit and relaunch the TUI. It does not re-render the entire transcript — only turns past the cursor (none, immediately).
+6. Quit and relaunch the TUI. It replays transcript history in the local pane, then tails new turns.
 7. `--repl` and `--listen` are not invoked anywhere; user has one terminal for `run.sh` and one for the TUI.
 
 ## Dependencies

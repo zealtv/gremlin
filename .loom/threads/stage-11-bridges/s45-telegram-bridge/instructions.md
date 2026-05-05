@@ -45,11 +45,11 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
   - `POST https://api.telegram.org/bot<token>/sendMessage` with `chat_id` and `text` (turn body).
   - On success, advance `.cursor` to the byte offset after that turn.
   - On failure (network, rate limit), retry with backoff; do not advance the cursor until success.
-- Cursor format: byte offset into `transcript.md` (matches s44).
+- Cursor format: byte offset into `transcript.md` (the push-bridge convention recorded in the stage goal).
 
 ## Cursor / restart semantics
 
-- Same convention as s44: `bridges/telegram/.cursor` records the transcript byte offset after the last successfully pushed turn.
+- `bridges/telegram/.cursor` records the transcript byte offset after the last successfully pushed turn.
 - On startup: read cursor, push everything after it, advance as we go. A restart mid-conversation does not duplicate.
 - Missing cursor on first launch: do **not** push the entire transcript history to Telegram. Initialise the cursor to "now" and only push turns from this point forward. (Different default than the TUI, because pushing 500 historical turns to a chat is noisy and possibly rate-limited.)
 
@@ -69,7 +69,7 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
 ## Dependencies
 
 - **s43** must land first. Without transcript-as-single-surface, the bridge contract doesn't hold.
-- **s44** establishes the `bridges/<name>/` folder convention and cursor file pattern. s45 follows that pattern; if s45 lands first it has to invent it instead, so prefer s44 first.
+- **s44** establishes the `bridges/<name>/` folder convention. s45 adds the persisted cursor pattern needed by push bridges.
 
 ## Verify
 

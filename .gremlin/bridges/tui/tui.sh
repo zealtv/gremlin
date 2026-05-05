@@ -11,10 +11,11 @@ GREMLIN_DIR="$(cd "$BRIDGE_DIR/../.." && pwd)"
 NESTLING="$GREMLIN_DIR/.nest/nestling.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 COMMANDS="$GREMLIN_DIR/commands"
-CURSOR="$BRIDGE_DIR/.cursor"
 
 POLL_SECS=0.15
 MAX_LINES=500
+MIN_ROWS=10
+MIN_COLS=30
 
 if [ ! -t 0 ] || [ ! -t 1 ]; then
   echo "tui.sh requires an interactive terminal" >&2
@@ -26,15 +27,23 @@ if ! command -v tput >/dev/null 2>&1; then
   exit 2
 fi
 
-display_lines=()
+raw_lines=()
 input=""
 pending=""
 pending_since=0
 status="idle"
 tick=0
+transcript_offset=0
+transcript_size=0
+transcript_turns=0
+model="default"
+rows=24
+cols=80
 old_stty="$(stty -g)"
 
 cleanup() {
+  printf '\033]0;\007'
+  tput rmcup 2>/dev/null || true
   stty "$old_stty" 2>/dev/null || true
   tput cnorm 2>/dev/null || true
   tput sgr0 2>/dev/null || true
@@ -43,23 +52,51 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+update_size() {
+  local size
+  size="$(stty size 2>/dev/null || true)"
+  if [ -n "$size" ]; then
+    rows="${size%% *}"
+    cols="${size##* }"
+  fi
+  [ "$rows" -lt "$MIN_ROWS" ] && rows="$MIN_ROWS"
+  [ "$cols" -lt "$MIN_COLS" ] && cols="$MIN_COLS"
+  return 0
+}
+trap update_size WINCH
+
+tput smcup 2>/dev/null || true
+printf '\033]0;gremlin tui\007'
 stty -echo -icanon -ixon min 0 time 0
 tput civis
+update_size
+
+cup() {
+  printf '\033[%s;%sH' "$(($1 + 1))" "$(($2 + 1))"
+}
+
+el() {
+  printf '\033[K'
+}
 
 color() {
-  tput setaf "$1" 2>/dev/null || true
+  printf '\033[38;5;%sm' "$1"
+}
+
+bg() {
+  printf '\033[48;5;%sm' "$1"
 }
 
 bold() {
-  tput bold 2>/dev/null || true
+  printf '\033[1m'
 }
 
 dim() {
-  tput dim 2>/dev/null || true
+  printf '\033[2m'
 }
 
 reset() {
-  tput sgr0 2>/dev/null || true
+  printf '\033[0m'
 }
 
 face() {
@@ -69,53 +106,48 @@ face() {
     pending:1) printf '^-_-^' ;;
     pending:2) printf '^o_-^' ;;
     pending:*) printf '^*_*^' ;;
-    *:1) printf '^-_-^' ;;
     *) printf '^o_o^' ;;
   esac
 }
 
 append_line() {
-  display_lines+=("$1")
-  while [ "${#display_lines[@]}" -gt "$MAX_LINES" ]; do
-    display_lines=("${display_lines[@]:1}")
+  raw_lines+=("$1")
+  while [ "${#raw_lines[@]}" -gt "$MAX_LINES" ]; do
+    raw_lines=("${raw_lines[@]:1}")
   done
 }
 
 file_size() {
+  local size
   if [ -f "$1" ]; then
-    wc -c < "$1" | tr -d ' '
+    size="$(wc -c < "$1")"
+    size="${size//[!0-9]/}"
+    printf '%s\n' "${size:-0}"
   else
     printf '0\n'
   fi
 }
 
-read_cursor() {
-  local size offset
-  size="$(file_size "$TRANSCRIPT")"
-  if [ -f "$CURSOR" ]; then
-    offset="$(tr -cd '0-9' < "$CURSOR")"
+current_model() {
+  if [ -s "$GREMLIN_DIR/.model" ]; then
+    tr -d '[:space:]' < "$GREMLIN_DIR/.model"
   else
-    offset=0
+    printf 'default\n'
   fi
-  [ -n "$offset" ] || offset=0
-  if [ "$offset" -gt "$size" ]; then
-    offset=0
-  fi
-  printf '%s\n' "$offset"
 }
 
-write_cursor() {
-  printf '%s\n' "$1" > "$CURSOR"
+refresh_model() {
+  model="$(current_model)"
 }
 
 trim_blank_tail() {
-  while [ "${#display_lines[@]}" -gt 0 ]; do
+  while [ "${#raw_lines[@]}" -gt 0 ]; do
     local last_index last
-    last_index=$((${#display_lines[@]} - 1))
-    last="${display_lines[$last_index]}"
+    last_index=$((${#raw_lines[@]} - 1))
+    last="${raw_lines[$last_index]}"
     [ -n "$last" ] && break
-    unset 'display_lines[$last_index]'
-    display_lines=("${display_lines[@]}")
+    unset 'raw_lines[$last_index]'
+    raw_lines=("${raw_lines[@]}")
   done
 }
 
@@ -133,8 +165,8 @@ render_turn() {
   local role="$1"
   local ts="$2"
   local body="$3"
-  local label_color=6
-  [ "$role" = "assistant" ] && label_color=2
+  local label_color=81
+  [ "$role" = "assistant" ] && label_color=213
 
   trim_blank_tail
   append_line ""
@@ -154,8 +186,14 @@ EOF_BODY
 poll_transcript() {
   local offset size bytes chunk parsed line turn_role turn_ts turn_body
 
-  offset="$(read_cursor)"
   size="$(file_size "$TRANSCRIPT")"
+  if [ "$size" -lt "$transcript_offset" ]; then
+    raw_lines=()
+    transcript_offset=0
+    transcript_turns=0
+  fi
+
+  offset="$transcript_offset"
   [ "$size" -gt "$offset" ] || return 0
 
   bytes=$((size - offset))
@@ -199,6 +237,7 @@ poll_transcript() {
         ;;
       "__GREMLIN_END__")
         render_turn "$turn_role" "$turn_ts" "$turn_body"
+        transcript_turns=$((transcript_turns + 1))
         turn_role=""
         turn_ts=""
         turn_body=""
@@ -216,7 +255,8 @@ poll_transcript() {
   done < "$parsed"
   rm -f "$chunk" "$parsed"
 
-  write_cursor "$size"
+  transcript_offset="$size"
+  transcript_size="$size"
 }
 
 unique_item_name() {
@@ -243,7 +283,7 @@ submit_message() {
     pending_since="$(date +%s)"
     status="pending"
   else
-    append_line "$(color 1)failed to submit message$(reset)"
+    append_line "$(color 203)failed to submit message$(reset)"
   fi
   rm -f "$tmp"
 }
@@ -255,9 +295,15 @@ run_slash() {
   cmd="${rest%% *}"
 
   if [ -z "$cmd" ]; then
-    append_line "$(color 1)usage: /<command> [args...]$(reset)"
+    append_line "$(color 203)usage: /<command> [args...]$(reset)"
     return 0
   fi
+
+  case "$cmd" in
+    exit|quit)
+      exit 0
+      ;;
+  esac
 
   if [ "$cmd" = "$rest" ]; then
     args=()
@@ -268,7 +314,7 @@ run_slash() {
   fi
 
   if [ ! -x "$COMMANDS/$cmd.sh" ]; then
-    append_line "$(color 1)unknown command: /$cmd$(reset)"
+    append_line "$(color 203)unknown command: /$cmd$(reset)"
     append_line "$(dim)try /help$(reset)"
     return 0
   fi
@@ -279,7 +325,7 @@ run_slash() {
   set -e
 
   append_line ""
-  append_line "$(bold)$(color 5)/$cmd$(reset) $(dim)command output$(reset)"
+  append_line "$(bold)$(color 171)/$cmd$(reset) $(dim)command output$(reset)"
   if [ -n "$output" ]; then
     while IFS= read -r out_line; do
       append_line "$out_line"
@@ -288,8 +334,9 @@ $output
 EOF_OUTPUT
   fi
   if [ "$rc" -ne 0 ]; then
-    append_line "$(color 1)command exited $rc$(reset)"
+    append_line "$(color 203)command exited $rc$(reset)"
   fi
+  refresh_model
 }
 
 handle_enter() {
@@ -301,7 +348,7 @@ handle_enter() {
     /*) run_slash "$line" ;;
     *)
       if [ -n "$pending" ]; then
-        append_line "$(color 3)message still pending; wait for the user turn to land$(reset)"
+        append_line "$(color 226)message still pending; wait for the user turn to land$(reset)"
         input="$line"
       else
         submit_message "$line"
@@ -334,56 +381,152 @@ handle_key() {
   esac
 }
 
-redraw() {
-  local rows cols frame body_rows start i line prompt shown_input mode_text pending_age
-  rows="$(tput lines)"
-  cols="$(tput cols)"
-  [ "$rows" -lt 8 ] && rows=8
-  [ "$cols" -lt 30 ] && cols=30
+wrap_text_line() {
+  local line="$1"
+  local width="$2"
+  local out word
 
-  frame=$((tick % 4))
-  tick=$((tick + 1))
-  body_rows=$((rows - 4))
-  start=0
-  if [ "${#display_lines[@]}" -gt "$body_rows" ]; then
-    start=$((${#display_lines[@]} - body_rows))
+  if [ -z "$line" ]; then
+    printf '\n'
+    return 0
   fi
 
-  tput clear
+  case "$line" in
+    *$'\033'*)
+      printf '%s\n' "$line"
+      return 0
+      ;;
+  esac
 
-  printf '%s%s gremlin tui %s%s\n' "$(bold)" "$(color 2)" "$(face "$frame")" "$(reset)"
+  out=""
+  for word in $line; do
+    while [ "${#word}" -gt "$width" ]; do
+      if [ -n "$out" ]; then
+        printf '%s\n' "$out"
+        out=""
+      fi
+      printf '%s\n' "${word:0:$width}"
+      word="${word:$width}"
+    done
+    if [ -z "$out" ]; then
+      out="$word"
+    elif [ -z "$word" ]; then
+      :
+    elif [ "$((${#out} + 1 + ${#word}))" -le "$width" ]; then
+      out="$out $word"
+    else
+      printf '%s\n' "$out"
+      out="$word"
+    fi
+  done
+  [ -n "$out" ] && printf '%s\n' "$out"
+}
 
+build_wrapped_lines() {
+  local width="$1"
+  local line wrapped
+  wrapped_lines=()
+
+  for line in "${raw_lines[@]}"; do
+    while IFS= read -r wrapped || [ -n "$wrapped" ]; do
+      wrapped_lines+=("$wrapped")
+    done < <(wrap_text_line "$line" "$width")
+  done
+}
+
+redraw() {
+  local frame body_rows start i line prompt shown_input mode_text pending_age
+  local status_face status_color bottom_status max_line title title_width title_fill divider
+  local row wrapped_count
+  printf '\033]0;gremlin tui\007'
+
+  frame=0
+  if [ "$status" = "pending" ]; then
+    frame=$(( (tick / 3) % 4 ))
+  elif [ $((tick % 27)) -eq 26 ]; then
+    frame=1
+  fi
+  if [ "$status" = "idle" ] && [ "$frame" -eq 1 ]; then
+    status_face='^-_-^'
+  else
+    status_face="$(face "$frame")"
+  fi
+  tick=$((tick + 1))
+
+  # Header, transcript, blank spacer, divider, status, input, bottom bar.
+  body_rows=$((rows - 6))
+  max_line=$((cols - 1))
+
+  build_wrapped_lines "$max_line"
+  wrapped_count="${#wrapped_lines[@]}"
+
+  cup 0 0
+  el
+  title="    ──────── gremlin tui ──────── "
+  title_width=34
+  title_fill=$((cols - title_width))
+  [ "$title_fill" -lt 0 ] && title_fill=0
+  printf '%s%s%s%s' "$(bg 45)" "$(color 16)" "$(bold)" "$title"
+  printf '%*s%s' "$title_fill" '' "$(reset)"
+
+  start=0
+  if [ "$wrapped_count" -gt "$body_rows" ]; then
+    start=$((wrapped_count - body_rows))
+  fi
+
+  row=1
   i="$start"
-  while [ "$i" -lt "${#display_lines[@]}" ] && [ "$i" -lt "$((start + body_rows))" ]; do
-    line="${display_lines[$i]}"
-    printf '%s\n' "$line"
+  while [ "$row" -le "$body_rows" ]; do
+    cup "$row" 0
+    el
+    if [ "$i" -lt "$wrapped_count" ]; then
+      line="${wrapped_lines[$i]}"
+      printf '%s' "${line:0:$max_line}"
+    fi
+    row=$((row + 1))
     i=$((i + 1))
   done
 
-  tput cup "$((rows - 3))" 0
-  printf '%s' "$(dim)"
-  printf '%*s\n' "$cols" '' | tr ' ' '-'
+  cup "$((rows - 5))" 0
+  el
+
+  cup "$((rows - 4))" 0
+  el
+  printf '%s' "$(color 135)"
+  printf -v divider '%*s' "$cols" ''
+  printf '%s\n' "${divider// /-}"
   printf '%s' "$(reset)"
 
-  tput cup "$((rows - 2))" 0
+  cup "$((rows - 3))" 0
   mode_text="idle"
+  status_color=81
   if [ -n "$pending" ]; then
     pending_age=$(( $(date +%s) - pending_since ))
-    mode_text="pending ${pending_age}s $(face "$frame")"
+    mode_text="pending ${pending_age}s"
+    status_color=226
   fi
-  printf '%s%s%s\n' "$(dim)" "$mode_text" "$(reset)"
+  el
+  printf '%s%s %s%s%s\n' "$(color 226)" "$status_face" "$(color "$status_color")" "$mode_text" "$(reset)"
 
-  tput cup "$((rows - 1))" 0
+  cup "$((rows - 2))" 0
   prompt='> '
   shown_input="$input"
+  el
   if [ -n "$pending" ]; then
     shown_input="$pending"
-    printf '%s%s%s%s' "$prompt" "$(dim)" "$shown_input" "$(reset)"
+    printf '%s%s%s%s' "$prompt" "$(dim)" "${shown_input:0:$((cols - 3))}" "$(reset)"
   else
-    printf '%s%s' "$prompt" "$shown_input"
+    printf '%s%s' "$prompt" "${shown_input:0:$((cols - 3))}"
   fi
+
+  bottom_status="model: $model | transcript: ${transcript_size} B, ${transcript_turns} turns"
+  cup "$((rows - 1))" 0
+  el
+  printf '%s%s%s' "$(dim)" "${bottom_status:0:$max_line}" "$(reset)"
 }
 
+tput clear
+refresh_model
 poll_transcript
 append_line "$(dim)Ctrl-D exits. Slash commands render here only.$(reset)"
 
