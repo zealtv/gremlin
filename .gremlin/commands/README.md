@@ -18,6 +18,9 @@ Each command is a bash script directly under `commands/`.
 |---------|---------|
 | `/new` | start a fresh transcript (rotates current into `transcript-archive/`) |
 | `/model` | list or set the active model preset |
+| `/update` | pull canonical gremlin from `.upstream` and lay it over this copy |
 | `/help` | show available commands |
 
-Add a command by dropping a script into this folder.
+Add a command by dropping a script into this folder. **Name custom additions distinctly from canonical names** — `/update` overwrites canonical files by name, so a personal `commands/help.sh` would be replaced. New names (e.g. `commands/standup.sh`) survive untouched.
+
+`/update` reads the canonical tarball URL from `.gremlin/.upstream`. `init.sh` writes a default pointing at the public canonical; edit it to track a fork or a local tarball (`file:///path/to/gremlin.tar.gz`).
