@@ -15,6 +15,10 @@ Configure a model preset before starting. The default preset is
 drop another executable preset into `.gremlin/models/` and select it from the
 TUI with `/model <alias>`.
 
+The gremlin's working directory is the parent folder that contains `.gremlin/`.
+The runner `cd`s there before tending, so model CLIs and tools should treat
+that host folder as the normal workspace scope.
+
 Start the runner:
 
 ```sh
