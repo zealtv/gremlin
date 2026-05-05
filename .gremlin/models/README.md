@@ -19,8 +19,9 @@ flags; that's exactly why the invocation lives per-preset.
 
 ## File name = alias
 
-`models/fast.sh` → alias `fast`. Switch at runtime with
-`say "/model fast"`. `/model` lists every `*.sh` in this directory,
+`models/fast.sh` -> alias `fast`. Switch at runtime with
+`/model fast` in the TUI, or `bin/say /model fast` from a script.
+`/model` lists every `*.sh` in this directory,
 marking the active one with `*`.
 
 ## Label
@@ -47,7 +48,7 @@ there, or write your own.
 cp models/default.sh models/local.sh
 chmod +x models/local.sh
 $EDITOR models/local.sh   # uncomment one block, drop the rest
-say "/model local"
+./.gremlin/bin/say /model local
 ```
 
 ## Permissions
@@ -56,5 +57,5 @@ There is no enforced sandbox at the gremlin layer. Each harness has
 its own permissions model — claude has `--allowedTools`, others have
 their equivalents — and the appropriate flag goes inside the preset.
 The convention is to host a gremlin in a directory where broad
-filesystem reach is acceptable. See `DEVELOPING.md` for OS-level
-isolation.
+filesystem reach is acceptable. See `docs/composition.md` for notes on
+OS-level isolation.
