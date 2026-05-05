@@ -6,4 +6,5 @@ set -euo pipefail
 target="$1/.gremlin"
 [[ ! -e "$target" ]] || { echo "refusing: $target already exists" >&2; exit 1; }
 cp -r "$(dirname "$0")/.gremlin" "$target"
+echo "https://github.com/zealtv/gremlin/archive/refs/heads/main.tar.gz" > "$target/.upstream"
 echo "initialised gremlin at $target"

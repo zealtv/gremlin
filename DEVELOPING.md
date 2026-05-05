@@ -17,31 +17,28 @@ cd ~/repos/gremlin
 
 Personalise the copy: edit `~/Desktop/mygremlin/.gremlin/gremlin.md`, drop facts into `context/*.md`. Never edit identity or context inside the repo.
 
-Drop a sync helper into the host directory so you can pull canonical → personal at will:
+`init.sh` writes `~/Desktop/mygremlin/.gremlin/.upstream` pointing at the public canonical tarball on GitHub. `/update` (a slash command) is the one and only way personal copies pull from canonical — for end users and for you. To iterate against your local clone instead of GitHub, point `.upstream` at a local tarball:
 
 ```bash
-cat > ~/Desktop/mygremlin/sync.sh <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-rsync -a \
-  --exclude='transcript*' \
-  --exclude='.nest/in/' --exclude='.nest/out/' --exclude='.nest/dropped/' \
-  --exclude='.groundhog/out/' --exclude='.groundhog/fired/' \
-  --exclude='context/' \
-  ~/repos/gremlin/.gremlin/ ~/Desktop/mygremlin/.gremlin/
-EOF
-chmod +x ~/Desktop/mygremlin/sync.sh
+echo 'file:///tmp/gremlin.tar.gz' > ~/Desktop/mygremlin/.gremlin/.upstream
 ```
 
-Code flows; runtime artefacts and your `context/` don't.
+Then refresh that tarball whenever you want to test a canonical change:
+
+```bash
+( cd ~/repos && tar -czf /tmp/gremlin.tar.gz gremlin/.gremlin )
+```
+
+Code flows; runtime artefacts and your `context/` don't — `/update` excludes `transcript*`, the nest queues, groundhog runtime + schedule, `context/`, `gremlin.md`, and per-install state (`.upstream`, `.model`, `.paused`).
 
 ## Daily loop
 
 1. Edit the canonical inside `~/repos/gremlin/.gremlin/`.
-2. Sync: `~/Desktop/mygremlin/sync.sh`.
-3. Run / test from `~/Desktop/mygremlin/`.
-4. Iterate.
-5. Commit the canonical changes.
+2. Re-tar: `( cd ~/repos && tar -czf /tmp/gremlin.tar.gz gremlin/.gremlin )`.
+3. From `~/Desktop/mygremlin/`: `./.gremlin/say "/update"` (or `/update --dry-run` to preview).
+4. Run / test.
+5. Iterate.
+6. Commit the canonical changes.
 
 Bigger work — features, extensions, refactors — drives through the loom.
 
