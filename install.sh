@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# usage: curl -fsSL https://raw.githubusercontent.com/zealtv/gremlin/main/install.sh | bash
+#        curl -fsSL https://raw.githubusercontent.com/zealtv/gremlin/main/install.sh | bash -s -- <host-dir>
+# Places a fresh .gremlin/ inside the given host directory, downloading it from
+# the canonical GitHub tarball.
+set -euo pipefail
+
+target="${1:-$PWD}"
+dest="$target/.gremlin"
+url="https://github.com/zealtv/gremlin/archive/refs/heads/main.tar.gz"
+
+[[ ! -e "$dest" ]] || { echo "refusing: $dest already exists" >&2; exit 1; }
+mkdir -p "$target"
+
+tmp="$(mktemp -d)"
+cleanup() {
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+curl -fsSL "$url" -o "$tmp/gremlin.tar.gz"
+tar -xzf "$tmp/gremlin.tar.gz" -C "$tmp"
+
+extracted="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+src="$extracted/.gremlin"
+[[ -d "$src" ]] || { echo "tarball does not contain a .gremlin/ at its root" >&2; exit 1; }
+
+cp -R "$src" "$dest"
+echo "$url" > "$dest/.upstream"
+echo "initialised gremlin at $dest"
