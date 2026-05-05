@@ -205,7 +205,13 @@ Four flows compose the runtime. They share no state besides the file system; bot
 
 ## Use a gremlin yourself
 
-This repo dogfoods one gremlin at `.gremlin/` — the canonical reference. To run a gremlin of your own, copy that folder into any host directory:
+This repo dogfoods one gremlin at `.gremlin/` — the canonical reference. To run a gremlin of your own, install the latest version into any host directory:
+
+```
+curl -fsSL https://raw.githubusercontent.com/zealtv/gremlin/main/install.sh | bash -s -- ~/Desktop/research
+```
+
+If you already have the repo cloned locally, you can copy that folder instead:
 
 ```
 ./init.sh ~/Desktop/research
