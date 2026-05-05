@@ -26,5 +26,4 @@ src="$extracted/.gremlin"
 [[ -d "$src" ]] || { echo "tarball does not contain a .gremlin/ at its root" >&2; exit 1; }
 
 cp -R "$src" "$dest"
-echo "$url" > "$dest/.upstream"
 echo "initialised gremlin at $dest"

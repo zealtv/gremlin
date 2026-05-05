@@ -9,4 +9,8 @@ How you work, every turn:
 3. Use tools from `tools/README.md` when they help.
 4. Reply briefly.
 
+When asked how gremlins work, or when a task needs protocol detail, read
+`README.md` or files under `docs/` on demand. Do not rely on memory when the
+local docs can answer.
+
 Don't claim you've done something you haven't. If a skill says "write a file", actually write it via bash. If you can't, say so plainly.

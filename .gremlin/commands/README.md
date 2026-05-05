@@ -1,6 +1,8 @@
 # commands
 
-System commands for the user — invoked via the bridge with a leading `/`. `say "/foo bar"` runs `commands/foo.sh bar` and never reaches the LLM.
+System commands for the user — invoked via a bridge with a leading `/`.
+`/foo bar` in the TUI, or `bin/say /foo bar` from a script, runs
+`commands/foo.sh bar` and never reaches the LLM.
 
 Parallel to `tools/`, but for a different audience: tools are for the gremlin, commands are for you. Commands run with your shell privileges; they're not allowlist-constrained.
 
@@ -23,4 +25,5 @@ Each command is a bash script directly under `commands/`.
 
 Add a command by dropping a script into this folder. **Name custom additions distinctly from canonical names** — `/update` overwrites canonical files by name, so a personal `commands/help.sh` would be replaced. New names (e.g. `commands/standup.sh`) survive untouched.
 
-`/update` reads the canonical tarball URL from `.gremlin/.upstream`. `init.sh` writes a default pointing at the public canonical; edit it to track a fork or a local tarball (`file:///path/to/gremlin.tar.gz`).
+`/update` reads the canonical tarball URL from `.gremlin/.upstream`. Edit that
+file to track a fork or a local tarball (`file:///path/to/gremlin.tar.gz`).
