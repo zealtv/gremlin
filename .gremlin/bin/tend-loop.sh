@@ -13,15 +13,15 @@
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 
 # .paused gate: while present, the loop is a no-op. Lets archive.sh (and
 # any other coordinator) freeze the gremlin without killing the runner.
 [ -e "$GREMLIN_DIR/.paused" ] && exit 0
 
-# Run from the gremlin root so the LLM's --allowedTools "Bash(./tools/*)"
-# pattern resolves to *this* gremlin's tools, regardless of where run.sh
-# was launched from.
-cd "$GREMLIN_DIR"
+# Run model/tool commands from the host workspace. Gremlin internals
+# continue using absolute paths under GREMLIN_DIR.
+cd "$HOST_DIR"
 
 NEST="$GREMLIN_DIR/.nest"
 NESTLING="$NEST/nestling.sh"

@@ -14,6 +14,9 @@
 set -uo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
+
+cd "$HOST_DIR"
 
 "$GREMLIN_DIR/bin/index-skills.sh"
 
