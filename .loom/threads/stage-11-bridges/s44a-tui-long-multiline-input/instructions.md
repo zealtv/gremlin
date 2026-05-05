@@ -17,7 +17,7 @@ This is a focused follow-up to `s44-tui-bridge`. The initial bridge deliberately
 
 - Replace the bottom single-line input affordance with a small wrapping editor area.
 - Long lines wrap within the terminal width instead of being cut off.
-- Multiline input is supported with `Ctrl-J` to insert a newline and `Enter` to submit. Document it in `bridges/tui/README.md`, and show a dim hint in the empty input area.
+- Multiline input is supported with `Ctrl-N` to insert a newline and `Enter` to submit. Document it in `bridges/tui/README.md`, and show a dim hint in the empty input area.
 - Submission writes the exact entered body to `.nest/in/<iso>.md`, preserving newlines.
 - Slash commands still dispatch as commands when the whole input begins with `/`; command output remains ephemeral and is not written to `transcript.md`.
 - Keep the TUI dependency-free unless the implementation proves the shell editor path is too brittle. If a dependency is introduced, document why and keep launch/install behaviour clear.
