@@ -110,7 +110,7 @@ From `~/repos/gremlin`:
 
 These extensions slot in cleanly without restructuring the foundation. Pick one, draft a thread under `.loom/threads/`, decompose.
 
-- **Telegram (or any other) bridge** — long-running daemon that tails `transcript.md` for assistant turns and writes inbound to `.nest/in/`, with a `bridges/<name>/.cursor` for at-least-once replay.
+- **Telegram (or any other push bridge)** — long-running daemon that tails `transcript.md` for assistant turns and writes inbound to `.nest/in/`, with a `bridges/<name>/.cursor` for at-least-once delivery.
 - **Attachments** — items in `.nest/in/` and `.nest/out/` become directories. The protocol already accepts both.
 - **Voice (whisper in, TTS out)** — a transcribe tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
 - **A second gremlin in the same parent** — another host folder. Maybe a delegate skill.

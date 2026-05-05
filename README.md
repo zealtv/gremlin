@@ -85,7 +85,7 @@ A gremlin has four small surfaces. Everything else is internals.
 
 A bridge moves bytes between the outside world and the gremlin. Inbound bridges write into `.nest/in/`; outbound bridges tail `transcript.md` for new `## assistant —` turns. Bridges know nothing about the LLM, prompts, or skills.
 
-The MVP ships one one-shot bridge: a local CLI named `say` at `bin/say`. `say "..."` writes your message into `.nest/in/`, tails `transcript.md` for the next assistant turn, prints its body. `say /foo bar` dispatches to `commands/foo.sh bar` directly, bypassing both the LLM and the nest. Synchronous from your side, async from the gremlin's. Long-running bridges (TUI, Telegram) keep a `bridges/<name>/.cursor` so a restart doesn't re-render history.
+The MVP ships one one-shot bridge: a local CLI named `say` at `bin/say`. `say "..."` writes your message into `.nest/in/`, tails `transcript.md` for the next assistant turn, prints its body. `say /foo bar` dispatches to `commands/foo.sh bar` directly, bypassing both the LLM and the nest. Synchronous from your side, async from the gremlin's. Long-running bridges that push to external channels keep a `bridges/<name>/.cursor` so a restart doesn't re-send history; local bridges may replay history in their own pane.
 
 Telegram, Discord, email, web — all later additions, each just another script that talks to the transcript and `.nest/in/`. Swap the bridge, the gremlin doesn't notice.
 
@@ -258,7 +258,7 @@ The MVP gives you: a runnable gremlin that converses via local CLI, calls tools,
 
 Extensions slot in without restructuring:
 
-- **Telegram (or any other) bridge** — long-running daemon that tails `transcript.md` for assistant turns and writes inbound to `.nest/in/`, with a `bridges/<name>/.cursor` for at-least-once replay.
+- **Telegram (or any other push bridge)** — long-running daemon that tails `transcript.md` for assistant turns and writes inbound to `.nest/in/`, with a `bridges/<name>/.cursor` for at-least-once delivery.
 - **Attachments** — items in `.nest/in/` and `.nest/out/` become directories. The protocol already accepts both.
 - **Voice (whisper in, TTS out)** — a transcribe tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
 - **A second gremlin** — another host folder. Maybe a delegate skill.
