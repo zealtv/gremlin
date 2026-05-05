@@ -41,7 +41,14 @@ exec claude -p --model claude-sonnet-4-6 --allowedTools "Bash"
 # --- codex (openai) -----------------------------------------------------
 # Requires the openai codex CLI. The `exec` subcommand is the
 # non-interactive entry point; `-` makes it read the prompt from stdin.
-# exec codex exec --model gpt-5 -
+# exec codex exec --model gpt-5.5 -
+# exec codex exec --model gpt-5.4 -
+# exec codex exec --model gpt-5.4-mini -
+# exec codex exec --model gpt-5.3-codex -
+# exec codex exec --model gpt-5.3-codex-spark -
+# exec codex exec --model gpt-5.2 -
+
+
 
 # --- pi (https://pi.dev) ------------------------------------------------
 # Multi-provider agent. pi takes the prompt as a positional arg, so
