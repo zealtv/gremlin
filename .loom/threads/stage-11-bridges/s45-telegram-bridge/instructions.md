@@ -8,7 +8,7 @@ Second bridge. Slots into the `bridges/<name>/` convention established by s44. A
 bridges/
   telegram/
     telegram.sh       # entry point; long-running daemon
-    .cursor           # last pushed transcript turn
+    .cursor           # transcript byte offset after last pushed turn
     .update-offset    # last seen telegram update_id (inbound polling)
     config            # bot token, chat id (gitignored; .example committed)
     config.example
@@ -43,13 +43,13 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
 
 - Tail `transcript.md`. For each new `## assistant — <iso>` turn past the cursor:
   - `POST https://api.telegram.org/bot<token>/sendMessage` with `chat_id` and `text` (turn body).
-  - On success, advance `.cursor` to that turn's iso.
+  - On success, advance `.cursor` to the byte offset after that turn.
   - On failure (network, rate limit), retry with backoff; do not advance the cursor until success.
-- Cursor format: iso timestamp (matches s44).
+- Cursor format: byte offset into `transcript.md` (matches s44).
 
 ## Cursor / restart semantics
 
-- Same convention as s44: `bridges/telegram/.cursor` records the last successfully pushed turn.
+- Same convention as s44: `bridges/telegram/.cursor` records the transcript byte offset after the last successfully pushed turn.
 - On startup: read cursor, push everything after it, advance as we go. A restart mid-conversation does not duplicate.
 - Missing cursor on first launch: do **not** push the entire transcript history to Telegram. Initialise the cursor to "now" and only push turns from this point forward. (Different default than the TUI, because pushing 500 historical turns to a chat is noisy and possibly rate-limited.)
 

@@ -37,9 +37,10 @@ bridges/
 ## Cursor
 
 - File: `bridges/tui/.cursor`.
-- Contents: the iso timestamp of the last turn rendered. Human-readable; matches transcript format.
-- On startup: read cursor; render nothing already past it; render new turns as they arrive; advance cursor as each is rendered.
-- If cursor is missing on first launch: render nothing historical. The user starts fresh. (Alternative: render the last N turns. Decide during build; default is fresh.)
+- Contents: byte offset into `transcript.md`. This deliberately differs from the original timestamp sketch: byte offsets avoid same-second timestamp collisions and match how the bridge tails the file.
+- On startup: read cursor; render content after it; render new turns as they arrive; advance cursor to the transcript size after each poll.
+- If cursor is missing on first launch: replay transcript history from the beginning, then save the byte offset.
+- If the transcript is archived or truncated and the saved cursor is past EOF, reset to the beginning.
 
 ## Out of scope
 

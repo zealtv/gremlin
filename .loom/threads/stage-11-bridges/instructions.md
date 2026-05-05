@@ -28,7 +28,8 @@ Implementation order is encoded in stitch numbers across all in-flight threads: 
 
 **At-least-once and replay.**
 
-- Tailing transcript means bridges must persist a cursor (last delivered turn timestamp or byte offset) so a restart doesn't re-push history. Cursor lives at `bridges/<name>/.cursor`. Each bridge owns its own.
+- Tailing transcript means bridges must persist a cursor so a restart doesn't re-push history. Cursor lives at `bridges/<name>/.cursor`. Each bridge owns its own.
+- Cursor format established by s44: byte offset into `transcript.md`, not turn timestamp. Byte offsets avoid same-second timestamp collisions and match the bridge's actual tailing behavior.
 - All bridges always fire. Every channel gets every assistant turn. Per-message routing (Telegram only, not TUI) is explicitly out of scope; revisit if a real need surfaces.
 
 **Routing concern deferred.** Once a real need exists, a frontmatter field on the transcript turn (`target: telegram`) is the lightest way in. Don't pre-design.
@@ -43,7 +44,7 @@ Implementation order is encoded in stitch numbers across all in-flight threads: 
 - Tail `transcript.md` for new turns; render assistant turns as they appear.
 - Slash commands dispatch the same way `say` does (`commands/<cmd>.sh`); output renders ephemerally in the TUI pane, **not** written to `transcript.md`.
 - Library-agnostic at this stage. Pick when implementing.
-- Cursor convention: `bridges/tui/.cursor` records last rendered turn so restart doesn't re-render the entire transcript.
+- Cursor convention: `bridges/tui/.cursor` records the last rendered transcript byte offset so restart doesn't re-render already-seen transcript content.
 
 ### Runner / nest (s43)
 
@@ -79,7 +80,7 @@ End-to-end with TUI as the only bridge:
 
 - TUI library / framework choice.
 - Exact pending-affordance for the user's submitted-but-not-yet-ingested line.
-- Cursor format: timestamp-based vs byte-offset.
+- Cursor format: decided in s44 as byte offset.
 - Whether `.nest/out/` is removed from disk or just left empty.
 - Whether `say` survives at all post-stage, or only as inbound-only one-shot for scripts.
 - Slash-command output styling in the TUI pane.
