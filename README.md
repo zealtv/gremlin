@@ -93,7 +93,7 @@ Telegram, Discord, email, web — all later additions, each just another script 
 
 A tool is a bash script that takes args (or stdin) and writes text to stdout. Errors go to stderr with a non-zero exit. That's the whole interface. Pure functions of args → stdout; state lives in nests and transcripts.
 
-`tools/README.md` is the menu the tender reads. `bin/llm.sh` invokes the tender with `--allowedTools "Bash"` (unrestricted) so it can read skills on demand, run tools, and write scheduled work. There is **no enforced sandbox** — gremlins are gremlins. The convention is that you host one in a directory where broad bash is fine. Real isolation belongs outside the protocol (see "Sandboxing & sharing" and DEVELOPING.md). Tools are the *named* surface; the rest of the host directory is the *implicit* one.
+`tools/README.md` is the menu the tender reads. The active preset (`models/<alias>.sh`) invokes the tender with broad bash so it can read skills on demand, run tools, and write scheduled work — for the default claude preset that's `--allowedTools "Bash"`; other harnesses use their equivalent. There is **no enforced sandbox** — gremlins are gremlins. The convention is that you host one in a directory where broad bash is fine. Real isolation belongs outside the protocol (see "Sandboxing & sharing" and DEVELOPING.md). Tools are the *named* surface; the rest of the host directory is the *implicit* one.
 
 ### Skills (`skills/<name>.md`)
 
@@ -119,9 +119,9 @@ When the user asks to be reminded, write a file at:
 
 Tool vs skill: **tool = script you run, skill = procedure you follow.**
 
-### The LLM seam (`bin/llm.sh`)
+### The LLM seam (`bin/llm.sh` + `models/`)
 
-One file hides everything LLM-specific. `llm.sh "<prompt>"` reads stdin or args, calls whichever model CLI is wired up, prints the reply on stdout. Swap models by editing this one file. Everything else — bridges, nests, skills, tools, transcript — stays the same.
+One file routes prompts to the active preset. `llm.sh "<prompt>"` reads stdin or args, looks up the alias in `.gremlin/.model` (default: `default`), and pipes the prompt to `models/<alias>.sh`. Each preset is a small executable script that takes the prompt on stdin and emits a reply on stdout — that is the whole contract, so any harness fits: claude, gemini, codex, pi, opencode, nanocoder, ollama, a custom HTTP wrapper. Swap or add presets by editing files in `models/`; `llm.sh` itself never needs to change. Everything else — bridges, nests, skills, tools, transcript — stays the same. See `models/README.md` for the contract; `models/default.sh` ships as a runnable example with starter blocks for several harnesses.
 
 ## The loops
 
@@ -234,7 +234,7 @@ There is no shared state, no shared process, no shared anything. Composition is 
 
 ### Sandboxing & sharing
 
-Sandboxing is convention, not enforcement. `bin/llm.sh` runs the model with unrestricted bash; the rule is "host a gremlin somewhere broad reach is acceptable." Anything stricter belongs outside the protocol — see DEVELOPING.md for OS-level options.
+Sandboxing is convention, not enforcement. The active preset runs the model with unrestricted bash; the rule is "host a gremlin somewhere broad reach is acceptable." Anything stricter belongs outside the protocol — see DEVELOPING.md for OS-level options.
 
 When two gremlins should talk, or a gremlin should reach a shared resource, make the reach **visible** with a symlink. The link is the capability; removing it is revocation; `ls` is the audit trail.
 
@@ -267,6 +267,6 @@ Extensions slot in without restructuring:
 
 - **Bridges are dumb.** They translate bytes between a platform and the file system. They know nothing about the LLM, prompts, or context.
 - **The tender is platform-agnostic.** Swap the bridge to change platform; nests, groundhogs, transcripts, tools, skills, identity, and context are unchanged.
-- **The tender is LLM-agnostic.** Skills are markdown, tools are bash, the prompt is a concatenation of files. Swap `llm.sh` to change models.
+- **The tender is LLM-agnostic.** Skills are markdown, tools are bash, the prompt is a concatenation of files. Swap a preset in `models/` to change harness or model.
 - **Gremlins are folders.** Each is a complete unit. Adding one is `cp -r`. Removing one is `rm -rf`. Cross-gremlin work is `mv`.
 - **Debugging is `ls` and `cat`.** Every piece of state — pending work, schedule, tools, skills, identity, context, conversation — is a visible file.
