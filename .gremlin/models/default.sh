@@ -47,13 +47,14 @@ exec claude -p --model claude-sonnet-4-6 --allowedTools "Bash"
 # non-interactive entry point; `-` makes it read the prompt from stdin.
 # Gremlin usually runs from a normal host folder rather than a git repo,
 # so Codex presets should skip the repo trust check.
-# exec codex exec --skip-git-repo-check --model gpt-5.5 -s workspace-write -a on-request -
-# exec codex exec --skip-git-repo-check --model gpt-5.5 -s danger-full-access -a never -
-# exec codex exec --skip-git-repo-check --model gpt-5.4 -s workspace-write -a on-request -
-# exec codex exec --skip-git-repo-check --model gpt-5.4-mini -s workspace-write -a on-request -
-# exec codex exec --skip-git-repo-check --model gpt-5.3-codex -s workspace-write -a on-request -
-# exec codex exec --skip-git-repo-check --model gpt-5.3-codex-spark -s workspace-write -a on-request -
-# exec codex exec --skip-git-repo-check --model gpt-5.2 -s workspace-write -a on-request -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.5 -s workspace-write -a on-request -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.2 -s workspace-write -
+# exec codex --ask-for-approval never exec --skip-git-repo-check --model gpt-5.5 -s danger-full-access -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.4 -s workspace-write -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.4-mini -s workspace-write -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.3-codex -s workspace-write -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.3-codex-spark -s workspace-write -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.2 -s workspace-write -
 
 
 
