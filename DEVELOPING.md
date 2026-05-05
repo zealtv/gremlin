@@ -35,7 +35,7 @@ Code flows; runtime artefacts and your `context/` don't — `/update` excludes `
 
 1. Edit the canonical inside `~/repos/gremlin/.gremlin/`.
 2. Re-tar: `( cd ~/repos && tar -czf /tmp/gremlin.tar.gz gremlin/.gremlin )`.
-3. From `~/Desktop/mygremlin/`: `./.gremlin/say "/update"` (or `/update --dry-run` to preview).
+3. From `~/Desktop/mygremlin/`: `./.gremlin/bin/say "/update"` (or `/update --dry-run` to preview).
 4. Run / test.
 5. Iterate.
 6. Commit the canonical changes.
@@ -110,7 +110,7 @@ From `~/repos/gremlin`:
 
 These extensions slot in cleanly without restructuring the foundation. Pick one, draft a thread under `.loom/threads/`, decompose.
 
-- **Telegram (or any other) bridge** — replace `say` with `bin/bridge-in.sh` + `bin/bridge-out.sh` reading `meta.json`.
+- **Telegram (or any other) bridge** — long-running daemon that tails `transcript.md` for assistant turns and writes inbound to `.nest/in/`, with a `bridges/<name>/.cursor` for at-least-once replay.
 - **Attachments** — items in `.nest/in/` and `.nest/out/` become directories. The protocol already accepts both.
 - **Voice (whisper in, TTS out)** — a transcribe tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
 - **A second gremlin in the same parent** — another host folder. Maybe a delegate skill.
@@ -122,7 +122,8 @@ Before pushing, from `~/repos/gremlin`:
 
 - [ ] `git status` is clean
 - [ ] `cat .gremlin/transcript.md` is empty
-- [ ] `.gremlin/.nest/in/`, `.nest/out/`, `.groundhog/out/`, `.groundhog/fired/` contain only `.gitkeep`
+- [ ] `.gremlin/.nest/in/`, `.groundhog/out/`, `.groundhog/fired/` contain only `.gitkeep`
+- [ ] `.gremlin/.nest/out/` contains only `.gitkeep` *or* archive entries newer than the sweep window (default 14 days; cleared by `nestling sweep`)
 - [ ] `cat .gremlin/gremlin.md` is generic — no real names, people, or projects
 - [ ] `ls .gremlin/context/` contains only `.gitkeep` (or generic placeholders)
 - [ ] No `.env`, no `meta.json`, no API keys anywhere

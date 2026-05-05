@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # tend-loop.sh — one pass of the tend loop.
 #
-# Lists ready items in the nest, claims the oldest, assembles a prompt from
-# identity + context + transcript + item body, calls bin/llm.sh, writes the
-# reply to .nest/out/<ts>.md, appends the assistant turn to transcript.md,
-# and completes the claimed item.
+# Lists ready items in the nest, claims the oldest, appends a `## user —`
+# turn to transcript.md, assembles a prompt from identity + context +
+# transcript + item body, calls bin/llm.sh, appends the assistant turn to
+# transcript.md, and completes the claimed item (filing the reply into
+# .nest/out/ as the protocol-aligned per-item archive).
 #
 # Idempotent and single-shot: run.sh invokes this on a cadence; each call
 # processes at most one item.
@@ -46,6 +47,11 @@ if [ -d "$claimed_path" ]; then
 else
   body="$(cat "$claimed_path")"
 fi
+
+# Tender owns transcript writes for both turns. Bridges only drop into
+# .nest/in/; the user turn lands here at claim time.
+iso_user="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+printf '## user — %s\n%s\n\n' "$iso_user" "$body" >> "$TRANSCRIPT"
 
 prompt_file="$(mktemp)"
 reply_file="$(mktemp)"

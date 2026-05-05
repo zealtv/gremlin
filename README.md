@@ -11,8 +11,8 @@ Built on `nestlings`, `groundhog`, and `loom`. LLM-agnostic by construction: not
 The folder *is* the agent.
 
 - An incoming message becomes a file in `.gremlin/.nest/in/`.
-- The tender reads the gremlin's identity, context, skills, tools, and transcript, replies into `.nest/out/`.
-- A bridge ships items between the outside world and the nest.
+- The tender reads the gremlin's identity, context, skills, tools, and transcript, and appends its reply to `transcript.md`.
+- A bridge ships items between the outside world and the gremlin: inbound writes to `.nest/in/`; outbound tails `transcript.md`.
 - A groundhog provides scheduled messages and recurring tasks.
 - Tools are bash scripts. Skills are markdown procedures.
 
@@ -40,10 +40,10 @@ There is no enforced "shared/" folder for cross-gremlin tools or skills. If two 
   gremlin.md            # identity: personality, purpose, voice
   context/              # optional: facts. user, stakeholders, environment, glossary
   run.sh                # backgrounds the loops; traps SIGINT
-  say                   # local CLI bridge: write a message, get a reply
   transcript.md         # append-only conversation log
   transcript-archive/   # rotated transcripts
   bin/
+    say                 # local one-shot CLI bridge: write a message, get a reply
     tend-loop.sh        # the agent loop
     tick-loop.sh        # groundhog tick → route items
     llm.sh              # the only LLM-specific code
@@ -83,11 +83,11 @@ A gremlin has four small surfaces. Everything else is internals.
 
 ### Bridges (how the world reaches the gremlin)
 
-A bridge moves bytes between the outside world and `.nest/`. Inbound bridges write into `.nest/in/`; outbound bridges read from `.nest/out/`. Bridges know nothing about the LLM, prompts, or skills.
+A bridge moves bytes between the outside world and the gremlin. Inbound bridges write into `.nest/in/`; outbound bridges tail `transcript.md` for new `## assistant —` turns. Bridges know nothing about the LLM, prompts, or skills.
 
-The MVP ships one bridge: a local CLI named `say`. `say "..."` writes your message into `.nest/in/`, waits for a reply in `.nest/out/`, prints it. `say --repl` is an interactive loop — type, enter, see the reply, repeat; slash commands work inline; `/exit` or Ctrl-D quits. `say --listen` blocks and prints whatever lands in `.nest/out/` — for scheduled outbound and as a side channel. Synchronous from your side, async from the gremlin's.
+The MVP ships one one-shot bridge: a local CLI named `say` at `bin/say`. `say "..."` writes your message into `.nest/in/`, tails `transcript.md` for the next assistant turn, prints its body. `say /foo bar` dispatches to `commands/foo.sh bar` directly, bypassing both the LLM and the nest. Synchronous from your side, async from the gremlin's. Long-running bridges (TUI, Telegram) keep a `bridges/<name>/.cursor` so a restart doesn't re-render history.
 
-Telegram, Discord, email, web — all later additions, each just another script that talks to the same two folders. Swap the bridge, the gremlin doesn't notice.
+Telegram, Discord, email, web — all later additions, each just another script that talks to the transcript and `.nest/in/`. Swap the bridge, the gremlin doesn't notice.
 
 ### Tools (`tools/<name>.sh`)
 
@@ -131,18 +131,20 @@ Each loop is a single shell script. They never call each other; they share the f
 
 1. List ready items via `.nest/nestling.sh list`; bail if empty.
 2. Claim the oldest item.
-3. Build the prompt: `gremlin.md` + `context/*.md` (sorted) + `skills/INDEX.md` + `tools/README.md` + `transcript.md` + the item.
-4. Pipe to `bin/llm.sh`; capture reply.
-5. Write reply to `.nest/out/<timestamp>.md` via `.landing` rename.
+3. Append `## user — <iso8601>\n<body>\n\n` to `transcript.md`. (The tender owns all transcript writes; bridges only drop into `.nest/in/`.)
+4. Build the prompt: `gremlin.md` + `context/*.md` (sorted) + `skills/INDEX.md` + `tools/README.md` + `transcript.md` + the item.
+5. Pipe to `bin/llm.sh`; capture reply.
 6. Append `## assistant — <iso8601>\n<reply>\n\n` to `transcript.md`.
-7. Complete the claimed item.
+7. Complete the claimed item — `nestling complete` files the reply into `.nest/out/<ts>.md` as the protocol-aligned per-item archive (not a delivery surface; bounded by `nestling sweep`).
 
 ### `bin/tick-loop.sh` (~60s cadence)
 
 1. `.groundhog/groundhog.sh tick`.
 2. For each item in `.groundhog/out/`:
-   - If it contains `message.md`: `mv` that into `.nest/out/<timestamp>.md` (scheduled outbound — no agent invocation).
+   - If it contains `message.md`: append the body to `transcript.md` as a fresh `## assistant —` turn (scheduled outbound — no agent invocation), then drop the materialised item.
    - Otherwise: `mv` the item directory into `.nest/in/` (scheduled work for the tender).
+
+Items materialised by groundhog land in `.groundhog/out/<slug>/`. `tick-loop.sh` routes by structure: `message.md` is a pre-baked turn (appended directly to `transcript.md`); `instructions.md` is a thinking task (moved into `.nest/in/` for the tender).
 
 ### `run.sh`
 
@@ -150,7 +152,7 @@ Backgrounds each loop, traps SIGINT/SIGTERM, kills the children explicitly, `wai
 
 ## Transcript
 
-`transcript.md` is plain markdown, append-only. Two writers: the inbound bridge (user turns) and `tend-loop.sh` (assistant turns). One `>>` per turn — concurrent small appends do not interleave on POSIX.
+`transcript.md` is plain markdown, append-only. The tender owns all writes: `tend-loop.sh` appends both `## user —` (at claim time) and `## assistant —` (after the LLM call), and `tick-loop.sh` appends `## assistant —` for scheduled outbound. Bridges never write to it. One `>>` per turn — concurrent small appends do not interleave on POSIX.
 
 ```markdown
 ## user — 2026-04-27T19:42:11Z
@@ -169,11 +171,10 @@ Four flows compose the runtime. They share no state besides the file system; bot
 **(1) `say` round-trip — you talk, the gremlin replies.**
 
 ```
-  say "..."   ──►  transcript.md  (## user)
-              ──►  .nest/in/<ts>.md
-                                  ──(tend-loop)──►  .nest/out/<ts>.md
-                                                ──►  transcript.md  (## assistant)
-  say polls .nest/out/, prints the new file, moves it to out/sent/.
+  say "..."   ──►  .nest/in/<ts>.md
+                                  ──(tend-loop)──►  transcript.md  (## user, then ## assistant)
+                                                ──►  nestling complete → .nest/out/<ts>.md (archive)
+  say tails transcript.md, prints the next ## assistant body.
 ```
 
 **(2) Scheduled outbound — a future message, no agent invocation.**
@@ -181,8 +182,8 @@ Four flows compose the runtime. They share no state besides the file system; bot
 ```
   .groundhog/schedule/once/<date>/foo/message.md
        ──(groundhog tick)──►  .groundhog/out/foo-<date>/message.md
-       ──(tick-loop)──────►  .nest/out/<ts>.md
-       ──(say --listen / bridge)──►  delivered
+       ──(tick-loop)──────►  transcript.md  (## assistant)
+       ──(bridges tail)───►  delivered
 ```
 
 **(3) Scheduled tending — a future request the gremlin acts on.**
@@ -191,7 +192,7 @@ Four flows compose the runtime. They share no state besides the file system; bot
   .groundhog/schedule/daily/09/briefing/instructions.md
        ──(groundhog tick)──►  .groundhog/out/briefing-<date>/instructions.md
        ──(tick-loop)──────►  .nest/in/briefing-<date>/
-       ──(tend-loop)──────►  .nest/out/<ts>.md   (assistant reply)
+       ──(tend-loop)──────►  transcript.md  (## user, then ## assistant)
 ```
 
 **(4) Self-pacing follow-up — the gremlin schedules its own future work.**
@@ -217,7 +218,7 @@ Then edit your `gremlin.md`, drop facts into `context/`, and start it:
 ```
 cd ~/Desktop/research
 ./.gremlin/run.sh
-./.gremlin/say "hello"
+./.gremlin/bin/say "hello"
 ```
 
 **Don't run `say` against this repo's reference `.gremlin/`.** Its purpose is to be a clean, generic example you copy from. If you do run `say` against it, you'll see `transcript.md` change in `git status` — that's the visible signal to copy the gremlin out and run it there instead.
@@ -257,7 +258,7 @@ The MVP gives you: a runnable gremlin that converses via local CLI, calls tools,
 
 Extensions slot in without restructuring:
 
-- **Telegram (or any other) bridge** — replace `say` with `bin/bridge-in.sh` + `bin/bridge-out.sh` reading `meta.json`.
+- **Telegram (or any other) bridge** — long-running daemon that tails `transcript.md` for assistant turns and writes inbound to `.nest/in/`, with a `bridges/<name>/.cursor` for at-least-once replay.
 - **Attachments** — items in `.nest/in/` and `.nest/out/` become directories. The protocol already accepts both.
 - **Voice (whisper in, TTS out)** — a transcribe tool runs pre-tend; a TTS tool produces `voice.ogg` next to `message.md`.
 - **A second gremlin** — another host folder. Maybe a delegate skill.
