@@ -20,8 +20,10 @@
 #
 # Permissions / sandboxing: each harness has its own model. Claude's
 # `--allowedTools "Bash"` is the equivalent of "no real sandbox,"
-# matching the gremlin's host-directory convention. Other harnesses'
-# equivalents go here too.
+# matching the gremlin's host-directory convention. Gremlin host
+# folders do not need to be git repos, so include any harness flags
+# needed to run outside a repository. Other harnesses' equivalents go
+# here too.
 
 set -euo pipefail
 
@@ -35,18 +37,22 @@ exec claude -p --model claude-sonnet-4-6 --allowedTools "Bash"
 
 # --- gemini (google) ----------------------------------------------------
 # Requires the gemini CLI (https://github.com/google-gemini/gemini-cli).
-# Verify stdin support against your installed version.
+# Verify stdin support against your installed version. Gemini's trusted
+# folders feature is optional and disabled by default; if you enable it,
+# trust the gremlin host folder or its parent directory.
 # exec gemini -p --model gemini-2.5-flash
 
 # --- codex (openai) -----------------------------------------------------
 # Requires the openai codex CLI. The `exec` subcommand is the
 # non-interactive entry point; `-` makes it read the prompt from stdin.
-# exec codex exec --model gpt-5.5 -
-# exec codex exec --model gpt-5.4 -
-# exec codex exec --model gpt-5.4-mini -
-# exec codex exec --model gpt-5.3-codex -
-# exec codex exec --model gpt-5.3-codex-spark -
-# exec codex exec --model gpt-5.2 -
+# Gremlin usually runs from a normal host folder rather than a git repo,
+# so Codex presets should skip the repo trust check.
+# exec codex exec --skip-git-repo-check --model gpt-5.5 -
+# exec codex exec --skip-git-repo-check --model gpt-5.4 -
+# exec codex exec --skip-git-repo-check --model gpt-5.4-mini -
+# exec codex exec --skip-git-repo-check --model gpt-5.3-codex -
+# exec codex exec --skip-git-repo-check --model gpt-5.3-codex-spark -
+# exec codex exec --skip-git-repo-check --model gpt-5.2 -
 
 
 

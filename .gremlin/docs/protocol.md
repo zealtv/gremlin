@@ -26,8 +26,9 @@ Gremlin contains two nested protocols worth reading directly:
   .groundhog/           # scheduled work protocol
 ```
 
-The host folder is the agent's outside identity. The `.gremlin/` folder defines
-how that agent behaves.
+The host folder is the agent's outside identity and working directory. The
+`.gremlin/` folder defines how that agent behaves, and `run.sh` executes the
+loops from the host folder rather than from inside `.gremlin/`.
 
 ## Prompt Inputs
 
@@ -76,6 +77,10 @@ uses stderr plus a non-zero exit for errors.
 
 Each model preset receives the prompt on stdin and writes the reply to stdout.
 That keeps the rest of the gremlin independent of the model harness.
+
+Presets run with the host folder as the current working directory. Do not
+assume the gremlin is inside a git repository; the intended scope is usually
+just the parent folder containing `.gremlin/`.
 
 Configure `models/default.sh` before first use, or add another executable preset
 and select it from the TUI with `/model <alias>`.

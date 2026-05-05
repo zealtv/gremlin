@@ -3,6 +3,11 @@
 A gremlin is a folder you can talk to. This `.gremlin/` directory turns its
 parent folder into an agent.
 
+The parent folder that contains `.gremlin/` is also the gremlin's working
+directory. `run.sh` changes into that host folder before invoking the loops and
+model preset, so tools and model CLIs should treat it as the normal workspace
+scope.
+
 ## Run
 
 Configure a model preset first. The default preset is `models/default.sh`; edit
