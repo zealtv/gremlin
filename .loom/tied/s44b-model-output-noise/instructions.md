@@ -47,3 +47,7 @@ fast — claude-haiku-4-5
 - Repeated `/model` in the TUI never shows `sync.sh` unless a real `models/sync.sh` exists and is intentionally listed.
 - Output in TUI matches `./.gremlin/commands/model.sh` (byte-for-byte) for the same install.
 
+## Notes
+
+- Root cause was in TUI wrapping, not `/model`. `wrap_text_line()` used `for word in $line`, so Bash performed glob expansion while wrapping display text. The `/model` active marker `*` expanded against the TUI process cwd; in a local gremlin hosted beside `sync.sh`, the marker rendered as `sync.sh`.
+- Fixed by making wrapping treat each line as literal text via `fold -s -w`, preserving the active `*` marker and indentation.
