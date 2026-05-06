@@ -1,5 +1,9 @@
 # s47a-finding-shape
 
+```
+!!! Note from bob.  reconsider the below regarding yaml. it makes sense for findings to match the shape of skills.  this requires consideration, brainstorming, and careful thought.  DO NOT IMPLEMENT THIS STITCH until that work is done.
+```
+
 *(scribble repo)*
 
 Adopt plain markdown as the finding contract — no YAML, no frontmatter, ever. The shape that `index` and `fetch` will parse.
