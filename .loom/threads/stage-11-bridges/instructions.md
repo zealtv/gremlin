@@ -4,7 +4,7 @@
 
 **This is the goal stitch only.** Child stitches need their own `instructions.md` before being claimed.
 
-Implementation order is encoded in stitch numbers across all in-flight threads: s41–s46 are the bridges/models/update sequence, with stage-11's children at s43–s46. `s44a` is a TUI follow-up ordered immediately after s44 and before s45. Stage-10's memory work picks up at s47–s52 and lands last on a settled core.
+Implementation order is encoded in stitch numbers across all in-flight threads: s41–s46 are the bridges/models/update sequence, with stage-11's children at s43–s46. `s44a`/`s44b` are TUI follow-ups; `s44c` introduces the user-facing `gremlin` wrapper and lands before s45 so the Telegram daemon ships as `gremlin telegram start/stop/status/restart` from day one. Stage-10's memory work picks up at s47–s52 and lands last on a settled core.
 
 ## Strategy
 
@@ -74,8 +74,10 @@ End-to-end with TUI as the only bridge:
 1. `s43-runner-owns-outbound` — reframe `.nest/out/` as nestling-protocol archive, not a delivery surface. Move tick-loop's message branch to transcript append. Remove `--repl`/`--listen` from `say`. Update README and DEVELOPING. Foundational; everything else assumes the single-read-surface contract.
 2. `s44-tui-bridge` — implement the TUI as the first bridge. Establishes `bridges/<name>/` convention. Validates the new model end-to-end locally before going remote.
 3. `s44a-tui-long-multiline-input` — make the TUI input area wrap long text and preserve multiline submissions. Follow-up to s44; lands before more bridge surface area is added.
-4. `s45-telegram-bridge` — second bridge over Telegram Bot API. Reuses the bridges convention from s44 and adds persisted cursor state for a push channel. Demonstrates fan-out (TUI + Telegram both fire on every assistant turn).
-5. `s46-sweep-command` — `/sweep` slash command fanning out to `nestling sweep` and `groundhog sweep`. Strictly after s43.
+4. `s44b-model-output-noise` — fix `/model` output contamination observed in the TUI. Independent TUI bug-fix.
+5. `s44c-gremlin-wrapper` — introduce `./.gremlin/gremlin` as the single user-facing entry point. Moves `run.sh` into `bin/`, renames `bin/say` → `bin/say.sh`, and exposes `start/stop/status/restart/say/tui/help` plus auto-discovered `commands/*.sh`. Reserves the `gremlin <bridge> <verb>` dispatch shape for s45. Direct script invocation remains supported.
+6. `s45-telegram-bridge` — second bridge over Telegram Bot API. Reuses the bridges convention from s44, adds persisted cursor state for a push channel, and ships its daemon under `gremlin telegram start/stop/status/restart` via the s44c dispatch convention. Demonstrates fan-out (TUI + Telegram both fire on every assistant turn).
+7. `s46-sweep-command` — `/sweep` slash command fanning out to `nestling sweep` and `groundhog sweep`. Strictly after s43.
 
 ## Decisions deferred to those child stitches
 
