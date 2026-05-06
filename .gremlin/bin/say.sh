@@ -27,27 +27,7 @@ POLL_SECS=0.5
 
 # --- slash command dispatch --------------------------------------------
 if [ "$#" -gt 0 ] && [ "${1#/}" != "$1" ]; then
-  rest="$*"
-  rest="${rest#/}"
-  if [ -z "$rest" ]; then
-    echo "usage: $0 /<command> [args...]   (try /help)" >&2
-    exit 2
-  fi
-  cmd="${rest%% *}"
-  if [ "$cmd" = "$rest" ]; then
-    args=()
-  else
-    # shellcheck disable=SC2206
-    args=(${rest#"$cmd "})
-  fi
-  COMMANDS="$GREMLIN_DIR/commands"
-  script="$COMMANDS/$cmd.sh"
-  if [ -x "$script" ]; then
-    exec "$script" "${args[@]}"
-  fi
-  echo "unknown command: /$cmd" >&2
-  echo "try /help" >&2
-  exit 1
+  exec "$GREMLIN_DIR/bin/slash.sh" "$@"
 fi
 
 # --- send + wait (default) ---------------------------------------------

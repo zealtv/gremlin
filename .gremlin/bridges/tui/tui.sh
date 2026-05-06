@@ -362,14 +362,9 @@ submit_message() {
 
 run_slash() {
   local line="$1"
-  local rest cmd args output_file rc out_line
+  local rest cmd output_file rc out_line
   rest="${line#/}"
   cmd="${rest%% *}"
-
-  if [ -z "$cmd" ]; then
-    append_line "$(color 203)usage: /<command> [args...]$(reset)"
-    return 0
-  fi
 
   case "$cmd" in
     exit|quit)
@@ -377,32 +372,18 @@ run_slash() {
       ;;
   esac
 
-  if [ "$cmd" = "$rest" ]; then
-    args=()
-  else
-    # Match the small, space-separated command convention used by scripts.
-    # shellcheck disable=SC2206
-    args=(${rest#"$cmd "})
-  fi
-
-  if [ ! -x "$COMMANDS/$cmd.sh" ]; then
-    append_line "$(color 203)unknown command: /$cmd$(reset)"
-    append_line "$(dim)try /help$(reset)"
-    return 0
-  fi
-
   output_file="$(mktemp)"
   set +e
   if [ "${LC_ALL:-}" = "C.UTF-8" ]; then
-    ( cd "$GREMLIN_DIR" && LC_ALL= "$COMMANDS/$cmd.sh" "${args[@]}" </dev/null ) >"$output_file" 2>&1
+    LC_ALL= "$GREMLIN_DIR/bin/slash.sh" "$line" >"$output_file" 2>&1
   else
-    ( cd "$GREMLIN_DIR" && "$COMMANDS/$cmd.sh" "${args[@]}" </dev/null ) >"$output_file" 2>&1
+    "$GREMLIN_DIR/bin/slash.sh" "$line" >"$output_file" 2>&1
   fi
   rc=$?
   set -e
 
   append_line ""
-  append_line "$(bold)$(color 171)/$cmd$(reset) $(dim)command output$(reset)"
+  append_line "$(bold)$(color 171)/${cmd:-?}$(reset) $(dim)command output$(reset)"
   if [ -s "$output_file" ]; then
     while IFS= read -r out_line || [ -n "$out_line" ]; do
       append_line "$out_line"
