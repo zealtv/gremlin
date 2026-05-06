@@ -2,6 +2,8 @@
 
 Second bridge. Slots into the `bridges/<name>/` convention established by s44. A Telegram bot becomes a remote channel: messages sent to the bot land in `.nest/in/`; assistant turns from `transcript.md` get pushed back to the chat.
 
+**This is now a parent stitch.** Do not implement directly from this file. Work the child stitches in order so implementation, local-copy verification, restart/cursor checks, and setup docs are tied off with evidence from a real Telegram bot on `~/Desktop/mygremlin`.
+
 ## Layout
 
 ```
@@ -73,7 +75,17 @@ Polling is simpler than webhooks (no public URL needed). Keep it.
 
 ## Verify
 
-1. `run.sh` running. TUI bridge running. Telegram bridge running with valid config pointing at a test chat.
+Canonical verification happens in the child stitches:
+
+1. `s45a-telegram-bridge-implementation` builds the bridge and static docs scaffold without secrets.
+2. `s45b-local-copy-bot-setup` installs/tests the current canonical state in `~/Desktop/mygremlin` with a real Telegram bot config.
+3. `s45c-inbound-smoke-test` verifies Telegram input reaches `.nest/in/`, then transcript, then the reply returns.
+4. `s45d-outbound-cursor-verification` verifies proactive transcript fan-out, restart behavior, cursor semantics, and paused-runner behavior.
+5. `s45e-docs-from-verification` folds the findings from the staged tests into user-facing setup/troubleshooting docs.
+
+End-state acceptance for the whole parent stitch:
+
+1. Runner is running. TUI bridge is running. Telegram bridge is running with valid config pointing at a test chat.
 2. Send "hi" from Telegram. Within seconds, both the TUI and the Telegram chat show the assistant's reply. `transcript.md` has the `## user` and `## assistant` turns.
 3. Type "remind me in one minute to test" in the TUI. The reminder fires. Both the TUI **and** the Telegram chat receive the proactive message.
 4. Restart the Telegram bridge. Nothing re-pushes; cursor honoured.
