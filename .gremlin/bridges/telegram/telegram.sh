@@ -271,8 +271,38 @@ handle_update() {
     return 0
   fi
 
+  if [ "${text#/}" != "$text" ]; then
+    handle_slash "$update_id" "$text"
+    write_update_offset "$next_offset"
+    return 0
+  fi
+
   ingest_text "$update_id" "$text"
   write_update_offset "$next_offset"
+}
+
+handle_slash() {
+  local update_id="$1"
+  local text="$2"
+  local output rc
+
+  set +e
+  output="$("$GREMLIN_DIR/bin/slash.sh" "$text" 2>&1)"
+  rc=$?
+  set -e
+
+  if [ -z "$output" ]; then
+    if [ "$rc" -eq 0 ]; then
+      output="(no output)"
+    else
+      output="(command exited $rc)"
+    fi
+  fi
+
+  if ! send_message "$output"; then
+    echo "telegram: failed to send slash reply for update $update_id" >&2
+  fi
+  echo "ran telegram slash command (rc=$rc)"
 }
 
 poll_once() {
