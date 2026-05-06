@@ -110,7 +110,7 @@ Before pushing:
 
 - `git status` shows only intended changes.
 - `.gremlin/transcript.md` is empty.
-- `.gremlin/.nest/in/`, `.groundhog/out/`, and `.groundhog/fired/` contain only
+- `.gremlin/.nest/in/`, `.gremlin/.groundhog/out/`, and `.gremlin/.groundhog/fired/` contain only
   placeholder files.
 - `.gremlin/context/` contains no personal facts.
 - `.gremlin/gremlin.md` is generic.

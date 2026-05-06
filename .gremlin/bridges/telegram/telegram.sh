@@ -23,6 +23,7 @@ TRANSCRIPT="${TELEGRAM_TRANSCRIPT:-$GREMLIN_DIR/transcript.md}"
 POLL_TIMEOUT="${TELEGRAM_POLL_TIMEOUT:-30}"
 POLL_SLEEP="${TELEGRAM_POLL_SLEEP:-1}"
 OUTBOUND_BACKOFF="${TELEGRAM_OUTBOUND_BACKOFF:-5}"
+STOP_TIMEOUT="${TELEGRAM_STOP_TIMEOUT:-35}"
 
 usage() {
   cat <<'USAGE'
@@ -163,6 +164,12 @@ write_cursor() {
   printf '%s\n' "$1" > "$CURSOR"
 }
 
+ensure_cursor() {
+  if [ ! -s "$CURSOR" ]; then
+    write_cursor "$(file_size "$TRANSCRIPT")"
+  fi
+}
+
 extract_assistant_turns() {
   awk '
     /^## / {
@@ -196,11 +203,7 @@ push_transcript_once() {
   require_runtime
 
   size="$(file_size "$TRANSCRIPT")"
-  if [ ! -s "$CURSOR" ]; then
-    write_cursor "$size"
-    return 0
-  fi
-
+  ensure_cursor
   cursor="$(read_cursor)"
 
   if [ "$cursor" -gt "$size" ] 2>/dev/null; then
@@ -228,14 +231,16 @@ push_transcript_once() {
 ingest_text() {
   local update_id="$1"
   local text="$2"
-  local tmp name
+  local tmp name suffix
 
   tmp="$(mktemp "$BRIDGE_DIR/telegram-inbound.XXXXXX")"
+  suffix="$(basename "$tmp")"
+  suffix="${suffix#telegram-inbound.}"
   printf '%s\n' "$text" > "$tmp"
-  name="$(date -u +%Y%m%dT%H%M%SZ)-telegram-$update_id.md"
+  name="$(date -u +%Y%m%dT%H%M%SZ)-telegram-$suffix.md"
   "$NESTLING" ingest "$tmp" "$name" >/dev/null
   rm -f "$tmp"
-  echo "ingested telegram update $update_id as $name"
+  echo "ingested telegram text as $name"
 }
 
 handle_update() {
@@ -249,19 +254,19 @@ handle_update() {
   text="$(printf '%s\n' "$update" | jq -r '.message.text? // empty')"
 
   if [ -z "$chat_id" ]; then
-    echo "ignored telegram update $update_id: no message chat"
+    echo "ignored telegram update: no message chat"
     write_update_offset "$next_offset"
     return 0
   fi
 
   if [ "$chat_id" != "$TELEGRAM_CHAT_ID" ]; then
-    echo "ignored telegram update $update_id: chat not configured"
+    echo "ignored telegram update: chat not configured"
     write_update_offset "$next_offset"
     return 0
   fi
 
   if [ -z "$text" ]; then
-    echo "ignored telegram update $update_id: non-text message"
+    echo "ignored telegram update: non-text message"
     write_update_offset "$next_offset"
     return 0
   fi
@@ -345,7 +350,7 @@ cmd_stop() {
   fi
 
   kill "$pid" 2>/dev/null || true
-  deadline=$(( $(date +%s) + 5 ))
+  deadline=$(( $(date +%s) + STOP_TIMEOUT ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
     if ! pid_is_running "$pid"; then
       rm -f "$PIDFILE"
@@ -367,6 +372,7 @@ cmd_run() {
   echo "cursor: $CURSOR"
   echo "update offset: $UPDATE_OFFSET"
   echo "transcript: $TRANSCRIPT"
+  ensure_cursor
 
   trap 'echo "telegram bridge daemon stopping"; exit 0' INT TERM
   while :; do

@@ -41,6 +41,33 @@ Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands
 ./.gremlin/gremlin say /help
 ```
 
+## Telegram
+
+The Telegram bridge lets a single Telegram chat talk to the gremlin.
+
+1. In Telegram, create a bot with BotFather and copy the bot token.
+2. Get your numeric chat id. One simple option is to message `@myidbot`.
+3. From the host folder, create the local config:
+
+```sh
+cp ./.gremlin/bridges/telegram/config.example ./.gremlin/bridges/telegram/config
+chmod 600 ./.gremlin/bridges/telegram/config
+```
+
+4. Edit `config` and set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+5. Start the runner and bridge:
+
+```sh
+./.gremlin/gremlin start
+./.gremlin/gremlin telegram start
+./.gremlin/gremlin telegram status
+```
+
+Telegram's `/start` message is passed through as normal text; the gremlin may
+reply that it does not recognize it. Send a regular message after setup.
+
+More detail: `bridges/telegram/README.md`.
+
 ## Customize
 
 - `gremlin.md`: identity, personality, purpose, voice.
