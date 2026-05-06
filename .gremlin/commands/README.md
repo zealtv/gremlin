@@ -1,7 +1,7 @@
 # commands
 
 System commands for the user — invoked via a bridge with a leading `/`.
-`/foo bar` in the TUI, or `bin/say /foo bar` from a script, runs
+`/foo bar` in the TUI, or `gremlin say /foo bar` from a script, runs
 `commands/foo.sh bar` and never reaches the LLM.
 
 Parallel to `tools/`, but for a different audience: tools are for the gremlin, commands are for you. Commands run with your shell privileges; they're not allowlist-constrained.

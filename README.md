@@ -22,13 +22,13 @@ that host folder as the normal workspace scope.
 Start the runner:
 
 ```sh
-./.gremlin/run.sh
+./.gremlin/gremlin start
 ```
 
-Open the TUI in another terminal:
+Open the TUI:
 
 ```sh
-./.gremlin/bridges/tui/tui.sh
+./.gremlin/gremlin tui
 ```
 
 Use the TUI for normal interactive work.
@@ -91,7 +91,7 @@ Then run `/update` from the TUI, or:
 
 ```sh
 cd ~/Desktop/mygremlin
-./.gremlin/bin/say /update
+./.gremlin/gremlin update
 ```
 
 ## Developing
@@ -121,5 +121,5 @@ Before pushing:
 The protocol does not enforce a sandbox. Host a gremlin where broad shell and
 file access is acceptable.
 
-For real isolation, wrap `bin/llm.sh` or `run.sh` with OS or harness controls:
+For real isolation, wrap `bin/llm.sh` or `bin/run.sh` with OS or harness controls:
 a separate UNIX user, container, VM, `sandbox-exec`, `bwrap`, or equivalent.

@@ -2,9 +2,9 @@
 # say — local one-shot CLI bridge.
 #
 # Usage:
-#   ./.gremlin/bin/say "your message"   # send + wait for reply (default)
-#   echo "..." | ./.gremlin/bin/say     # same, message via stdin
-#   ./.gremlin/bin/say /foo bar         # slash dispatch: runs commands/foo.sh bar
+#   ./.gremlin/bin/say.sh "your message"   # send + wait for reply (default)
+#   echo "..." | ./.gremlin/bin/say.sh     # same, message via stdin
+#   ./.gremlin/bin/say.sh /foo bar         # slash dispatch: runs commands/foo.sh bar
 #
 # Send-and-wait writes the message into .nest/in/<ts>.md, then tails
 # transcript.md until the next `## assistant —` turn appears past the
@@ -12,6 +12,10 @@
 # to commands/<cmd>.sh and bypass both the LLM and the nest.
 
 set -euo pipefail
+
+if [ "${LC_ALL:-}" = "C.UTF-8" ]; then
+  unset LC_ALL
+fi
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NEST="$GREMLIN_DIR/.nest"

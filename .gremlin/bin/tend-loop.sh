@@ -7,7 +7,7 @@
 # transcript.md, and completes the claimed item (filing the reply into
 # .nest/out/ as the protocol-aligned per-item archive).
 #
-# Idempotent and single-shot: run.sh invokes this on a cadence; each call
+# Idempotent and single-shot: bin/run.sh invokes this on a cadence; each call
 # processes at most one item.
 
 set -euo pipefail

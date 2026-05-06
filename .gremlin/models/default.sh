@@ -10,7 +10,7 @@
 # That's the whole contract. The active preset is selected by the
 # alias name in `.gremlin/.model` (or "default" if absent). Switch
 # at runtime with `/model <alias>` in the TUI, or
-# `bin/say /model <alias>` from a script.
+# `gremlin say /model <alias>` from a script.
 #
 # Add presets by dropping `models/<alias>.sh` files. Each preset is
 # its own invocation — different harnesses take different flags, and

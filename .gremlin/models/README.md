@@ -20,7 +20,7 @@ flags; that's exactly why the invocation lives per-preset.
 ## File name = alias
 
 `models/fast.sh` -> alias `fast`. Switch at runtime with
-`/model fast` in the TUI, or `bin/say /model fast` from a script.
+`/model fast` in the TUI, or `gremlin say /model fast` from a script.
 `/model` lists every `*.sh` in this directory,
 marking the active one with `*`.
 
@@ -48,7 +48,7 @@ there, or write your own.
 cp models/default.sh models/local.sh
 chmod +x models/local.sh
 $EDITOR models/local.sh   # uncomment one block, drop the rest
-./.gremlin/bin/say /model local
+./.gremlin/gremlin model local
 ```
 
 ## Permissions

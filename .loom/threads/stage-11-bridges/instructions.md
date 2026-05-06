@@ -61,7 +61,7 @@ Implementation order is encoded in stitch numbers across all in-flight threads: 
 
 End-to-end with TUI as the only bridge:
 
-1. One terminal: `run.sh`. One terminal: TUI bridge.
+1. One terminal: `./.gremlin/gremlin start`. One terminal: `./.gremlin/gremlin tui`.
 2. Type a message in the TUI. Assistant reply renders in the TUI. Both turns are in `transcript.md`.
 3. Schedule a reminder via the TUI ("remind me in 1 minute").
 4. Wait. Reminder fires. It appears in the TUI **and** is present in `transcript.md` as `## assistant`.
