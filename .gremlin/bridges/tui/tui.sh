@@ -470,8 +470,8 @@ handle_key() {
 wrap_text_line() {
   local line="$1"
   local width="$2"
-  local out word
 
+  [ "$width" -lt 1 ] && width=1
   if [ -z "$line" ]; then
     printf '\n'
     return 0
@@ -484,28 +484,7 @@ wrap_text_line() {
       ;;
   esac
 
-  out=""
-  for word in $line; do
-    while [ "${#word}" -gt "$width" ]; do
-      if [ -n "$out" ]; then
-        printf '%s\n' "$out"
-        out=""
-      fi
-      printf '%s\n' "${word:0:$width}"
-      word="${word:$width}"
-    done
-    if [ -z "$out" ]; then
-      out="$word"
-    elif [ -z "$word" ]; then
-      :
-    elif [ "$((${#out} + 1 + ${#word}))" -le "$width" ]; then
-      out="$out $word"
-    else
-      printf '%s\n' "$out"
-      out="$word"
-    fi
-  done
-  [ -n "$out" ] && printf '%s\n' "$out"
+  printf '%s\n' "$line" | fold -s -w "$width"
 }
 
 build_wrapped_lines() {
