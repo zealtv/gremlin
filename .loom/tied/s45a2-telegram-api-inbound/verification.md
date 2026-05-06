@@ -7,7 +7,7 @@
   - wrong-chat update was ignored
   - non-text configured-chat update was ignored
   - `.update-offset` advanced from no file to `103`
-- Temporary fake config, mock response, update-offset, and generated `.nest/in/*telegram-100.md` item were removed after the check.
+- Temporary fake config, mock response, update-offset, and generated `.nest/in/*telegram-*.md` item were removed after the check.
 
 No real Telegram token or chat id was used for this stitch.
 
