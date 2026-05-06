@@ -4,8 +4,8 @@ Composition is adjacency: multiple gremlins are multiple host folders, each with
 its own `.gremlin/`.
 
 ```text
-~/Desktop/house/research/.gremlin/
-~/Desktop/house/admin/.gremlin/
+~/Desktop/gremlin-house/research/.gremlin/
+~/Desktop/gremlin-house/admin/.gremlin/
 ```
 
 They have no shared process and no shared state. They are independent agents

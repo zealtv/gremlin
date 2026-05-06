@@ -5,8 +5,8 @@ Terminal bridge for a gremlin.
 Run it beside the gremlin runner:
 
 ```sh
-./.gremlin/run.sh
-./.gremlin/bridges/tui/tui.sh
+./.gremlin/gremlin start
+./.gremlin/gremlin tui
 ```
 
 The TUI reads `transcript.md` from the beginning on launch, writes submitted

@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# gremlin — user-facing entry point.
+set -euo pipefail
+
+if [ "${LC_ALL:-}" = "C.UTF-8" ]; then
+  unset LC_ALL
+fi
+
+GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNNER="$GREMLIN_DIR/bin/run.sh"
+LOG="$GREMLIN_DIR/run.log"
+
+usage() {
+  cat <<'USAGE'
+usage:
+  ./.gremlin/gremlin start
+  ./.gremlin/gremlin stop
+  ./.gremlin/gremlin status
+  ./.gremlin/gremlin restart
+  ./.gremlin/gremlin say <message|/command>
+  ./.gremlin/gremlin tui
+  ./.gremlin/gremlin <command> [args...]
+  ./.gremlin/gremlin <bridge> <verb> [args...]
+  ./.gremlin/gremlin help
+USAGE
+}
+
+runner_pids() {
+  pgrep -f "$RUNNER" 2>/dev/null || true
+}
+
+require_runner() {
+  [ -x "$RUNNER" ] || {
+    echo "runner not executable: $RUNNER" >&2
+    exit 1
+  }
+}
+
+cmd_start() {
+  require_runner
+  local pids
+  pids="$(runner_pids)"
+  if [ -n "$pids" ]; then
+    echo "gremlin already running:"
+    printf '%s\n' "$pids"
+    exit 1
+  fi
+
+  nohup "$RUNNER" >> "$LOG" 2>&1 &
+  local pid="$!"
+  disown "$pid" 2>/dev/null || true
+  echo "started gremlin: $pid"
+  echo "log: $LOG"
+}
+
+cmd_status() {
+  local pids
+  pids="$(runner_pids)"
+  if [ -n "$pids" ]; then
+    echo "gremlin running:"
+    printf '%s\n' "$pids"
+  else
+    echo "gremlin not running"
+  fi
+}
+
+cmd_stop() {
+  local pids pid deadline
+  pids="$(runner_pids)"
+  if [ -z "$pids" ]; then
+    echo "gremlin not running"
+    return 0
+  fi
+
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    kill "$pid" 2>/dev/null || true
+  done <<< "$pids"
+
+  deadline=$(( $(date +%s) + 5 ))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    [ -z "$(runner_pids)" ] && {
+      echo "stopped gremlin"
+      return 0
+    }
+    sleep 0.2
+  done
+
+  echo "sent stop signal, but runner still appears active:" >&2
+  runner_pids >&2
+  exit 1
+}
+
+cmd_help() {
+  usage
+  echo
+  echo "built-ins:"
+  printf '  %s\n' start stop status restart say tui help
+
+  echo
+  echo "commands:"
+  if [ -x "$GREMLIN_DIR/commands/help.sh" ]; then
+    "$GREMLIN_DIR/commands/help.sh" | sed 's/^/  /'
+  else
+    echo "  (none)"
+  fi
+
+  echo
+  echo "bridges:"
+  local found=0 bridge script name
+  for bridge in "$GREMLIN_DIR"/bridges/*; do
+    [ -d "$bridge" ] || continue
+    name="$(basename "$bridge")"
+    script="$bridge/$name.sh"
+    [ -x "$script" ] || continue
+    printf '  %s\n' "$name"
+    found=1
+  done
+  [ "$found" -eq 1 ] || echo "  (none)"
+}
+
+if [ "$#" -eq 0 ]; then
+  usage
+  exit 2
+fi
+
+verb="$1"
+shift
+
+case "$verb" in
+  start)
+    cmd_start "$@"
+    ;;
+  stop)
+    cmd_stop "$@"
+    ;;
+  status)
+    cmd_status "$@"
+    ;;
+  restart)
+    cmd_stop
+    cmd_start
+    ;;
+  say)
+    exec "$GREMLIN_DIR/bin/say.sh" "$@"
+    ;;
+  tui)
+    exec "$GREMLIN_DIR/bridges/tui/tui.sh" "$@"
+    ;;
+  help|-h|--help)
+    cmd_help
+    ;;
+  *)
+    command_script="$GREMLIN_DIR/commands/$verb.sh"
+    if [ -x "$command_script" ]; then
+      exec "$command_script" "$@"
+    fi
+
+    bridge_script="$GREMLIN_DIR/bridges/$verb/$verb.sh"
+    if [ -x "$bridge_script" ]; then
+      exec "$bridge_script" "$@"
+    fi
+
+    echo "unknown gremlin verb: $verb" >&2
+    echo "try: ./.gremlin/gremlin help" >&2
+    exit 1
+    ;;
+esac

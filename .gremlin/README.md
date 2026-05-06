@@ -4,9 +4,9 @@ A gremlin is a folder you can talk to. This `.gremlin/` directory turns its
 parent folder into an agent.
 
 The parent folder that contains `.gremlin/` is also the gremlin's working
-directory. `run.sh` changes into that host folder before invoking the loops and
-model preset, so tools and model CLIs should treat it as the normal workspace
-scope.
+directory. `bin/run.sh` changes into that host folder before invoking the loops
+and model preset, so tools and model CLIs should treat it as the normal
+workspace scope.
 
 ## Run
 
@@ -17,7 +17,7 @@ it for the model CLI you want to use, or add another executable
 Start the gremlin runner from the host folder:
 
 ```sh
-./.gremlin/run.sh
+./.gremlin/gremlin start
 ```
 
 The runner backgrounds the tend and schedule loops. Leave it running while you
@@ -28,18 +28,17 @@ interact with the gremlin.
 Use the TUI for normal interactive work:
 
 ```sh
-./.gremlin/bridges/tui/tui.sh
+./.gremlin/gremlin tui
 ```
 
-Run it in a second terminal beside `run.sh`. The TUI shows transcript history,
-sends submitted messages into `.nest/in/`, and renders assistant turns as they
-land in `transcript.md`.
+The TUI shows transcript history, sends submitted messages into `.nest/in/`, and renders assistant turns
+as they land in `transcript.md`.
 
-Use `bin/say` for one-shot prompts, shell scripts, and direct slash commands:
+Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands:
 
 ```sh
-./.gremlin/bin/say "summarize this folder"
-./.gremlin/bin/say /help
+./.gremlin/gremlin say "summarize this folder"
+./.gremlin/gremlin say /help
 ```
 
 ## Customize
@@ -51,7 +50,7 @@ Use `bin/say` for one-shot prompts, shell scripts, and direct slash commands:
 - `models/*.sh`: model runner presets.
 - `commands/*.sh`: slash commands for bridges and scripts.
 
-Run `./.gremlin/run.sh` again after editing skills so `skills/INDEX.md` is
+Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is
 rebuilt. You can also run `.gremlin/bin/index-skills.sh` directly.
 
 ## Update
@@ -67,7 +66,7 @@ From the TUI, run:
 From a script or shell:
 
 ```sh
-./.gremlin/bin/say /update
+./.gremlin/gremlin update
 ```
 
 `/update` overlays canonical files while preserving identity, context,

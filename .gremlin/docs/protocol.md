@@ -13,10 +13,10 @@ Gremlin contains two nested protocols worth reading directly:
 .gremlin/
   gremlin.md            # identity: personality, purpose, voice
   context/              # facts loaded into every prompt
-  run.sh                # backgrounds the loops
+  gremlin               # user-facing wrapper
   transcript.md         # append-only conversation log
   transcript-archive/   # rotated transcripts
-  bin/                  # runner scripts and one-shot bridge
+  bin/                  # runner scripts and one-shot bridge implementation
   bridges/              # long-running user/channel bridges
   commands/             # slash commands
   tools/                # bash tools the gremlin can call
@@ -27,8 +27,8 @@ Gremlin contains two nested protocols worth reading directly:
 ```
 
 The host folder is the agent's outside identity and working directory. The
-`.gremlin/` folder defines how that agent behaves, and `run.sh` executes the
-loops from the host folder rather than from inside `.gremlin/`.
+`.gremlin/` folder defines how that agent behaves, and `bin/run.sh` executes
+the loops from the host folder rather than from inside `.gremlin/`.
 
 ## Prompt Inputs
 
@@ -55,11 +55,11 @@ Bridges are how the outside world reaches the gremlin.
 The TUI bridge is the normal interactive surface:
 
 ```sh
-./.gremlin/bridges/tui/tui.sh
+./.gremlin/gremlin tui
 ```
 
-`bin/say` is the one-shot and scripting surface. It writes one item, waits for
-the next assistant turn, and prints it.
+`gremlin say` is the one-shot and scripting surface. It writes one item, waits
+for the next assistant turn, and prints it.
 
 ## Skills And Tools
 
@@ -87,7 +87,7 @@ and select it from the TUI with `/model <alias>`.
 
 ## Loops
 
-`run.sh` starts two loops:
+`gremlin start` backgrounds `bin/run.sh`, which starts two loops:
 
 - `bin/tend-loop.sh`: claims items from `.nest/in/`, appends the user turn,
   calls the model, appends the assistant turn, and completes the item into
