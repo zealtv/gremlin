@@ -1,4 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/sh
+if [ "${GREMLIN_BASH_TRAMPOLINE:-}" != "1" ]; then
+  [ "${LC_ALL:-}" = "C.UTF-8" ] && unset LC_ALL
+  export GREMLIN_BASH_TRAMPOLINE=1
+  exec bash "$0" "$@"
+fi
+unset GREMLIN_BASH_TRAMPOLINE
 # gremlin — user-facing entry point.
 set -euo pipefail
 

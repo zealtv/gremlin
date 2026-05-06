@@ -524,12 +524,16 @@ sweep_dir() {
   local dir="$1" kind="$2" days="$3"
   [[ -d "$dir" ]] || return 0
   local entry name
+  local find_args=(-mindepth 1 -maxdepth 1 -type d)
+  if [[ "$days" != "0" ]]; then
+    find_args+=(-mtime +"$days")
+  fi
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
     name="$(basename "$entry")"
     rm -rf -- "$entry"
     printf 'swept %s %s\n' "$kind" "$name"
-  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d -mtime +"$days" | sort)
+  done < <(find "$dir" "${find_args[@]}" | sort)
 }
 
 cmd_sweep() {

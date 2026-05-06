@@ -5,3 +5,4 @@
 .gremlin/bridges/*/*.log
 .gremlin/bridges/*/.cursor
 .gremlin/bridges/*/.update-offset
+ 
