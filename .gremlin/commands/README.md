@@ -21,6 +21,7 @@ Each command is a bash script directly under `commands/`.
 | `/new` | start a fresh transcript (rotates current into `transcript-archive/`) |
 | `/model` | list or set the active model preset |
 | `/update` | pull canonical gremlin from `.upstream` and lay it over this copy |
+| `/sweep` | remove old nestling and groundhog archive entries |
 | `/help` | show available commands |
 
 Add a command by dropping a script into this folder. **Name custom additions distinctly from canonical names** — `/update` overwrites canonical files by name, so a personal `commands/help.sh` would be replaced. New names (e.g. `commands/standup.sh`) survive untouched.
