@@ -37,11 +37,7 @@
 
 ### scribble
 
-5. `finding.md` template grows a `## Triggers` section. README documents the section-based contract that `index` and `fetch` rely on.
-6. `scribble.sh index` regenerates `findings/INDEX.md` — one bullet per finding (id, title, Claim line). Mirrors `bin/index-skills.sh`.
-7. `scribble.sh fetch <query...>` returns paths of findings whose id, title, Claim, Scope, or Triggers match. The prefetch seam.
-8. `scribble.sh capture <id>` reads stdin and lands ready in one shot. Replaces the previously-suggested `ingest <id> -` form.
-9. README documents disclosure layers (INDEX always, finding.md on lookup, context.md deep dive) and the dream-as-item composition recipe (groundhog → nest → dream skill).
+Tracked in scribble's loom — see `~/repos/scribble/.loom/threads/plain-md-finding-protocol/`.
 
 ## Verification gate
 
@@ -59,13 +55,7 @@ If step 6 works, it's memory. If not, it's a filing cabinet.
 
 ## Child stitches
 
-Scribble-side (fleshed out, ready to claim — must ship before any gremlin-side work):
-
-- `s47a-finding-shape` *(scribble repo)* — plain-markdown finding contract; add `## Triggers` to template; document parse rules.
-- `s47b-index` *(scribble repo)* — `scribble.sh index` writes `findings/INDEX.md`.
-- `s47c-fetch` *(scribble repo)* — `scribble.sh fetch <query...>` returns matching finding paths.
-- `s47d-capture` *(scribble repo)* — `scribble.sh capture <id>` reads stdin and lands ready.
-- `s47e-readme` *(scribble repo)* — README documents disclosure layers and the dream-as-item recipe.
+Scribble-side work has its own home now: `~/repos/scribble/.loom/threads/plain-md-finding-protocol/` (goal stitch with `s47a`–`s47e` children). Tracked there, not here. The gremlin-side children below all wait on that goal being tied.
 
 Gremlin-side (suggestions — need their own `instructions.md` before being claimed):
 
@@ -78,7 +68,8 @@ Gremlin-side (suggestions — need their own `instructions.md` before being clai
 
 ## Dependencies
 
-- **Groundhog "paused item" feature** *(groundhog repo, separate change)*. The dream item must ship paused so a fresh install does not auto-dream. Groundhog today has a runner-wide `.paused`; per-item pause is a new feature. Tracked in the groundhog repo, not here. `s51-dream-schedule-paused` waits on it.
+- **Scribble plain-md finding protocol** *(scribble repo)*. Goal stitch at `~/repos/scribble/.loom/threads/plain-md-finding-protocol/`. Children `s47a`–`s47e` cover finding shape, `index`, `fetch`, `capture`, README. `s48`–`s50` here wait on it.
+- **Groundhog paused-items feature** *(groundhog repo)*. Stitch at `~/repos/groundhog/.loom/threads/paused-items/`. The dream item must ship paused so a fresh install does not auto-dream. `s51-dream-schedule-paused` waits on it.
 
 ## Decisions deferred to those child stitches
 
