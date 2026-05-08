@@ -3,7 +3,7 @@
 #
 # A model preset is just an executable that reads the prompt on stdin
 # and writes a reply on stdout. Nothing requires it to call an LLM.
-# This preset echoes the user's latest message back, prefixed with
+# This preset echoes the incoming item body back, prefixed with
 # "echo:". Use it as a starting point for script-powered gremlins —
 # routers, fixed-response bots, lookup tables, local rule engines, or
 # anything else that needs a deterministic reply without a model.
@@ -15,17 +15,18 @@ set -euo pipefail
 
 # bin/tend-loop.sh assembles the prompt by concatenating gremlin.md,
 # context/*.md, skills/INDEX.md, tools/README.md, the full transcript,
-# and the current item body. The user's latest message therefore
-# appears twice near the end:
+# and the current item body. The body therefore appears twice near
+# the end of the prompt:
 #
-#   ## user — <iso>
+#   ## <role> — <iso>
 #   <body>          ← last transcript turn
 #                   ← blank line (transcript's per-turn '\n\n')
 #                   ← blank line (extra '\n' from tend-loop's `echo`)
 #   <body>          ← body re-emitted at end of prompt
 #
-# Two consecutive blank lines reliably mark that boundary, so we drop
-# everything up to and including them and keep the trailing body.
+# Two consecutive blank lines reliably mark that boundary regardless
+# of which roles appear in the transcript, so we drop everything up to
+# and including them and keep the trailing body.
 body="$(awk '
   $0 == "" && prev == "" { buf = ""; prev = $0; next }
   { buf = buf $0 ORS; prev = $0 }
@@ -36,7 +37,7 @@ printf 'echo: %s\n' "$body"
 
 # --- How to extend this script ----------------------------------------
 #
-# The variable $body now holds the user's latest message. Swap the
+# The variable $body now holds the incoming item body. Swap the
 # `printf` above for whatever logic you want. A few sketches:
 #
 # 1. Keyword router — match on the first word and dispatch:
@@ -67,7 +68,7 @@ printf 'echo: %s\n' "$body"
 # 5. Full prompt — if you want everything (identity, context,
 #    transcript, body), drop the awk and just `cat` stdin into your
 #    handler. The body extraction above is only useful when you want
-#    just the new turn.
+#    just the incoming item.
 #
 # Anything that exits 0 with a reply on stdout works. Exit non-zero to
 # signal failure; tend-loop will surface it.
