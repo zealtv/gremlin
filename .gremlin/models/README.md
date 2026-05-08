@@ -14,8 +14,9 @@ A preset:
 
 That is the whole interface. Anything that fits — claude, gemini,
 codex, pi, opencode, nanocoder, ollama, a Python script wrapping an
-HTTP API — is a valid preset. Different harnesses take different
-flags; that's exactly why the invocation lives per-preset.
+HTTP API, or a plain script with no model at all (see `echo.sh`) —
+is a valid preset. Different harnesses take different flags; that's
+exactly why the invocation lives per-preset.
 
 ## File name = alias
 
@@ -40,9 +41,16 @@ If a preset has no label line, `/model` shows just the filename.
 ## Adding a preset
 
 Drop a new file in this directory, make it executable, give it a
-label. `default.sh` ships as the canonical example and contains
-commented starter invocations for several agent CLIs — copy from
-there, or write your own.
+label. Two presets ship as starting points:
+
+- `default.sh` — canonical LLM example with commented starter
+  invocations for several agent CLIs.
+- `echo.sh` — script-only example that echoes the incoming item
+  back, useful as a starting point for routers, fixed-response
+  bots, lookup tables, or local rule engines that need a
+  deterministic reply without a model.
+
+Copy from either, or write your own.
 
 ```sh
 cp models/default.sh models/local.sh
