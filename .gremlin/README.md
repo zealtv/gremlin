@@ -12,7 +12,10 @@ workspace scope.
 
 Configure a model preset first. The default preset is `models/default.sh`; edit
 it for the model CLI you want to use, or add another executable
-`models/<alias>.sh` and select it from the TUI with `/model <alias>`.
+`models/<alias>.sh` and select it from the TUI with `/model <alias>`. A preset
+is any executable that reads the prompt on stdin and writes a reply on stdout,
+so it doesn't have to call an LLM — `models/echo.sh` ships as a script-only
+example.
 
 Start the gremlin runner from the host folder:
 

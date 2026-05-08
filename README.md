@@ -13,7 +13,9 @@ curl -fsSL https://raw.githubusercontent.com/zealtv/gremlin/main/install.sh | ba
 Configure a model preset before starting. The default preset is
 `.gremlin/models/default.sh`; edit it to match the model CLI you want to use, or
 drop another executable preset into `.gremlin/models/` and select it from the
-TUI with `/model <alias>`.
+TUI with `/model <alias>`. Presets are just executables that read a prompt on
+stdin and write a reply on stdout, so they don't have to call an LLM —
+`.gremlin/models/echo.sh` ships as a script-only example.
 
 The gremlin's working directory is the parent folder that contains `.gremlin/`.
 The runner `cd`s there before tending, so model CLIs and tools should treat
