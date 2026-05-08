@@ -76,7 +76,9 @@ uses stderr plus a non-zero exit for errors.
 `models/<alias>.sh`.
 
 Each model preset receives the prompt on stdin and writes the reply to stdout.
-That keeps the rest of the gremlin independent of the model harness.
+That keeps the rest of the gremlin independent of the model harness. A preset
+does not have to call a model at all; `models/echo.sh` ships as a script-only
+example for routers, fixed-response bots, and local rule engines.
 
 Presets run with the host folder as the current working directory. Do not
 assume the gremlin is inside a git repository; the intended scope is usually
