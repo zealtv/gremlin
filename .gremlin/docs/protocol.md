@@ -129,7 +129,7 @@ Initial sub-categories:
 
 - `⚙️ run:` — a script ran, or an item was aborted.
 - `⚠️ error:` — runtime failure worth surfacing.
-- `📅 reminder:` — scheduled `message.md` body emitted by the tender.
+- `💌 message:` — scheduled `message.md` body emitted by the tender (any flavour: reminder, summary, status — the role is "voice from outside the conversation").
 
 ### Authorship
 
@@ -177,6 +177,6 @@ Tend-loop dispatch by shape:
 
 - `instructions.md` (or a file item) → model-backed tend → `## user —` plus
   `## assistant —`.
-- `message.md` → no model → `## system — 📅 reminder: <body>`.
+- `message.md` → no model → `## system — 💌 message: <body>`.
 - `run.sh` (executable) → no model → run, capture stdout → `## system —
   ⚙️ run: <stdout>` (or `⚠️ error:` on non-zero exit).
