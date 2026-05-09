@@ -69,7 +69,7 @@ Gremlin-side (suggestions — need their own `instructions.md` before being clai
 ## Dependencies
 
 - **Scribble plain-md finding protocol** *(scribble repo)*. Goal stitch at `~/repos/scribble/.loom/threads/plain-md-finding-protocol/`. Children `s47a`–`s47e` cover finding shape, `index`, `fetch`, `capture`, README. `s48`–`s50` here wait on it.
-- **Groundhog paused-items feature** *(groundhog repo)*. Stitch at `~/repos/groundhog/.loom/threads/paused-items/`. The dream item must ship paused so a fresh install does not auto-dream. `s51-dream-schedule-paused` waits on it.
+- ~~**Groundhog paused-items feature** *(groundhog repo)*. Stitch at `~/repos/groundhog/.loom/threads/paused-items/`. The dream item must ship paused so a fresh install does not auto-dream. `s51-dream-schedule-paused` waits on it.~~ ✅ Landed 2026-05-09 — `.paused` suffix on any path component takes that subtree off-schedule (cascades). Vendored into `.gremlin/.groundhog/`. `s51-dream-schedule-paused` is unblocked from the groundhog side.
 
 ## Decisions deferred to those child stitches
 

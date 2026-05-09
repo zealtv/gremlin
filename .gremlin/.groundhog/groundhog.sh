@@ -21,10 +21,13 @@ notes:
       weekly, weekly/mon, weekly/mon/09, weekly/mon/09-30,
       monthly, monthly/1, monthly/15/09, monthly/15/09-30,
       yearly, yearly/03-15, yearly/03-15/09, yearly/03-15/09-30,
-      once, once/2026-05-01, once/2026-05-01/09-30
+      once, once/2026-05-01, once/2026-05-01/09-30,
+      every/15m, every/3h
   - time is optional and always the innermost axis: HH (00..23) or HH-MM
   - HH-MM is forbidden at yearly root (would collide with MM-DD shape)
+  - every/ is sub-day interval recurrence anchored to 00:00; bucket is <N>m or <N>h
   - root items default to: weekly→Mon, monthly→1st, yearly→Jan 1, once→next tick
+  - every/ has no default — a bucket like 15m or 3h is required
   - item contents are opaque to groundhog
 USAGE
 }
@@ -52,12 +55,16 @@ ensure_dirs() {
   mkdir -p "$SCHED" "$OUT" "$FIRED"
 }
 
+is_paused() { [[ "$1" == *.paused ]]; }
+
 is_hh()  { [[ "$1" =~ ^([01][0-9]|2[0-3])$ ]]; }
 is_hm()  { [[ "$1" =~ ^([01][0-9]|2[0-3])-[0-5][0-9]$ ]]; }
 is_dow() { [[ "$1" =~ ^(mon|tue|wed|thu|fri|sat|sun)$ ]]; }
 is_dom() { [[ "$1" =~ ^([1-9]|[12][0-9]|3[01])$ ]]; }
 is_md()  { [[ "$1" =~ ^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; }
 is_ymd() { [[ "$1" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; }
+# every/ bucket: <N>m or <N>h, N a positive integer with no leading zero.
+is_interval() { [[ "$1" =~ ^[1-9][0-9]*[mh]$ ]]; }
 
 # Selector → minutes-since-midnight. Nonzero exit means "not a time selector."
 selector_minutes() {
@@ -79,13 +86,14 @@ is_id() {
   local v="$1"
   [[ "$v" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
   case "$v" in
-    daily|weekly|monthly|yearly|once) return 1 ;;
+    daily|weekly|monthly|yearly|once|every) return 1 ;;
   esac
   is_hh "$v"  && return 1
   is_dow "$v" && return 1
   is_dom "$v" && return 1
   is_md "$v"  && return 1
   is_ymd "$v" && return 1
+  is_interval "$v" && return 1
   # Reject pure-numeric and dash-numeric shapes — these are
   # indistinguishable from typo'd axis params (`monthly/99`, `yearly/13-45`).
   [[ "$v" =~ ^[0-9]+$ ]] && return 1
@@ -143,8 +151,17 @@ validate_when() {
         is_hh "$hh" || is_hm "$hh" || die "expected HH or HH-MM in '$when'"
       fi
       ;;
+    every)
+      die "every requires a bucket like every/15m or every/3h"
+      ;;
+    every/*)
+      local rest="${when#every/}"
+      local bucket="${rest%%/*}"
+      [[ "$rest" != */* ]] || die "too many components in '$when'"
+      is_interval "$bucket" || die "expected <N>m or <N>h in '$when'"
+      ;;
     *)
-      die "unknown axis in '$when' (expected daily, weekly, monthly, yearly, once)"
+      die "unknown axis in '$when' (expected daily, weekly, monthly, yearly, once, every)"
       ;;
   esac
 }
@@ -157,7 +174,9 @@ now_mm()    { echo $((10#$(date +%M))); }
 now_md()    { date +%m-%d; }
 
 # Emits one tab-separated row per due item:
-#   <item-name>\t<source-path>\t<is-once>
+#   <item-name>\t<source-path>\t<is-once>\t<slot>
+# <slot> is empty for calendar axes; for every/ it is the latest sub-day slot
+# (HH-MM) at-or-before now. Per-slot keying lets fired/ track each slot.
 walk_due() {
   shopt -s nullglob
   local now_t now_d now_dom_v now_hh_v now_mm_v now_md_v now_min_total
@@ -181,12 +200,15 @@ walk_due() {
     for entry in "$parent"/*; do
       [[ -d "$entry" ]] || continue
       name="$(basename "$entry")"
+      is_paused "$name" && continue
       if mins=$("$time_fn" "$name"); then
         (( now_min_total >= mins )) || continue
-        local sub
+        local sub sub_name
         for sub in "$entry"/*; do
           [[ -d "$sub" ]] || continue
-          printf '%s\t%s\t%s\n' "$(basename "$sub")" "$sub" "$is_once"
+          sub_name="$(basename "$sub")"
+          is_paused "$sub_name" && continue
+          printf '%s\t%s\t%s\n' "$sub_name" "$sub" "$is_once"
         done
       else
         printf '%s\t%s\t%s\n' "$name" "$entry" "$is_once"
@@ -207,13 +229,16 @@ walk_due() {
     for entry in "$parent"/*; do
       [[ -d "$entry" ]] || continue
       name="$(basename "$entry")"
+      is_paused "$name" && continue
       "$sub_check" "$name" && continue
       if mins=$("$time_fn" "$name"); then
         (( now_min_total >= mins )) || continue
-        local sub
+        local sub sub_name
         for sub in "$entry"/*; do
           [[ -d "$sub" ]] || continue
-          printf '%s\t%s\t%s\n' "$(basename "$sub")" "$sub" "$is_once"
+          sub_name="$(basename "$sub")"
+          is_paused "$sub_name" && continue
+          printf '%s\t%s\t%s\n' "$sub_name" "$sub" "$is_once"
         done
       else
         printf '%s\t%s\t%s\n' "$name" "$entry" "$is_once"
@@ -221,16 +246,46 @@ walk_due() {
     done
   }
 
+  # every/<N>{m,h}/<item>/ — interval recurrence anchored to 00:00 local.
+  # Pick only the latest slot at-or-before now: missed earlier slots are gone
+  # (recurrence beats fidelity), and the per-slot fired marker prevents refire
+  # within the same slot. Each slot gets a distinct out/ name and fired/ entry.
+  emit_every() {
+    [[ -d "$SCHED/every" ]] || return 0
+    local bucket bucket_name n unit step item item_name slot_min slot_str
+    for bucket in "$SCHED/every"/*; do
+      [[ -d "$bucket" ]] || continue
+      bucket_name="$(basename "$bucket")"
+      is_paused "$bucket_name" && continue
+      is_interval "$bucket_name" || continue   # lint flags; walker skips
+      n="${bucket_name%[mh]}"
+      unit="${bucket_name: -1}"
+      if [[ "$unit" == "m" ]]; then step=$((10#$n)); else step=$((10#$n * 60)); fi
+      (( step > 0 )) || continue
+      slot_min=$(( (now_min_total / step) * step ))
+      printf -v slot_str '%02d-%02d' $((slot_min/60)) $((slot_min%60))
+      for item in "$bucket"/*; do
+        [[ -d "$item" ]] || continue
+        item_name="$(basename "$item")"
+        is_paused "$item_name" && continue
+        printf '%s\t%s\t%s\t%s\n' "$item_name" "$item" "0" "$slot_str"
+      done
+    done
+  }
+
   # Past one-shots fire regardless of inner time — the day is already gone.
   emit_past_once() {
-    local parent="$1" entry name sub
+    local parent="$1" entry name sub sub_name
     for entry in "$parent"/*; do
       [[ -d "$entry" ]] || continue
       name="$(basename "$entry")"
+      is_paused "$name" && continue
       if is_hh "$name" || is_hm "$name"; then
         for sub in "$entry"/*; do
           [[ -d "$sub" ]] || continue
-          printf '%s\t%s\t1\n' "$(basename "$sub")" "$sub"
+          sub_name="$(basename "$sub")"
+          is_paused "$sub_name" && continue
+          printf '%s\t%s\t1\n' "$sub_name" "$sub"
         done
       else
         printf '%s\t%s\t1\n' "$name" "$entry"
@@ -260,6 +315,7 @@ walk_due() {
     for date_dir in "$SCHED/once"/*; do
       [[ -d "$date_dir" ]] || continue
       d="$(basename "$date_dir")"
+      is_paused "$d" && continue
       is_ymd "$d" || continue
       if [[ "$d" > "$now_t" ]]; then
         continue
@@ -271,6 +327,9 @@ walk_due() {
     done
   fi
   emit_axis_root "$SCHED/once" is_ymd selector_minutes 1
+
+  # every: sub-day intervals
+  emit_every
 
   shopt -u nullglob
 }
@@ -302,9 +361,13 @@ cmd_add() {
 # with the same name (e.g. weekly/sat/foo and monthly/25/foo) get
 # distinct markers and neither is silently swallowed.
 fired_marker_for() {
-  local src="$1" now_t="$2"
+  local src="$1" now_t="$2" slot="${3:-}"
   local rel="${src#"$SCHED"/}"
-  printf '%s/%s/%s\n' "$FIRED" "$now_t" "$rel"
+  if [[ -n "$slot" ]]; then
+    printf '%s/%s/%s/%s\n' "$FIRED" "$now_t" "$rel" "$slot"
+  else
+    printf '%s/%s/%s\n' "$FIRED" "$now_t" "$rel"
+  fi
 }
 
 cmd_due() {
@@ -312,10 +375,10 @@ cmd_due() {
   ensure_dirs
   local now_t
   now_t="$(now_today)"
-  local name src is_once marker
-  while IFS=$'\t' read -r name src is_once; do
+  local name src is_once slot marker
+  while IFS=$'\t' read -r name src is_once slot; do
     [[ -n "$name" ]] || continue
-    marker="$(fired_marker_for "$src" "$now_t")"
+    marker="$(fired_marker_for "$src" "$now_t" "$slot")"
     [[ -e "$marker" ]] && continue
     printf '%s\n' "$src"
   done < <(walk_due)
@@ -326,11 +389,15 @@ cmd_tick() {
   ensure_dirs
   local now_t
   now_t="$(now_today)"
-  local name src is_once dst tmp date_dir marker
-  while IFS=$'\t' read -r name src is_once; do
+  local name src is_once slot dst tmp date_dir marker
+  while IFS=$'\t' read -r name src is_once slot; do
     [[ -n "$name" ]] || continue
-    dst="$OUT/${name}-${now_t}"
-    marker="$(fired_marker_for "$src" "$now_t")"
+    if [[ -n "$slot" ]]; then
+      dst="$OUT/${name}-${now_t}-${slot}"
+    else
+      dst="$OUT/${name}-${now_t}"
+    fi
+    marker="$(fired_marker_for "$src" "$now_t" "$slot")"
     if [[ -e "$marker" ]]; then
       :  # journal says this already fired today — leave it alone
     elif [[ -e "$dst" ]]; then
@@ -338,7 +405,7 @@ cmd_tick() {
       mkdir -p "$(dirname "$marker")"
       touch "$marker"
     else
-      tmp="$OUT/${name}-${now_t}.landing"
+      tmp="${dst}.landing"
       [[ -e "$tmp" ]] && rm -rf -- "$tmp"
       cp -R -- "$src" "$tmp"
       mv -- "$tmp" "$dst"
@@ -373,14 +440,21 @@ print_tree() {
   local count="${#entries[@]}" i=0
   for entry in "${entries[@]}"; do
     i=$((i + 1))
-    local name branch child_prefix
+    local name branch child_prefix tag display
     name="$(basename "$entry")"
     if (( i == count )); then
       branch="└──"; child_prefix="    "
     else
       branch="├──"; child_prefix="│   "
     fi
-    printf '%s%s %s\n' "$prefix" "$branch" "$name"
+    if is_paused "$name"; then
+      display="${name%.paused}"
+      tag=" [paused]"
+    else
+      display="$name"
+      tag=""
+    fi
+    printf '%s%s %s%s\n' "$prefix" "$branch" "$display" "$tag"
     print_tree "$entry" "$prefix$child_prefix"
   done
 }
@@ -410,6 +484,7 @@ lint_walk() {
   for entry in "$dir"/*; do
     [[ -d "$entry" ]] || continue
     name="$(basename "$entry")"
+    is_paused "$name" && continue
 
     case "$state" in
       axis-daily)
@@ -442,6 +517,15 @@ lint_walk() {
         elif is_id  "$name"; then :
         else LINT_ORPHANS+=("$entry"); fi
         ;;
+      axis-every)
+        # every/ requires a bucket; bare items at axis root are orphans.
+        if   is_interval "$name"; then lint_walk "$entry" "every-bucket"
+        else LINT_ORPHANS+=("$entry"); fi
+        ;;
+      every-bucket)
+        if is_id "$name"; then :
+        else LINT_ORPHANS+=("$entry"); fi
+        ;;
       weekly-dow|param-with-hour-or-item)
         if   is_hh "$name" || is_hm "$name"; then lint_walk "$entry" "item-only"
         elif is_id "$name"; then :
@@ -464,12 +548,14 @@ cmd_lint() {
   for axis_dir in "$SCHED"/*; do
     [[ -d "$axis_dir" ]] || continue
     name="$(basename "$axis_dir")"
+    is_paused "$name" && continue
     case "$name" in
       daily)   lint_walk "$axis_dir" "axis-daily"   ;;
       weekly)  lint_walk "$axis_dir" "axis-weekly"  ;;
       monthly) lint_walk "$axis_dir" "axis-monthly" ;;
       yearly)  lint_walk "$axis_dir" "axis-yearly"  ;;
       once)    lint_walk "$axis_dir" "axis-once"    ;;
+      every)   lint_walk "$axis_dir" "axis-every"   ;;
       *)       LINT_ORPHANS+=("$axis_dir") ;;
     esac
   done
@@ -494,7 +580,7 @@ cmd_drop() {
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue
     matches+=("$p")
-  done < <(find "$SCHED" -type d -name "$id")
+  done < <(find "$SCHED" -type d \( -name "$id" -o -name "$id.paused" \))
   if (( ${#matches[@]} == 0 )); then
     die "item '$id' not found under schedule/"
   fi
@@ -524,16 +610,12 @@ sweep_dir() {
   local dir="$1" kind="$2" days="$3"
   [[ -d "$dir" ]] || return 0
   local entry name
-  local find_args=(-mindepth 1 -maxdepth 1 -type d)
-  if [[ "$days" != "0" ]]; then
-    find_args+=(-mtime +"$days")
-  fi
   while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
     name="$(basename "$entry")"
     rm -rf -- "$entry"
     printf 'swept %s %s\n' "$kind" "$name"
-  done < <(find "$dir" "${find_args[@]}" | sort)
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d -mtime +"$days" | sort)
 }
 
 cmd_sweep() {
