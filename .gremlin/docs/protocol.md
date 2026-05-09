@@ -101,7 +101,7 @@ Both loops honor `.paused`.
 
 ## Transcript
 
-`transcript.md` is append-only markdown:
+`transcript.md` is append-only markdown. Three turn roles:
 
 ```markdown
 ## user — 2026-04-27T19:42:11Z
@@ -109,34 +109,74 @@ hello
 
 ## assistant — 2026-04-27T19:42:14Z
 hi, what's up?
+
+## system — 2026-04-27T19:43:02Z
+⚙️ run: backup.sh ok
 ```
 
-The tender owns transcript writes for model-backed turns. Scheduled outbound
-messages are appended by `tick-loop.sh`.
+`user` and `assistant` are the conversational pair — real model exchanges.
+`system` is everything else: aborts, scheduled output, errors, future
+tool-use traces. The role grammar stays stable; sub-categorisation lives in
+the body.
+
+### Body convention
+
+For `system` turns, the first line is `<emoji> <label>: <message>`;
+remaining lines are free-form. Vocabulary grows by adding new emoji+label
+pairs, never new role headers.
+
+Initial sub-categories:
+
+- `⚙️ run:` — a script ran, or an item was aborted.
+- `⚠️ error:` — runtime failure worth surfacing.
+- `📅 reminder:` — scheduled `message.md` body emitted by the tender.
+
+### Authorship
+
+The tender writes the appropriate turn for the item it tended:
+`## user —` plus `## assistant —` for model-backed tends, `## system —`
+for non-model tends (scheduled `message.md`, `run.sh`).
+
+Outside-the-tender callers write `## system —` directly: slash commands
+like `/stop` (`⚙️ run: item aborted`), future bridges with their own
+status to surface.
+
+The tick loop does **not** write transcript turns. It routes materialised
+groundhog items into `.nest/in/`; the tender dispatches by shape.
+
+### Bridges
+
+Bridges may style `system` turns by emoji prefix (e.g. dimmed, framed,
+icon-prefixed). They must not eat or rewrite the body — the emoji+label
+is part of the message.
 
 ## Data Flow
+
+Every inbound item flows through `.nest/in/`; the tender is the only writer
+of transcript turns for tended work, dispatching by item shape.
 
 Interactive message:
 
 ```text
 bridge -> .nest/in/<item>
-       -> tend-loop -> transcript.md
+       -> tend-loop -> transcript.md (## user — / ## assistant —)
                     -> .nest/out/<archive>
 ```
 
-Scheduled message:
+Scheduled item (any axis — `message.md`, `instructions.md`, `run.sh`):
 
 ```text
-.groundhog/schedule/.../message.md
-  -> .groundhog/out/...
-  -> tick-loop -> transcript.md
-```
-
-Scheduled tending:
-
-```text
-.groundhog/schedule/.../instructions.md
+.groundhog/schedule/...
   -> .groundhog/out/...
   -> tick-loop -> .nest/in/...
-  -> tend-loop -> transcript.md
+  -> tend-loop -> transcript.md (turn role depends on shape)
+              -> .nest/out/<archive>
 ```
+
+Tend-loop dispatch by shape:
+
+- `instructions.md` (or a file item) → model-backed tend → `## user —` plus
+  `## assistant —`.
+- `message.md` → no model → `## system — 📅 reminder: <body>`.
+- `run.sh` (executable) → no model → run, capture stdout → `## system —
+  ⚙️ run: <stdout>` (or `⚠️ error:` on non-zero exit).
