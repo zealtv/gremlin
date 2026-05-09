@@ -4,8 +4,9 @@
 # Lists ready items in the nest, claims the oldest, appends a `## user —`
 # turn to transcript.md, assembles a prompt from identity + context +
 # transcript + item body, calls bin/llm.sh, appends the assistant turn to
-# transcript.md, and completes the claimed item (filing the reply into
-# .nest/out/ as the protocol-aligned per-item archive).
+# transcript.md, and archives the claimed item into .nest/out/ (the inbound
+# item itself, per the nestlings protocol — the reply lives in transcript.md
+# only, not duplicated on disk).
 #
 # Idempotent and single-shot: bin/run.sh invokes this on a cadence; each call
 # processes at most one item.
@@ -54,8 +55,7 @@ iso_user="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '## user — %s\n%s\n\n' "$iso_user" "$body" >> "$TRANSCRIPT"
 
 prompt_file="$(mktemp)"
-reply_file="$(mktemp)"
-trap 'rm -f "$prompt_file" "$reply_file"' EXIT
+trap 'rm -f "$prompt_file"' EXIT
 
 {
   cat "$GREMLIN_DIR/gremlin.md"
@@ -83,13 +83,14 @@ trap 'rm -f "$prompt_file" "$reply_file"' EXIT
 } > "$prompt_file"
 
 reply="$("$LLM" < "$prompt_file")"
-printf '%s\n' "$reply" > "$reply_file"
 
 iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-fname_ts="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 
 # Transcript format: `## <role> — <iso>` header, body, single blank line.
 # One `>>` per turn so concurrent appends with `say` don't interleave.
 printf '## assistant — %s\n%s\n\n' "$iso" "$reply" >> "$TRANSCRIPT"
 
-"$NESTLING" complete "$name" "$reply_file" "$fname_ts.md" >/dev/null
+# Archive the inbound item into .nest/out/. The reply is already in the
+# transcript; the protocol wants out/ to record what was actioned, not
+# what was replied.
+"$NESTLING" complete "$name" "$claimed_path" >/dev/null
