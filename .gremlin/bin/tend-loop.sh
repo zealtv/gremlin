@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # tend-loop.sh — one pass of the tend loop.
 #
-# Lists ready items in the nest, claims the oldest, appends a `## user —`
-# turn to transcript.md, assembles a prompt from identity + context +
-# transcript + item body, calls bin/llm.sh, appends the assistant turn to
-# transcript.md, and archives the claimed item into .nest/out/ (the inbound
-# item itself, per the nestlings protocol — the reply lives in transcript.md
-# only, not duplicated on disk).
+# Lists ready items in the nest, claims the oldest, dispatches by item
+# shape, and archives the claimed item into .nest/out/.
+#
+# Shapes:
+#   - directory with message.md (and no instructions.md) → no model;
+#     emit `## system — 💌 message: <body>` and archive.
+#   - directory with instructions.md, or a file item → model-backed:
+#     emit `## user —`, run llm.sh, emit `## assistant —`, archive.
+#
+# The reply lives in transcript.md only; .nest/out/ records the inbound
+# item, not the reply, per the nestlings protocol.
 #
 # Idempotent and single-shot: bin/run.sh invokes this on a cadence; each call
 # processes at most one item.
@@ -35,13 +40,21 @@ items="$("$NESTLING" list)"
 name="$(printf '%s\n' "$items" | head -n1)"
 claimed_path="$("$NESTLING" claim "$name")"
 
-# Extract the item body. Items may be files or directories (attachments
-# extension). For directories, the convention is a message.md inside.
+# Shape dispatch. Directories with message.md (and no instructions.md)
+# are non-model items routed in by tick-loop — emit a system turn and
+# archive. Everything else is a model-backed tend.
+if [ -d "$claimed_path" ] && [ -f "$claimed_path/message.md" ] && [ ! -f "$claimed_path/instructions.md" ]; then
+  iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  body="$(cat "$claimed_path/message.md")"
+  printf '## system — %s\n💌 message: %s\n\n' "$iso" "$body" >> "$TRANSCRIPT"
+  "$NESTLING" complete "$name" "$claimed_path" >/dev/null
+  exit 0
+fi
+
+# Model-backed path. Extract the body for the prompt.
 if [ -d "$claimed_path" ]; then
   if [ -f "$claimed_path/instructions.md" ]; then
     body="$(cat "$claimed_path/instructions.md")"
-  elif [ -f "$claimed_path/message.md" ]; then
-    body="$(cat "$claimed_path/message.md")"
   else
     body=""
   fi
