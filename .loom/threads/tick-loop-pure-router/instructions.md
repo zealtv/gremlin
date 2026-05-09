@@ -20,15 +20,13 @@ Routing every fired item through the nest gives one audit surface, lets the tend
 - `docs/protocol.md` Loops + Data Flow sections — update so scheduled messages flow `groundhog → tick-loop → .nest/in/ → tend-loop → transcript.md + .nest/out/`. The current diagram has tick-loop writing transcript directly; that arrow goes away.
 - `bin/tend-loop.sh` body-extraction order — currently checks `instructions.md` then `message.md` then file. The new dispatcher needs to *act differently* on which one it found, not just extract a body. Refactor the read into "classify shape, then handle."
 
-## Open question — what role does a scheduled `message.md` write?
+## Role for scheduled `message.md`
 
-Today it's `## assistant —`. Options:
+Resolved: scheduled messages emit `## system — 📅 reminder:`, not `## assistant —`. Decided alongside `format-and-docs`: keeps the protocol uniform — every transcript turn is either a real model exchange (`user`/`assistant`) or some flavour of `system`, no carve-outs.
 
-- **Keep `## assistant —`** — preserves user-visible behaviour exactly. Easiest. Slight protocol fib (it's not a model turn).
-- **Move to `## system — 📅 message:`** (or similar emoji+label) — honest, fits the system-turn vocabulary that `format-and-docs` is establishing. User-visible: bridges that filter system turns would stop forwarding scheduled reminders, which is probably *not* what the user wants.
-- **Hybrid: keep `## assistant —` for `message.md` but document it as the one carve-out** — assistant means "voice of the gremlin to the user," not strictly "model output."
+`📅 reminder:` is the initial label for scheduled-message output. Vocabulary is extensible per the system-turn convention, so alternative flavours (`📊 summary:`, etc.) can grow as needed without changing the role header.
 
-Default: keep `## assistant —`. Note the carve-out in `format-and-docs`. Revisit only if it actively bites.
+User-visible knock-on: bridges that filter system turns would stop forwarding scheduled messages. That's why `telegram-render` and `tui-render` default to "send/style" rather than "filter" — scheduled reminders are the load-bearing example.
 
 ## Mechanism (sketch)
 
@@ -59,7 +57,7 @@ done
 if [ -d "$claimed_path" ] && [ -f "$claimed_path/message.md" ] && [ ! -f "$claimed_path/instructions.md" ]; then
   iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   body="$(cat "$claimed_path/message.md")"
-  printf '## assistant — %s\n%s\n\n' "$iso" "$body" >> "$TRANSCRIPT"
+  printf '## system — %s\n📅 reminder: %s\n\n' "$iso" "$body" >> "$TRANSCRIPT"
   "$NESTLING" complete "$name" "$claimed_path" >/dev/null
   exit 0
 fi
@@ -70,7 +68,7 @@ fi
 
 ## Verify
 
-- Schedule a `once/<date>/<HH-MM>/<slug>/message.md` item; tick fires it. Result: transcript shows the message body as `## assistant —` (unchanged from today); `.nest/out/<slug>` contains the archived directory with `message.md` inside; `.groundhog/out/` is empty.
+- Schedule a `once/<date>/<HH-MM>/<slug>/message.md` item; tick fires it. Result: transcript shows the message body as `## system — 📅 reminder: <body>` (changed from today's `## assistant —`); `.nest/out/<slug>` contains the archived directory with `message.md` inside; `.groundhog/out/` is empty.
 - Schedule a tend-target item (e.g. `instructions.md`); tick fires it. Result: full model-backed flow as today, just routed through tick → nest → tend rather than direct.
 - Two scheduled `message.md` items materialised in the same tick: both move into `.nest/in/`, both get tended in subsequent passes (one per pass, per the single-shot tender contract). No collisions in `.nest/in/` or `.nest/out/`.
 - An item with neither `message.md` nor `instructions.md` (e.g. an empty dir) — current behaviour was "tend as default"; new behaviour preserves that (the tender's existing fallback applies). Nothing should newly break.
@@ -88,7 +86,7 @@ fi
 
 - **Lands before `groundhog-run-scripts`.** The script axis becomes a tend-loop dispatcher branch, not a tick-loop short-circuit. Filing it here means `groundhog-run-scripts` shrinks to "add a third case to the dispatcher."
 - **Composes with `nest-out-archives-input`.** Either order works. If `nest-out-archives-input` lands first, the archive call here is `nestling complete <name> <claimed_path>` and the verify story is symmetric across all axes from day one. If this lands first, the `message.md` branch can use the current "complete with reply" call (degenerate — the message body *is* the result content) and get retrofitted by `nest-out-archives-input`. Either is fine; recommend `nest-out-archives-input` first to avoid back-and-forth on the complete-call shape.
-- **Independent of `system-turn-type/format-and-docs`.** This stitch keeps `message.md` as `## assistant —`. The system role isn't introduced here.
+- **Depends on `system-turn-type/format-and-docs` for the role definition.** This stitch emits `## system — 📅 reminder:`, which `format-and-docs` is establishing as the convention. Land `format-and-docs` first so the role is documented when this stitch's behaviour ships.
 - **`groundhog-model-override`** automatically benefits — the tender already reads a per-item `.model` from the claimed path; tick-loop becoming a router means even `message.md`-style items could carry one (mostly moot since they don't call the model, but the principle holds).
 
 ## Notes
