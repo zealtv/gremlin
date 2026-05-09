@@ -12,6 +12,7 @@ fi
 
 BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GREMLIN_DIR="$(cd "$BRIDGE_DIR/../.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 NESTLING="$GREMLIN_DIR/.nest/nestling.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 COMMANDS="$GREMLIN_DIR/commands"
@@ -101,7 +102,7 @@ update_size() {
 trap update_size WINCH
 
 tput smcup 2>/dev/null || true
-printf '\033]0;gremlin tui\007'
+printf '\033]0;gremlin TUI (%s)\007' "$HOST_DIR"
 stty raw -echo min 0 time 0
 tput civis 2>/dev/null || true
 update_size
@@ -589,15 +590,24 @@ maybe_dirty_status_tick() {
 }
 
 draw_chrome() {
-  local title title_width title_fill divider
+  local title title_width title_fill divider prefix suffix path_budget host_display
 
   cup 0 0
   el
-  title="    -------- gremlin tui -------- "
-  title_width=34
+  prefix="-={ gremlin TUI ("
+  suffix=") }=-"
+  host_display="$HOST_DIR"
+  path_budget=$((cols - ${#prefix} - ${#suffix}))
+  if [ "$path_budget" -le 0 ]; then
+    host_display=""
+  elif [ "${#host_display}" -gt "$path_budget" ]; then
+    host_display="…${host_display: -$((path_budget - 1))}"
+  fi
+  title="${prefix}${host_display}${suffix}"
+  title_width=${#title}
   title_fill=$((cols - title_width))
   [ "$title_fill" -lt 0 ] && title_fill=0
-  printf '%s%s%s%s' "$(bg 45)" "$(color 16)" "$(bold)" "$title"
+  printf '%s%s%s%s' "$(bg 226)" "$(color 16)" "$(bold)" "$title"
   printf '%*s%s' "$title_fill" '' "$(reset)"
 
   cup "$divider_row" 0
