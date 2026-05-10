@@ -111,6 +111,28 @@ just delivers the directory; the `.model` file is just a file to it.
 
 Both loops honor `.paused`.
 
+### Tender pidfile
+
+While a model call is in flight, `bin/tend-loop.sh` writes the llm child's
+process-group id to `.gremlin/.tending.pid` (atomic via `.tmp` rename) and
+runs the preset in its own pgid so a single signal can reach the preset's
+children too (curl, jq, model SDKs). The pidfile is removed when the call
+returns — clean exit, error, or external kill — by an `EXIT` trap as the
+safety net.
+
+If the call exits non-zero **and** the claim has been moved out of
+`.nest/in/<x>.tending` (i.e. an outside actor like `/stop` dropped it),
+the tender treats this as a clean abort: it does not write an assistant
+turn and does not complete the item into `.nest/out/`. The system turn
+that announces the abort is the responsibility of whoever moved the
+claim, not the tender.
+
+A tender process killed with `SIGKILL` cannot run its trap; the pidfile
+is then stale. Treat a pidfile whose pid is not alive as "nothing to
+stop" and clean it on next inspection. The pidfile lives next to
+`.paused` and follows the same idiom: a single root-level flag observed
+by anyone who needs it.
+
 ## Transcript
 
 `transcript.md` is append-only markdown. Three turn roles:
