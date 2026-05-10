@@ -133,6 +133,17 @@ stop" and clean it on next inspection. The pidfile lives next to
 `.paused` and follows the same idiom: a single root-level flag observed
 by anyone who needs it.
 
+### /stop
+
+`/stop` is the user-visible abort: it reads `.tending.pid`, signals the pgid
+(TERM, then KILL after a short grace), moves the active `.nest/in/*.tending`
+claim into `.nest/dropped/<x>` with a reason file, appends a
+`## system — ✋ item aborted` turn, and removes the pidfile. The tender's
+abort branch then sees the missing claim and exits cleanly without a
+phantom assistant turn. `/stop` is idempotent: a missing pidfile prints
+"nothing to stop"; a stale pidfile is cleaned and any orphaned `.tending`
+claim is dropped.
+
 ## Transcript
 
 `transcript.md` is append-only markdown. Three turn roles:
@@ -161,9 +172,10 @@ pairs, never new role headers.
 
 Initial sub-categories:
 
-- `⚙️ run:` — a script ran (scheduled `run.sh` body), or an item was aborted.
+- `⚙️ run:` — a script ran (scheduled `run.sh` body).
 - `⚠️ error:` — runtime failure worth surfacing (e.g. `run.sh` exited non-zero).
 - `💌 message:` — scheduled `message.md` body emitted by the tender (any flavour: reminder, summary, status — the role is "voice from outside the conversation").
+- `✋ item aborted` — `/stop` cancelled the in-flight model call. Terse fixed-form line; no message tail.
 
 ### Authorship
 
