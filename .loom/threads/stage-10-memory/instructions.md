@@ -2,7 +2,9 @@
 
 **Outcome.** A fresh gremlin ships with glean vendored as its memory protocol. Distillation is a deliberate act, not an automatic flow. Findings are the workbench; `context/` remains the broadcast; promotion is by symlink.
 
-**Glean-side rebuild has tied (`s47a`–`s47j`).** Gremlin integration can begin. Gremlin-side children below remain suggestions — each needs its own `instructions.md` written and committed before being claimed.
+**Glean ships at `github.com/zealtv/glean`.** Gremlin integration can begin. The first child `s47-find-flow` is a design stitch that resolves the open flow questions and rewrites the remaining children into concrete `instructions.md` files; until it ties, the `s48`+ entries below are suggestions, not stitches.
+
+**Open flow questions live in `s47-find-flow/instructions.md`** — read that before editing this file.
 
 ## Strategy
 
@@ -34,14 +36,16 @@
 
 ### gremlin
 
-1. Vendor `.gremlin/.glean/` with `glean.sh`, `README.md`, `test.sh`, default `distil.md`. Match the nestlings/groundhog vendoring pattern.
+> Concrete steps land here once `s47-find-flow` ties. The bullets below are pre-design suggestions and will be rewritten.
+
+1. Vendor `.gremlin/.glean/` with glean's upstream-canonical `glean.sh` and `README.md` (do not edit — same convention as `.nest`, `.loom`, `.groundhog`), plus gremlin's own `distil.md` overlaid on top of glean's default. No `test.sh` exists upstream.
 2. `init.sh`: one line to run `glean.sh init` against the new copy after `cp -r`.
-3. `skills/distil.md`: triggered skill. Tight triggers. Body: read raw, read findings, prefer associate→revise→create→drop, land *small distilled notes* via `capture` (or `ingest` for raw material that needs a second pass), document promotion-via-symlink.
-4. (Optional) one-line nudge in `commands/new.sh`. Defer until acceptance.
+3. `skills/distil.md`: triggered skill. Tight triggers. Body: read raw from `.glean/in/`, read existing findings via `index`/`fetch`, prefer associate→revise→create→drop, write distilled notes directly to `findings/<id>.md`, then `glean.sh complete <in-id>` and `glean.sh index`. Document promotion-via-symlink. (No `capture` command exists; capture is a gremlin-side verb to be defined in `s47-find-flow`.)
+4. `/new` and groundhog-fired distillation behaviour — pending `s47-find-flow`.
 
 ### glean
 
-Tracked in glean's loom — see `~/repos/glean/.loom/threads/glean-rebuild/`. All ten children (`s47a`–`s47j`) are tied; the protocol is shipped.
+Glean ships at `github.com/zealtv/glean`. Its rebuild loom has been emptied and deleted; treat the public repo as canonical.
 
 ## Verification gate
 
@@ -59,16 +63,20 @@ If step 6 works, it's memory. If not, it's a filing cabinet.
 
 ## Child stitches
 
-Glean-side work is shipped: `~/repos/glean/.loom/threads/glean-rebuild/` (goal stitch with `s47a`–`s47j` tied — finding contract, ingest, capture, index, fetch, drop/status/sweep, tests, README, this cross-repo update).
+Glean-side work is shipped at `github.com/zealtv/glean` (rebuild loom emptied and deleted).
 
-Gremlin-side (suggestions — need their own `instructions.md` before being claimed):
+Gremlin-side:
 
-- `s48-vendor-glean` — copy `glean.sh` + `README.md` + `test.sh` into `.gremlin/.glean/`, ship a default `distil.md`.
+- **`s47-find-flow`** *(real loose end — design stitch; see `s47-find-flow/instructions.md`)*. Resolves capture semantics, distillation triggers, `/new` behaviour, gremlin's own `distil.md`, vendoring shape, and `/update` excludes. Output is concrete `instructions.md` files for the children below.
+
+The following are suggestions — not stitches yet. `s47-find-flow` writes their `instructions.md` files and structures dependencies (likely by nesting `s49`–`s52` under `s48`, and running `s53` last):
+
+- `s48-vendor-glean` — vendor `glean.sh` + upstream `README.md` into `.gremlin/.glean/`, layer gremlin's canonical `distil.md` on top.
 - `s49-init-wires-glean` — `init.sh` runs glean's init for new gremlins.
-- `s50-distil-skill` — `skills/distil.md` with tight triggers + the procedure; consumes `index` / `fetch` / `capture` / `ingest`.
+- `s50-distil-skill` — `skills/distil.md` with tight triggers + the procedure; consumes `index` / `fetch` / `ingest` / `complete` / `drop`.
 - `s51-distil-schedule-paused` — ship a paused groundhog item that fires a distil instruction into `.nest/in/`. The groundhog "paused item" feature has landed (see Dependencies).
-- `s52-update-excludes` — extend `commands/update.sh` `excludes=(...)` list to preserve glean runtime state across `/update` (likely `.glean/in/`, `.glean/findings/`, `.glean/dropped/`, and `distil.md` if user-tunable). `/update` is the modern overlay path and the excludes list is the modern preserve surface.
-- `s53-acceptance-memory` — the cold-start recall gate.
+- `s52-update-excludes` — extend `commands/update.sh` `excludes=(...)` so `/update` preserves `.glean/` runtime state (exact list pending `s47-find-flow`).
+- `s53-acceptance-memory` — the cold-start recall gate (rewritten by `s47-find-flow`).
 
 ## Dependencies
 
