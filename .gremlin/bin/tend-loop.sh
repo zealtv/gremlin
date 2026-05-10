@@ -101,7 +101,9 @@ iso_user="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf '## user — %s\n%s\n\n' "$iso_user" "$body" >> "$TRANSCRIPT"
 
 prompt_file="$(mktemp)"
-trap 'rm -f "$prompt_file"' EXIT
+reply_file="$(mktemp)"
+PIDFILE="$GREMLIN_DIR/.tending.pid"
+trap 'rm -f "$prompt_file" "$reply_file" "$PIDFILE"' EXIT
 
 {
   cat "$GREMLIN_DIR/gremlin.md"
@@ -137,7 +139,35 @@ if [ -d "$claimed_path" ] && [ -f "$claimed_path/.model" ]; then
   [ -n "$item_model" ] && export GREMLIN_MODEL="$item_model"
 fi
 
-reply="$("$LLM" < "$prompt_file")"
+# Run the model in its own process group so /stop can signal the whole
+# tree (the preset's curl/jq/SDK children too) with a single kill.
+# `set -m` makes the backgrounded command its own pgid (== pid in bash),
+# portably across macOS and Linux without depending on `setsid`.
+set -m
+"$LLM" < "$prompt_file" > "$reply_file" &
+llm_pid=$!
+set +m
+printf '%s\n' "$llm_pid" > "$PIDFILE.tmp"
+mv "$PIDFILE.tmp" "$PIDFILE"
+
+rc=0
+wait "$llm_pid" || rc=$?
+rm -f "$PIDFILE"
+
+# Abort path: /stop kills the pgid and moves the claim out of .nest/in/
+# into .nest/dropped/. If the claim is gone, treat this as a clean abort
+# — /stop already wrote the system turn — and exit without an assistant
+# turn or a complete-into-out/.
+if [ "$rc" -ne 0 ] && [ ! -e "$claimed_path" ]; then
+  exit 0
+fi
+
+if [ "$rc" -ne 0 ]; then
+  echo "tend-loop: llm.sh exited $rc" >&2
+  exit "$rc"
+fi
+
+reply="$(cat "$reply_file")"
 
 iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
