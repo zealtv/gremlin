@@ -170,10 +170,10 @@ ensure_cursor() {
   fi
 }
 
-extract_assistant_turns() {
+extract_pushable_turns() {
   awk '
     /^## / {
-      if (role == "assistant") {
+      if (role != "") {
         sub(/\n$/, "", body)
         print body "\034"
       }
@@ -181,14 +181,16 @@ extract_assistant_turns() {
       body = ""
       if ($0 ~ /^## assistant[[:space:]]/) {
         role = "assistant"
+      } else if ($0 ~ /^## system[[:space:]]/) {
+        role = "system"
       }
       next
     }
-    role == "assistant" {
+    role != "" {
       body = body $0 "\n"
     }
     END {
-      if (role == "assistant") {
+      if (role != "") {
         sub(/\n$/, "", body)
         print body "\034"
       }
@@ -220,11 +222,11 @@ push_transcript_once() {
     [ -n "$turn" ] || continue
     send_message "$turn" || return 1
     sent_any=1
-  done < <(printf '%s\n' "$chunk" | extract_assistant_turns)
+  done < <(printf '%s\n' "$chunk" | extract_pushable_turns)
 
   write_cursor "$size"
   if [ "$sent_any" -eq 1 ]; then
-    echo "pushed assistant transcript turns through byte $size"
+    echo "pushed transcript turns through byte $size"
   fi
 }
 

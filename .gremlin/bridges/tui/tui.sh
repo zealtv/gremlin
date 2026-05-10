@@ -227,6 +227,7 @@ render_turn() {
   local body="$3"
   local label_color=81
   [ "$role" = "assistant" ] && label_color=213
+  [ "$role" = "system" ] && label_color=226
 
   trim_blank_tail
   append_line ""
@@ -279,11 +280,11 @@ poll_transcript() {
       if (body != "") print body
       print "__GREMLIN_END__"
     }
-    /^## (user|assistant) — / {
+    /^## (user|assistant|system) — / {
       emit()
       role=$2
       ts=$0
-      sub(/^## (user|assistant) — /, "", ts)
+      sub(/^## (user|assistant|system) — /, "", ts)
       body=""
       next
     }

@@ -3,8 +3,9 @@
 Telegram bridge for a gremlin.
 
 This bridge polls one Telegram bot chat for inbound text messages and writes
-them into `.nest/in/`. It also watches `transcript.md` for assistant turns and
-pushes them back to the configured Telegram chat.
+them into `.nest/in/`. It also watches `transcript.md` for assistant and system
+turns and pushes them back to the configured Telegram chat. User turns are
+skipped — the user already sent them.
 
 ## Requirements
 
@@ -84,7 +85,9 @@ when fired, and then push to Telegram.
 - Non-text updates are ignored.
 - On first launch, a missing `.cursor` initializes to the current end of
   `transcript.md`; old transcript history is not pushed to Telegram.
-- Every new assistant turn is pushed to the configured chat.
+- Every new assistant or system turn is pushed to the configured chat.
+  System turns (`⚙️ run:`, `⚠️ error:`, `💌 message:`, …) go through with their
+  emoji+label intact — the body is sent verbatim.
 - `/start` is not special-cased; Telegram's setup message reaches the gremlin as
   ordinary text.
 
