@@ -24,7 +24,7 @@
 - No YAML, no frontmatter. `finding.md` is plain markdown with a fixed set of optional H2 sections (`Claim`, `Why`, `Scope`, `Triggers`, `Associations`).
 - `index` and `fetch` parse those sections directly. The contract is the heading shape.
 
-**Tend-loop, archive.sh, llm.sh, tick-loop.sh — all untouched.** The integration rides on the existing always-loaded `context/` slot plus one new triggered skill plus the vendored scribble.
+**Memory integration is orthogonal to the tender hot path.** The integration rides on the existing always-loaded `context/` slot plus one new triggered skill plus the vendored scribble. `tend-loop.sh`, `llm.sh`, `tick-loop.sh`, and `archive.sh` need no memory-specific changes — even after the recent system-turn / per-item `.model` / `run.sh` dispatch / pidfile work, those scripts remain content-opaque to memory.
 
 ## Surgical changes
 
@@ -63,7 +63,7 @@ Gremlin-side (suggestions — need their own `instructions.md` before being clai
 - `s49-init-wires-scribble` — `init.sh` runs scribble's init for new gremlins.
 - `s50-dream-skill` — `skills/dream.md` with tight triggers + the procedure; consumes `INDEX`/`fetch`/`capture`.
 - `s51-dream-schedule-paused` — ship a paused groundhog item that fires a dream instruction into `.nest/in/`. Depends on the groundhog "paused item" feature (see Dependencies).
-- `s52-sync-excludes` — update DEVELOPING.md sync helper template to exclude scribble runtime state.
+- `s52-update-excludes` — extend `commands/update.sh` `excludes=(...)` list to preserve scribble runtime state across `/update` (likely `.scribble/in/`, `.scribble/findings/`, `.scribble/dropped/`, and `dream.md` if user-tunable). The DEVELOPING.md sync-helper template referenced in earlier drafts no longer exists; `/update` is the modern overlay path and the excludes list is the modern preserve surface.
 - `s53-acceptance-memory` — the cold-start recall gate.
 
 ## Dependencies
@@ -78,7 +78,7 @@ Gremlin-side (suggestions — need their own `instructions.md` before being clai
 - Trigger phrasing — start tight, loosen if needed.
 - Whether `commands/new.sh` actually gets the nudge.
 - `.gitkeep` strategy for `.scribble/in/`, `findings/`, `dropped/` in the canonical.
-- Sync helper exclusions (probably mirror `context/` — `.scribble/in/`, `findings/`, `dropped/`, `dream.md`).
+- `commands/update.sh` excludes additions (probably mirror `context/` — `.scribble/in/`, `.scribble/findings/`, `.scribble/dropped/`, and `dream.md` if it's user-tunable).
 
 ## Notes
 
