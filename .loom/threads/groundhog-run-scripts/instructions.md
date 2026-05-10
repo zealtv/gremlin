@@ -21,7 +21,7 @@ Some scheduled work is just "run this command" — a backup, a check, a refresh.
 
 - `bin/tick-loop.sh` — new branch.
 - `docs/protocol.md` — Data Flow scheduled section: add the script route.
-- `.groundhog/README.md` (vendored) — *do not* claim groundhog interprets `run.sh`. Note that gremlin's tick-loop recognises the convention; groundhog itself is content-opaque.
+- **Do not edit `.groundhog/README.md`.** That file is the canonical upstream README from `~/repos/groundhog`, vendored verbatim. Groundhog is content-opaque by design — it must not learn about `run.sh`. Any documentation of the gremlin-side convention belongs in `docs/protocol.md`. The same rule applies to `.nest/README.md` and `.loom/README.md`: edits go upstream-first or to a sibling gremlin-side doc, never to the vendored copy.
 
 ## Verify
 
