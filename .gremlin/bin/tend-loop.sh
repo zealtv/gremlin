@@ -95,6 +95,15 @@ trap 'rm -f "$prompt_file"' EXIT
   printf '%s\n' "$body"
 } > "$prompt_file"
 
+# Per-item model override: if the claimed directory contains a .model
+# file, its single-line alias takes precedence over the gremlin-wide
+# .model setting for this tend. Lets a scheduled item pick a cheaper or
+# heavier preset than the default.
+if [ -d "$claimed_path" ] && [ -f "$claimed_path/.model" ]; then
+  item_model="$(tr -d '[:space:]' < "$claimed_path/.model")"
+  [ -n "$item_model" ] && export GREMLIN_MODEL="$item_model"
+fi
+
 reply="$("$LLM" < "$prompt_file")"
 
 iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

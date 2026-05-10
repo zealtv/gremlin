@@ -72,8 +72,11 @@ uses stderr plus a non-zero exit for errors.
 
 ## Models
 
-`bin/llm.sh` reads `.model` or defaults to `default`, then runs
-`models/<alias>.sh`.
+`bin/llm.sh` selects an alias and runs `models/<alias>.sh`. Alias precedence:
+
+1. `$GREMLIN_MODEL` — per-call override.
+2. `.gremlin/.model` — gremlin-wide default, set via `/model <alias>` from the TUI.
+3. `default` — built-in fallback.
 
 Each model preset receives the prompt on stdin and writes the reply to stdout.
 That keeps the rest of the gremlin independent of the model harness. A preset
@@ -86,6 +89,15 @@ just the parent folder containing `.gremlin/`.
 
 Configure `models/default.sh` before first use, or add another executable preset
 and select it from the TUI with `/model <alias>`.
+
+### Per-item override
+
+When the tender claims an item directory containing a `.model` file, it reads
+the single-line alias and exports `GREMLIN_MODEL` for that tend. A scheduled
+groundhog item can therefore pick its own preset — a cheap fast one for a daily
+summary, a heavier one for a weekly review — without changing the gremlin-wide
+`.model`. The convention is gremlin-side: groundhog stays content-opaque and
+just delivers the directory; the `.model` file is just a file to it.
 
 ## Loops
 

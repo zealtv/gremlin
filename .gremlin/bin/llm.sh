@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # llm.sh — the single LLM seam.
 #
-# The active preset is `models/<alias>.sh`, where the alias is read
-# from `.gremlin/.model` (or "default" if absent). A preset is an
-# executable script that reads the prompt on stdin and writes the
-# reply on stdout. Edit `models/default.sh` (or drop new
+# The active preset is `models/<alias>.sh`. Alias precedence:
+#   1. $GREMLIN_MODEL  — per-call override (e.g. tend-loop sets this when
+#                        the claimed item directory contains a .model file)
+#   2. .gremlin/.model — gremlin-wide default (set via /model <alias>)
+#   3. "default"       — built-in fallback
+#
+# A preset is an executable script that reads the prompt on stdin and
+# writes the reply on stdout. Edit `models/default.sh` (or drop new
 # `models/<alias>.sh` files) to swap CLIs or add presets.
 
 set -euo pipefail
@@ -16,6 +20,10 @@ ACTIVE_FILE="$GREMLIN_DIR/.model"
 alias_name="default"
 if [ -f "$ACTIVE_FILE" ]; then
   candidate="$(tr -d '[:space:]' < "$ACTIVE_FILE")"
+  [ -n "$candidate" ] && alias_name="$candidate"
+fi
+if [ -n "${GREMLIN_MODEL:-}" ]; then
+  candidate="$(printf '%s' "$GREMLIN_MODEL" | tr -d '[:space:]')"
   [ -n "$candidate" ] && alias_name="$candidate"
 fi
 
