@@ -203,6 +203,9 @@ sweep_dir() {
   [[ -d "$dir" ]] || return 0
   local entry name
   local find_args=(-mindepth 1 -maxdepth 1)
+  # `sweep 0` matches everything regardless of mtime. find treats `-mtime +0`
+  # as "modified more than 0 days ago" → always false on freshly touched
+  # items, so the flag has to be elided to mean "right now".
   if [[ "$days" != "0" ]]; then
     find_args+=(-mtime +"$days")
   fi

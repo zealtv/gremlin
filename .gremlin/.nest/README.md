@@ -93,5 +93,5 @@ Keep it short. Keep it concrete.
 ./nestling.sh claim <n>
 ./nestling.sh complete <n> <result_src> [out_name]
 ./nestling.sh drop <n> <reason>
-./nestling.sh sweep [days]   # remove out/dropped older than N days (default 14); prints one line per item
+./nestling.sh sweep [days]   # remove out/dropped older than N days (default 14; pass 0 to sweep everything regardless of mtime). `.gitkeep` placeholders and `*.reason.md` siblings are preserved. Prints one line per item.
 ```
