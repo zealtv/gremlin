@@ -4,7 +4,13 @@
 # Lists ready items in the nest, claims the oldest, dispatches by item
 # shape, and archives the claimed item into .nest/out/.
 #
-# Shapes:
+# Shapes (checked in order; first match wins):
+#   - directory with executable run.sh → no model; run the script in the
+#     host folder, emit `## system — ⚙️ run: <stdout>` (or `⚠️ error:` on
+#     non-zero exit), and archive. run.sh wins over message.md.
+#   - directory with run.sh that is not executable → drop with reason; the
+#     item named itself a script and is malformed, so don't fall through
+#     to the model.
 #   - directory with message.md (and no instructions.md) → no model;
 #     emit `## system — 💌 message: <body>` and archive.
 #   - directory with instructions.md, or a file item → model-backed:
@@ -40,9 +46,36 @@ items="$("$NESTLING" list)"
 name="$(printf '%s\n' "$items" | head -n1)"
 claimed_path="$("$NESTLING" claim "$name")"
 
-# Shape dispatch. Directories with message.md (and no instructions.md)
-# are non-model items routed in by tick-loop — emit a system turn and
-# archive. Everything else is a model-backed tend.
+# Shape dispatch. run.sh is checked before message.md so a script wins
+# when both exist (more specific). All non-model branches archive via
+# nestling and exit; only the model-backed path falls through.
+
+if [ -d "$claimed_path" ] && [ -e "$claimed_path/run.sh" ]; then
+  if [ -x "$claimed_path/run.sh" ]; then
+    iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    rc=0
+    out="$("$claimed_path/run.sh")" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      if [ -n "$out" ]; then
+        printf '## system — %s\n⚙️ run: %s\n\n' "$iso" "$out" >> "$TRANSCRIPT"
+      fi
+    else
+      tail_out="$(printf '%s\n' "$out" | tail -n 20)"
+      if [ -n "$tail_out" ]; then
+        printf '## system — %s\n⚠️ error: run.sh exited %d\n%s\n\n' "$iso" "$rc" "$tail_out" >> "$TRANSCRIPT"
+      else
+        printf '## system — %s\n⚠️ error: run.sh exited %d\n\n' "$iso" "$rc" >> "$TRANSCRIPT"
+      fi
+    fi
+    "$NESTLING" complete "$name" "$claimed_path" >/dev/null
+    exit 0
+  else
+    echo "tend-loop: run.sh in '$name' is not executable; dropping" >&2
+    "$NESTLING" drop "$name" "run.sh present but not executable" >/dev/null
+    exit 0
+  fi
+fi
+
 if [ -d "$claimed_path" ] && [ -f "$claimed_path/message.md" ] && [ ! -f "$claimed_path/instructions.md" ]; then
   iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   body="$(cat "$claimed_path/message.md")"
