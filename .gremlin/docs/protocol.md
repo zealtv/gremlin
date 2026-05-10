@@ -139,8 +139,8 @@ pairs, never new role headers.
 
 Initial sub-categories:
 
-- `⚙️ run:` — a script ran, or an item was aborted.
-- `⚠️ error:` — runtime failure worth surfacing.
+- `⚙️ run:` — a script ran (scheduled `run.sh` body), or an item was aborted.
+- `⚠️ error:` — runtime failure worth surfacing (e.g. `run.sh` exited non-zero).
 - `💌 message:` — scheduled `message.md` body emitted by the tender (any flavour: reminder, summary, status — the role is "voice from outside the conversation").
 
 ### Authorship
@@ -185,10 +185,18 @@ Scheduled item (any axis — `message.md`, `instructions.md`, `run.sh`):
               -> .nest/out/<archive>
 ```
 
-Tend-loop dispatch by shape:
+Tend-loop dispatch by shape, checked in order (first match wins):
 
-- `instructions.md` (or a file item) → model-backed tend → `## user —` plus
-  `## assistant —`.
-- `message.md` → no model → `## system — 💌 message: <body>`.
-- `run.sh` (executable) → no model → run, capture stdout → `## system —
-  ⚙️ run: <stdout>` (or `⚠️ error:` on non-zero exit).
+- Directory with executable `run.sh` → no model. Run the script with the host
+  folder as cwd, capture stdout (stderr goes to the runner log). On exit 0
+  with non-empty stdout: `## system — ⚙️ run: <stdout>`. On exit 0 with
+  empty stdout: no transcript turn (quiet success). On non-zero exit:
+  `## system — ⚠️ error: run.sh exited <code>` followed by the last lines of
+  stdout. `run.sh` wins over `message.md` when both are present.
+- Directory with `run.sh` that is not executable → drop with reason. The
+  item named itself a script and is malformed; do not fall through to the
+  model.
+- Directory with `message.md` (and no `instructions.md`) → no model →
+  `## system — 💌 message: <body>`.
+- Directory with `instructions.md`, or a file item → model-backed tend →
+  `## user —` plus `## assistant —`.
