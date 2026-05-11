@@ -18,7 +18,10 @@ Each command is a bash script directly under `commands/`.
 
 | Command | Purpose |
 |---------|---------|
-| `/new` | start a fresh transcript (rotates current into `transcript-archive/`) |
+| `/new-session` | start a fresh transcript and queue memory review for the ended session |
+| `/discard-session` | start a fresh transcript without memory review |
+| `/new` | alias for `/new-session` |
+| `/discard` | alias for `/discard-session` |
 | `/model` | list or set the active model preset |
 | `/update` | pull canonical gremlin from `.upstream` and lay it over this copy |
 | `/sweep` | remove old nestling and groundhog archive entries |

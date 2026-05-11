@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# new — alias for /new-session
+# discard — alias for /discard-session
 set -euo pipefail
+
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec "$GREMLIN_DIR/commands/new-session.sh" "$@"
+exec "$GREMLIN_DIR/commands/discard-session.sh" "$@"
