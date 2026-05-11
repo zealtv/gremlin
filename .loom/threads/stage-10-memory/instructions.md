@@ -1,97 +1,135 @@
 # stage-10-memory
 
-**Outcome.** A fresh gremlin ships with glean vendored as its memory protocol. Distillation is a deliberate act, not an automatic flow. Findings are the workbench; `context/` remains the broadcast; promotion is by symlink.
+**Outcome.** A fresh gremlin ships with Glean vendored as its memory protocol.
+Ended sessions can be reviewed automatically for durable memory, while temporary
+sessions can be discarded from memory review. Findings are the workbench;
+`context/` remains the always-loaded broadcast; promotion is explicit by
+symlink.
 
-**Glean ships at `github.com/zealtv/glean`.** Gremlin integration can begin. The first child `s47-find-flow` is a design stitch that resolves the open flow questions and rewrites the remaining children into concrete `instructions.md` files; until it ties, the `s48`+ entries below are suggestions, not stitches.
-
-**Open flow questions live in `s47-find-flow/instructions.md`** — read that before editing this file.
+**Glean ships at `github.com/zealtv/glean`.** Gremlin integration can proceed
+from the concrete child stitches below. The design record lives in
+`s47-find-flow/flow.md` once that stitch is tied.
 
 ## Strategy
 
-**Two surfaces.**
+**Two memory surfaces.**
 
-- `.gremlin/.glean/findings/` is the workbench — what the agent has distilled. Not always loaded.
-- `.gremlin/context/` is the broadcast — what the agent always carries.
-- Promotion is explicit: symlink `context/<id>.md → ../.glean/findings/<id>.md`. The agent decides when a finding has earned always-loading.
+- `.gremlin/.glean/findings/` is the workbench: distilled findings the agent
+  can search and revise. It is not always loaded.
+- `.gremlin/context/` is the broadcast: material loaded into every prompt.
+- Promotion is explicit: symlink `context/<id>.md` to
+  `../.glean/findings/<id>.md` when a finding has earned always-loading.
 
-**Distillation is deliberate.**
+**Session close is the review point.**
 
-- `/new` does **not** auto-pipe transcripts into `.glean/in/`. The transcript graveyard is `transcript-archive/`, which is human-readable and already exists.
-- A `distil` skill, triggered explicitly ("distil", "let's distil", "consolidate findings"), reads `transcript.md` (or a named archive) and decides what to land — either as raw material via `glean.sh ingest` or, if already polished, directly via `glean.sh capture`.
-- The agent participates in distillation rather than the system shovelling raw ore.
-- Distillation may also be invoked by a scheduled groundhog item that lands in `.nest/in/` and is tended via the same `distil` skill (no second code path). The distil item ships paused, so a fresh gremlin only distils when the user opts in.
+- `/new-session` archives the current transcript, starts a fresh transcript,
+  and queues a visible memory-review item for the archived session.
+- `/discard-session` archives the current transcript and starts fresh without
+  queueing memory review.
+- `/new` aliases `/new-session`; `/discard` aliases `/discard-session`.
+- The review item is model-backed, carries `.model = memory`, and asks the
+  agent to review the archive against `.glean/distil.md`.
 
-**Glean stays pure markdown.**
+**Automatic review, not automatic permanent memory.**
 
-- No YAML, no frontmatter. A finding is one flat markdown file at `findings/<id>.md`.
-- Parser contract: title (first `# ` line) + single-line description (first non-empty line between title and next heading). Everything else is free prose.
-- `## Why`, `## Triggers`, `## Associations`, `## Context` are *suggested* sections in the host's `distil.md` brief — none enforced by the parser.
+- `/new-session` does not copy whole transcripts into `.glean/in/`.
+- Transcript archives remain the durable raw corpus.
+- `.glean/in/` remains available for deliberate raw packets, not the automatic
+  graveyard for every conversation.
+- The review pass may create, revise, drop, or do nothing. It runs
+  `glean.sh index` after changing findings and reports a brief visible outcome
+  in the fresh transcript.
+
+**Glean stays pure and vendored.**
+
+- No new folders or ledger are added to Glean's protocol.
+- A finding is one flat markdown file at `findings/<id>.md`.
+- Parser contract: title (first `# ` line) plus description (first non-empty
+  line before the next heading). Everything else is free prose.
+- Suggested sections live in the host's `distil.md`: `## Why`, `## Triggers`,
+  `## Associations`, `## Context`.
 - Associations use wikilinks: `- [[other-id]]`.
-- `index` always-loads via `findings/INDEX.md`; `fetch` does the prefetch (strict by default — id + title + description + Triggers — with `--all` to widen to whole-file grep).
-- `ingest` uses the family-wide `.landing` write-protection suffix during the move, so an interrupted ingest leaves only `.landing` residue (ignored by other commands).
+- `index` always-loads via `findings/INDEX.md`; `fetch` is strict by default
+  and can widen with `--all`.
 
-**Memory integration is orthogonal to the tender hot path.** The integration rides on the existing always-loaded `context/` slot plus one new triggered skill plus the vendored glean. `tend-loop.sh`, `llm.sh`, `tick-loop.sh`, and `archive.sh` need no memory-specific changes — those scripts remain content-opaque to memory.
+**Memory integration is orthogonal to the tender hot path.** The integration
+rides on `context/`, one triggered distil skill, vendored Glean, slash commands,
+and the existing per-item `.model` hook. `tend-loop.sh` and `llm.sh` do not need
+memory-specific changes.
 
-## Surgical changes
+## Child stitches
 
-### gremlin
+These are structured as a serial Loom chain so the next concrete loose end is
+vendoring Glean, and the acceptance gate only opens after every integration
+piece has tied:
 
-> Concrete steps land here once `s47-find-flow` ties. The bullets below are pre-design suggestions and will be rewritten.
+```text
+s54-acceptance-memory
+└── s53-update-excludes
+    └── s52-distil-schedule-paused
+        └── s51-session-commands
+            └── s50-distil-skill
+                └── s49-init-wires-glean
+                    └── s48-vendor-glean
+```
 
-1. Vendor `.gremlin/.glean/` with glean's upstream-canonical `glean.sh` and `README.md` (do not edit — same convention as `.nest`, `.loom`, `.groundhog`), plus gremlin's own `distil.md` overlaid on top of glean's default. No `test.sh` exists upstream.
-2. `init.sh`: one line to run `glean.sh init` against the new copy after `cp -r`.
-3. `skills/distil.md`: triggered skill. Tight triggers. Body: read raw from `.glean/in/`, read existing findings via `index`/`fetch`, prefer associate→revise→create→drop, write distilled notes directly to `findings/<id>.md`, then `glean.sh complete <in-id>` and `glean.sh index`. Document promotion-via-symlink. (No `capture` command exists; capture is a gremlin-side verb to be defined in `s47-find-flow`.)
-4. `/new` and groundhog-fired distillation behaviour — pending `s47-find-flow`.
+- `s48-vendor-glean` — vendor `.gremlin/.glean/` with upstream `glean.sh` and
+  `README.md`, seed trays, add gremlin-tuned `distil.md`, and ship
+  `models/memory.sh` as a thin wrapper.
+- `s49-init-wires-glean` — ensure install/init creates a usable `.glean/`.
+- `s50-distil-skill` — add the triggered memory/distil skill used by manual
+  asks and review items.
+- `s51-session-commands` — add `/new-session`, `/discard-session`, and the
+  short aliases `/new` and `/discard`.
+- `s52-distil-schedule-paused` — ship an opt-in paused groundhog review item
+  for periodic memory review.
+- `s53-update-excludes` — preserve local Glean state across `/update` while
+  still overlaying canonical Glean files.
+- `s54-acceptance-memory` — verify `/new-session`, `/discard-session`, the
+  memory model preset, and cold-start recall through promoted findings.
 
-### glean
+## Dependencies
 
-Glean ships at `github.com/zealtv/glean`. Its rebuild loom has been emptied and deleted; treat the public repo as canonical.
+- Glean rebuild is complete. Treat `github.com/zealtv/glean` as canonical.
+- Groundhog paused-items support has landed and is vendored here. Paused
+  schedule subtrees can be used for opt-in periodic distillation.
 
 ## Verification gate
 
 Cold-start recall:
 
-1. Fresh init produces an empty glean.
-2. Establish a durable preference in conversation.
-3. Trigger distillation → finding lands at `.glean/findings/<id>.md`.
-4. Promote via symlink into `context/`.
-5. `/new` rotates the transcript.
-6. Ask the same question cold (no transcript context). Answer should still be correct *because* the symlinked finding is in the loaded context. **Load-bearing test.**
-7. Drop test: trigger removal. Finding moves to `.glean/dropped/`. Dangling symlink is acceptable; cleanup is a hygiene step the skill should mention.
+1. Fresh install produces an empty `.gremlin/.glean/findings/`.
+2. User establishes a durable preference in conversation.
+3. User runs `/new-session`.
+4. A memory-review item is queued with `.model = memory` and tended.
+5. The review creates or revises a finding and refreshes `findings/INDEX.md`.
+6. Promote the finding by symlink into `.gremlin/context/`.
+7. Start another fresh session.
+8. Ask a question that depends on the preference. The answer should reflect the
+   promoted finding because it is loaded through `context/`.
 
-If step 6 works, it's memory. If not, it's a filing cabinet.
+Discard path:
 
-## Child stitches
+1. User establishes a temporary preference.
+2. User runs `/discard-session`.
+3. No memory-review item is queued.
+4. No finding is created from that discarded session.
 
-Glean-side work is shipped at `github.com/zealtv/glean` (rebuild loom emptied and deleted).
+Update path:
 
-Gremlin-side:
+1. Create local findings, inbox residue, dropped findings, and a customized
+   `.glean/distil.md`.
+2. Run `/update --dry-run`, then `/update` against a local canonical tarball.
+3. Local Glean state remains; canonical `.glean/glean.sh` and `.glean/README.md`
+   update.
 
-- **`s47-find-flow`** *(real loose end — design stitch; see `s47-find-flow/instructions.md`)*. Resolves capture semantics, distillation triggers, `/new` behaviour, gremlin's own `distil.md`, vendoring shape, and `/update` excludes. Output is concrete `instructions.md` files for the children below.
-
-The following are suggestions — not stitches yet. `s47-find-flow` writes their `instructions.md` files and structures dependencies (likely by nesting `s49`–`s52` under `s48`, and running `s53` last):
-
-- `s48-vendor-glean` — vendor `glean.sh` + upstream `README.md` into `.gremlin/.glean/`, layer gremlin's canonical `distil.md` on top.
-- `s49-init-wires-glean` — `init.sh` runs glean's init for new gremlins.
-- `s50-distil-skill` — `skills/distil.md` with tight triggers + the procedure; consumes `index` / `fetch` / `ingest` / `complete` / `drop`.
-- `s51-distil-schedule-paused` — ship a paused groundhog item that fires a distil instruction into `.nest/in/`. The groundhog "paused item" feature has landed (see Dependencies).
-- `s52-update-excludes` — extend `commands/update.sh` `excludes=(...)` so `/update` preserves `.glean/` runtime state (exact list pending `s47-find-flow`).
-- `s53-acceptance-memory` — the cold-start recall gate (rewritten by `s47-find-flow`).
-
-## Dependencies
-
-- ~~**Glean rebuild** *(glean repo)*. Goal stitch at `~/repos/glean/.loom/threads/glean-rebuild/`. Children `s47a`–`s47j` cover the rename, finding contract, all eight commands, tests, README, and this thread's update. `s48`–`s50` here wait on it.~~ ✅ Tied 2026-05-10. Glean ships at `github.com/zealtv/glean` (renamed from `zealtv/scribble`).
-- ~~**Groundhog paused-items feature** *(groundhog repo)*. Stitch at `~/repos/groundhog/.loom/threads/paused-items/`. The distil item must ship paused so a fresh install does not auto-distil. `s51-distil-schedule-paused` waits on it.~~ ✅ Landed 2026-05-09 — `.paused` suffix on any path component takes that subtree off-schedule (cascades). Vendored into `.gremlin/.groundhog/`. `s51-distil-schedule-paused` is unblocked from the groundhog side.
-
-## Decisions deferred to those child stitches
-
-- Exact `distil.md` skill body (procedure, error cases, promotion guidance).
-- Default `distil.md` shipped inside `.gremlin/.glean/` — glean's default vs gremlin-tuned.
-- Trigger phrasing — start tight, loosen if needed.
-- Whether `commands/new.sh` actually gets the nudge.
-- `.gitkeep` strategy for `.glean/in/`, `findings/`, `dropped/` in the canonical.
-- `commands/update.sh` excludes additions (probably mirror `context/` — `.glean/in/`, `.glean/findings/`, `.glean/dropped/`, and `distil.md` if it's user-tunable).
+If cold-start recall works, it is memory. If not, it is a filing cabinet.
 
 ## Notes
 
-(filled in as child stitches tie off; record what was learned)
+- `/new-session` is intentionally transparent rather than quiet: the fresh
+  transcript receives a short memory-review outcome.
+- `/discard-session` archives rather than deletes; its promise is no memory
+  review, not no record.
+- A future quiet review item shape can be considered after this visible path is
+  proven.
