@@ -37,6 +37,11 @@ excludes=(
   --exclude='.groundhog/out/'
   --exclude='.groundhog/fired/'
   --exclude='.groundhog/schedule/'
+  --exclude='.glean/in/'
+  --exclude='.glean/findings/'
+  --exclude='.glean/out/'
+  --exclude='.glean/dropped/'
+  --exclude='.glean/distil.md'
   --exclude='context/'
   --exclude='gremlin.md'
   --exclude='.upstream'
@@ -49,6 +54,7 @@ created_pause=0
 cleanup() {
   rm -rf "$tmp"
   [ "$created_pause" = "1" ] && rm -f "$PAUSED_FILE"
+  true
 }
 trap cleanup EXIT
 

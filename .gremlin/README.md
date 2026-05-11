@@ -125,7 +125,10 @@ From a script or shell:
 ```
 
 `/update` overlays canonical files while preserving identity, context,
-transcripts, queues, schedules, `.upstream`, `.model`, and `.paused`.
+transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`,
+and `.paused`. Canonical `.glean/glean.sh` and `.glean/README.md` still update;
+`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and
+`.glean/distil.md` are local state.
 
 ## More
 

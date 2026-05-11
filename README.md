@@ -88,7 +88,10 @@ GREMLIN_INSTALL_URL=file:///tmp/gremlin.tar.gz ./install.sh ~/Desktop/mygremlin
 
 The installed `.gremlin/.upstream` points at the public canonical tarball.
 `/update` overlays canonical files while preserving identity, context,
-transcripts, queues, schedules, `.upstream`, `.model`, and `.paused`.
+transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`,
+and `.paused`. Canonical `.glean/glean.sh` and `.glean/README.md` still update;
+`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and
+`.glean/distil.md` are local state.
 
 To test local canonical changes through `/update`, point a personal copy at a
 local tarball:
