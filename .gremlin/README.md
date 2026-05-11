@@ -75,6 +75,7 @@ More detail: `bridges/telegram/README.md`.
 
 - `gremlin.md`: identity, personality, purpose, voice.
 - `context/*.md`: facts loaded into every prompt.
+- `.glean/`: memory workbench for distilled findings, fetched on demand.
 - `skills/*.md`: procedures the gremlin can follow.
 - `tools/*.sh`: bash tools the gremlin can run.
 - `models/*.sh`: model runner presets.
@@ -82,6 +83,25 @@ More detail: `bridges/telegram/README.md`.
 
 Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is
 rebuilt. You can also run `.gremlin/bin/index-skills.sh` directly.
+
+## Memory
+
+`.gremlin/.glean/` is the local memory workbench. It stores raw distillation
+inbox items in `.glean/in/`, distilled findings in `.glean/findings/`, completed
+inbox residue in `.glean/out/`, and retired findings in `.glean/dropped/`.
+
+Findings are not automatically loaded into every prompt. Search or fetch them
+when they are relevant, then promote only the small set that should always be in
+context by symlinking them into `.gremlin/context/`:
+
+```sh
+ln -s ../.glean/findings/<id>.md ./.gremlin/context/<id>.md
+```
+
+`models/memory.sh` is the default review model alias for memory-review work. It
+is intentionally a thin wrapper around `models/default.sh`, so a fresh gremlin
+inherits the configured default model unless you choose to specialize memory
+review later.
 
 ## Update
 

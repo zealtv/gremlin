@@ -41,16 +41,18 @@ If a preset has no label line, `/model` shows just the filename.
 ## Adding a preset
 
 Drop a new file in this directory, make it executable, give it a
-label. Two presets ship as starting points:
+label. Three presets ship as starting points:
 
 - `default.sh` — canonical LLM example with commented starter
   invocations for several agent CLIs.
+- `memory.sh` — conventional alias for memory-review work. It delegates to
+  `default.sh` unless you specialize it.
 - `echo.sh` — script-only example that echoes the incoming item
   back, useful as a starting point for routers, fixed-response
   bots, lookup tables, or local rule engines that need a
   deterministic reply without a model.
 
-Copy from either, or write your own.
+Copy from one, or write your own.
 
 ```sh
 cp models/default.sh models/local.sh
