@@ -1,8 +1,8 @@
 # 👀 gremlin
 
-gremlin is an AI agent that lives in a folder.
+gremlin is a simple AI agent that lives in a folder. Copy `.gremlin/` into a folder, that folder is now an agent.
 
-You can connect it to Claude Code, OpenAI Codex, Open Code, Pi, or your local model.
+Connect it to Claude Code, OpenAI Codex, Open Code, Pi, your local models - anything that pipes to the CLI. 
 
 
 ## Quick Start
@@ -45,6 +45,66 @@ Run `/help` for to list commands.
 - `.gremlin/skills/`: markdown skills.
 - `.gremlin/tools/`: bash tools.
 - `.gremlin/models/`: model presets.
+
+
+
+## Structure
+
+```
+Host_Directory/
+└── .gremlin/
+    ├── .glean/              <- memory
+    ├── .groundhog/          <- scheduled items
+    ├── .nest/               <- inbound/completed items
+    ├── bin/
+    ├── bridges/             <- TUI and Telegram bridges
+    ├── commands/            <- slash commands
+    ├── context/             <- facts loaded into every prompt
+    ├── docs/
+    ├── models/              <- model presets
+    ├── skills/              <- markdown procedures
+    ├── transcript-archive/  <- archived sessions
+    ├── tools/               <- bash tools
+    ├── .upstream     
+    ├── README.md
+    ├── gremlin             <- gremlin executable
+    ├── gremlin.md          <- identity, personality, purpose, voice
+    └── transcript.md       <- current session
+```
+
+## Message Lifecycle
+
+```mermaid
+flowchart TD
+  BRIDGES["Bridges <br/>(TUI, Telegram, bin/say)"]
+  TICK["Tick loop<br/>(scheduled items)"]
+  IN[".nest/in/"]
+  TEND["Tend loop<br/>(claim + dispatch)"]
+  TRANS[("transcript.md")]
+  OUT[".nest/out/ or .nest/dropped/"]
+
+  
+  TICK    -- "fired item"    --> IN
+  BRIDGES -- "user message" --> IN
+  IN --> TEND
+  TEND -- "run.sh → ⚙️ <br> message.md → 💌 <br/>else → model → reply" --> TRANS
+  TEND --> OUT
+  TRANS -. tail .-> BRIDGES
+```
+
+1. **Bridges and `gremlin say` deposit each user message as an item in `.nest/in/`**.
+2. **The tick loop drops scheduled items from groundhog into the same `.nest/in/`**, so all inbound work shares one funnel.
+3. **The tend loop claims one ready item at a time** (renaming it `.tending`) and dispatches by shape: 
+  - an executable `run.sh` runs as a script, 
+  - a lone `message.md` is emitted verbatim, 
+  - anything else goes to the model.
+4. **For model-backed items, the tender appends `## user —` to `transcript.md`, builds the prompt** (`gremlin.md` + `context/` + skills/tools/memory indexes + the transcript + the body), **calls the model, and appends `## assistant —`**.
+5. **The handled item is archived to `.nest/out/`** (or `.nest/dropped/` if it failed or was aborted by `/stop`); the reply itself lives only in the transcript.
+6. **Bridges tail `transcript.md` to fan replies back out** to their channel, closing the loop.
+
+Slash commands (`/stop`, `/help`, …) are a side channel: bridges run them directly via `commands/<cmd>.sh`, bypassing the nest and the model entirely.
+
+
 
 
 ## Principles
