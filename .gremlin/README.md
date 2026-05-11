@@ -1,21 +1,12 @@
 # gremlin
 
-A gremlin is a folder you can talk to. This `.gremlin/` directory turns its
-parent folder into an agent.
+A gremlin is a folder you can talk to. This `.gremlin/` directory turns its parent folder into an agent.
 
-The parent folder that contains `.gremlin/` is also the gremlin's working
-directory. `bin/run.sh` changes into that host folder before invoking the loops
-and model preset, so tools and model CLIs should treat it as the normal
-workspace scope.
+The parent folder that contains `.gremlin/` is also the gremlin's working directory. `bin/run.sh` changes into that host folder before invoking the loops and model preset, so tools and model CLIs should treat it as the normal workspace scope.
 
 ## Run
 
-Configure a model preset first. The default preset is `models/default.sh`; edit
-it for the model CLI you want to use, or add another executable
-`models/<alias>.sh` and select it from the TUI with `/model <alias>`. A preset
-is any executable that reads the prompt on stdin and writes a reply on stdout,
-so it doesn't have to call an LLM — `models/echo.sh` ships as a script-only
-example.
+Configure a model preset first. The default preset is `models/default.sh`; edit it for the model CLI you want to use, or add another executable `models/<alias>.sh`and select it from the TUI with`/model <alias>`. A preset is any executable that reads the prompt on stdin and writes a reply on stdout, so it doesn't have to call an LLM — `models/echo.sh` ships as a script-only example.
 
 Start the gremlin runner from the host folder:
 
@@ -23,8 +14,7 @@ Start the gremlin runner from the host folder:
 ./.gremlin/gremlin start
 ```
 
-The runner backgrounds the tend and schedule loops. Leave it running while you
-interact with the gremlin.
+The runner backgrounds the tend and schedule loops. Leave it running while you interact with the gremlin.
 
 ## Talk
 
@@ -34,8 +24,7 @@ Use the TUI for normal interactive work:
 ./.gremlin/gremlin tui
 ```
 
-The TUI shows transcript history, sends submitted messages into `.nest/in/`, and renders assistant turns
-as they land in `transcript.md`.
+The TUI shows transcript history, sends submitted messages into `.nest/in/`, and renders assistant turns as they land in `transcript.md`.
 
 Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands:
 
@@ -44,10 +33,7 @@ Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands
 ./.gremlin/gremlin say /help
 ```
 
-Use `/new-session` at a real session boundary. It rotates the transcript,
-starts fresh, and queues a visible memory-review item for the archived session.
-Use `/discard-session` for temporary sessions that should be archived but not
-reviewed for memory. `/new` and `/discard` are short aliases.
+Use `/new-session` at a real session boundary. It rotates the transcript, starts fresh, and queues a visible memory-review item for the archived session. Use `/discard-session` for temporary sessions that should be archived but not reviewed for memory. `/new` and `/discard` are short aliases.
 
 ## Telegram
 
@@ -71,8 +57,7 @@ chmod 600 ./.gremlin/bridges/telegram/config
 ./.gremlin/gremlin telegram status
 ```
 
-Telegram's `/start` message is passed through as normal text; the gremlin may
-reply that it does not recognize it. Send a regular message after setup.
+Telegram's `/start` message is passed through as normal text; the gremlin may reply that it does not recognize it. Send a regular message after setup.
 
 More detail: `bridges/telegram/README.md`.
 
@@ -86,27 +71,19 @@ More detail: `bridges/telegram/README.md`.
 - `models/*.sh`: model runner presets.
 - `commands/*.sh`: slash commands for bridges and scripts.
 
-Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is
-rebuilt. You can also run `.gremlin/bin/index-skills.sh` directly.
+Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is rebuilt. You can also run `.gremlin/bin/index-skills.sh` directly.
 
 ## Memory
 
-`.gremlin/.glean/` is the local memory workbench. It stores raw distillation
-inbox items in `.glean/in/`, distilled findings in `.glean/findings/`, completed
-inbox residue in `.glean/out/`, and retired findings in `.glean/dropped/`.
+`.gremlin/.glean/` is the local memory workbench. It stores raw distillation inbox items in `.glean/in/`, distilled findings in `.glean/findings/`, completed inbox residue in `.glean/out/`, and retired findings in `.glean/dropped/`.
 
-Findings are not automatically loaded into every prompt. Search or fetch them
-when they are relevant, then promote only the small set that should always be in
-context by symlinking them into `.gremlin/context/`:
+Findings are not automatically loaded into every prompt. Search or fetch them when they are relevant, then promote only the small set that should always be in context by symlinking them into `.gremlin/context/`:
 
 ```sh
 ln -s ../.glean/findings/<id>.md ./.gremlin/context/<id>.md
 ```
 
-`models/memory.sh` is the default review model alias for memory-review work. It
-is intentionally a thin wrapper around `models/default.sh`, so a fresh gremlin
-inherits the configured default model unless you choose to specialize memory
-review later.
+`models/memory.sh` is the default review model alias for memory-review work. It is intentionally a thin wrapper around `models/default.sh`, so a fresh gremlin inherits the configured default model unless you choose to specialize memory review later.
 
 ## Update
 
@@ -124,11 +101,31 @@ From a script or shell:
 ./.gremlin/gremlin update
 ```
 
-`/update` overlays canonical files while preserving identity, context,
-transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`,
-and `.paused`. Canonical `.glean/glean.sh` and `.glean/README.md` still update;
-`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and
-`.glean/distil.md` are local state.
+`/update` overlays canonical files while preserving identity, context, transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`, and `.paused`. Canonical `.glean/glean.sh`and`.glean/README.md`still update;`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and `.glean/distil.md` are local state.
+
+
+## Developing
+
+Keep personal state out of this repo.
+
+- Run and personalize a copy outside the repo.
+- Never run `say` or the TUI against the repo's reference `.gremlin/`.
+- Promote personal-copy ideas back by rewriting generic versions in canonical.
+- Use `.gremlin/.nest/README.md`, `.gremlin/.groundhog/README.md`, and
+  `.loom/README.md` to understand the nested protocols.
+- Use `.loom/threads/` for planned work; current and future items belong there.
+
+Before pushing:
+
+- `git status` shows only intended changes.
+- `.gremlin/transcript.md` is empty.
+- `.gremlin/.nest/in/`, `.gremlin/.groundhog/out/`, and `.gremlin/.groundhog/fired/` contain only
+  placeholder files.
+- `.gremlin/context/` contains no personal facts.
+- `.gremlin/gremlin.md` is generic.
+- No `.env`, API keys, bridge configs, or personal metadata are tracked.
+
+
 
 ## More
 
@@ -138,3 +135,4 @@ and `.paused`. Canonical `.glean/glean.sh` and `.glean/README.md` still update;
   sandboxing, and extensions.
 - `.nest/README.md`: the nestling inbox/claim/complete protocol.
 - `.groundhog/README.md`: the schedule/tick protocol.
+- `.glean/README.md`: the gleam memory protocol.
