@@ -1,10 +1,10 @@
-# s53-update-excludes
+# s52-update-excludes
 
 **Outcome.** `/update` preserves local Glean memory state while still overlaying
 canonical Glean protocol files.
 
-This stitch depends on the scheduled-review and command/skill integration below
-it in the Loom chain. Only tend it after `s52-distil-schedule-paused` ties.
+This stitch depends on the session-command and skill integration below it in the
+Loom chain. Only tend it after `s51-session-commands` ties.
 
 ## Scope
 

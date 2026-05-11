@@ -1,4 +1,4 @@
-# s54-acceptance-memory
+# s53-acceptance-memory
 
 **Outcome.** Prove the memory integration works end to end: `/new-session`
 reviews a completed session, `/discard-session` does not, the memory model
@@ -6,7 +6,7 @@ preset is used for review items, and promoted findings survive a fresh
 transcript through `context/`.
 
 This stitch depends on all implementation work below it in the Loom chain.
-Only tend it after `s53-update-excludes` has tied.
+Only tend it after `s52-update-excludes` has tied.
 
 ## Scope
 

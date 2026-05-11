@@ -60,13 +60,13 @@ memory-specific changes.
 ## Child stitches
 
 These are structured as a serial Loom chain so the next concrete loose end is
-vendoring Glean, and the acceptance gate only opens after every integration
-piece has tied:
+vendoring Glean, the acceptance gate only opens after every integration piece
+has tied, and field assessment happens after the basic system works:
 
 ```text
-s54-acceptance-memory
-└── s53-update-excludes
-    └── s52-distil-schedule-paused
+s54-memory-field-use
+└── s53-acceptance-memory
+    └── s52-update-excludes
         └── s51-session-commands
             └── s50-distil-skill
                 └── s49-init-wires-glean
@@ -81,18 +81,18 @@ s54-acceptance-memory
   asks and review items.
 - `s51-session-commands` — add `/new-session`, `/discard-session`, and the
   short aliases `/new` and `/discard`.
-- `s52-distil-schedule-paused` — ship an opt-in paused groundhog review item
-  for periodic memory review.
-- `s53-update-excludes` — preserve local Glean state across `/update` while
+- `s52-update-excludes` — preserve local Glean state across `/update` while
   still overlaying canonical Glean files.
-- `s54-acceptance-memory` — verify `/new-session`, `/discard-session`, the
+- `s53-acceptance-memory` — verify `/new-session`, `/discard-session`, the
   memory model preset, and cold-start recall through promoted findings.
+- `s54-memory-field-use` — pressure test the system in ordinary day-to-day use,
+  assess memory quality, and turn observed friction into follow-up stitches.
 
 ## Dependencies
 
 - Glean rebuild is complete. Treat `github.com/zealtv/glean` as canonical.
-- Groundhog paused-items support has landed and is vendored here. Paused
-  schedule subtrees can be used for opt-in periodic distillation.
+- Groundhog paused-items support has landed, but periodic memory review is
+  deferred. `/new-session` is the primary distillation trigger for this stage.
 
 ## Verification gate
 
@@ -133,3 +133,6 @@ If cold-start recall works, it is memory. If not, it is a filing cabinet.
   review, not no record.
 - A future quiet review item shape can be considered after this visible path is
   proven.
+- A paused Groundhog memory-review rhythm is deferred. `/new-session` is the
+  primary distillation trigger; scheduled review can return later if real use
+  shows a need for periodic corpus cleanup or `.glean/in/` draining.
