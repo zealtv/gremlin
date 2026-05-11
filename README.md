@@ -75,6 +75,15 @@ For local development copies:
 ```sh
 mkdir -p ~/Desktop/mygremlin
 cp -R .gremlin ~/Desktop/mygremlin/.gremlin
+~/Desktop/mygremlin/.gremlin/.glean/glean.sh init
+~/Desktop/mygremlin/.gremlin/.glean/glean.sh index
+```
+
+For local install-flow tests, point `install.sh` at a local canonical tarball:
+
+```sh
+( cd ~/repos && tar -czf /tmp/gremlin.tar.gz gremlin/.gremlin )
+GREMLIN_INSTALL_URL=file:///tmp/gremlin.tar.gz ./install.sh ~/Desktop/mygremlin
 ```
 
 The installed `.gremlin/.upstream` points at the public canonical tarball.
