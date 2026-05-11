@@ -49,22 +49,14 @@ Run `/help` for to list commands.
 
 ## Principles
 
-gremlin uses a family of simple file-based protocols for messaging, scheduling, and memory.
+gremlin uses a family of simple, file-based protocols for messaging, scheduling, and memory.
 
 - 🪺 [nestlings](https://github.com/zealtv/nestlings): queing and actioning work
 - 🦫 [groundhog](https://github.com/zealtv/groundhog): scheduling reocurring tasks
 - 🔮 [glean](https://github.com/zealtv/glean): memory distillation and retrieval
 - 🪡 [loom](https://github.com/zealtv/loom): planning structured work while developing gremlin
 
-
-- Inbound messages become files in `.gremlin/.nest/in/`.
-- Messages are passed to the model along with `gremlin.md`, `context/`, conversation transcript, and indexes for tools, skills, and memory.
-- Replies append to `.gremlin/transcript.md`.
-- Bridges simply write inbound items to `.nest/in` and tail transcript output.
-- Groundhog provides scheduled messages and recurring tasks.
-- Tools are bash scripts. Skills are markdown procedures. Memories are markdown files.
-
-
+Everything is bash and markdown. Simplicity, clarity, and extensibility are the guiding principles.
 
 
 ## Sandboxing
