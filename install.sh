@@ -7,7 +7,7 @@ set -euo pipefail
 
 target="${1:-$PWD}"
 dest="$target/.gremlin"
-url="https://github.com/zealtv/gremlin/archive/refs/heads/main.tar.gz"
+url="${GREMLIN_INSTALL_URL:-https://github.com/zealtv/gremlin/archive/refs/heads/main.tar.gz}"
 
 [[ ! -e "$dest" ]] || { echo "refusing: $dest already exists" >&2; exit 1; }
 mkdir -p "$target"
@@ -26,4 +26,6 @@ src="$extracted/.gremlin"
 [[ -d "$src" ]] || { echo "tarball does not contain a .gremlin/ at its root" >&2; exit 1; }
 
 cp -R "$src" "$dest"
+"$dest/.glean/glean.sh" init
+"$dest/.glean/glean.sh" index >/dev/null
 echo "initialised gremlin at $dest"
