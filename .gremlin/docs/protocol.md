@@ -2,10 +2,11 @@
 
 This is the single-gremlin mechanics reference.
 
-Gremlin contains two nested protocols worth reading directly:
+Gremlin contains three nested protocols worth reading directly:
 
 - `.nest/README.md`: inbound item lifecycle, claims, completion, and sweep.
 - `.groundhog/README.md`: schedules, ticks, fired items, and materialized work.
+- `.glean/README.md`: memory workbench, finding contract, and distillation flow.
 
 ## Layout
 
@@ -22,6 +23,7 @@ Gremlin contains two nested protocols worth reading directly:
   tools/                # bash tools the gremlin can call
   skills/               # markdown procedures
   models/               # model runner presets
+  .glean/               # memory workbench: inbox, findings, out, dropped
   .nest/                # inbound/completed item protocol
   .groundhog/           # scheduled work protocol
 ```
@@ -90,6 +92,10 @@ just the parent folder containing `.gremlin/`.
 Configure `models/default.sh` before first use, or add another executable preset
 and select it from the TUI with `/model <alias>`.
 
+`models/memory.sh` is the conventional alias for memory-review work. It ships as
+a thin wrapper around `default.sh`; customize it only when memory review should
+use a different model or harness from ordinary conversation.
+
 ### Per-item override
 
 When the tender claims an item directory containing a `.model` file, it reads
@@ -98,6 +104,23 @@ groundhog item can therefore pick its own preset — a cheap fast one for a dail
 summary, a heavier one for a weekly review — without changing the gremlin-wide
 `.model`. The convention is gremlin-side: groundhog stays content-opaque and
 just delivers the directory; the `.model` file is just a file to it.
+
+Memory review items use the same mechanism by writing `memory` into `.model`.
+
+## Memory
+
+`.gremlin/.glean/` is a vendored Glean workbench:
+
+- `in/` receives deliberate raw packets for distillation.
+- `findings/` holds flat markdown findings and generated `INDEX.md`.
+- `out/` holds considered inbox items until swept.
+- `dropped/` holds retired findings and reason files.
+- `distil.md` is the host-local brief for deciding what deserves memory.
+
+Glean findings are not part of the tender's always-loaded prompt by default.
+`context/` remains the broadcast surface. Promote a finding by symlinking it
+into `context/`; demote it by removing the symlink while leaving the finding in
+Glean.
 
 ## Loops
 
