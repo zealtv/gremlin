@@ -1,137 +1,87 @@
 # 👀 gremlin
 
-gremlin is a simple AI agent that lives in a folder. Copy `.gremlin/` into a folder, that folder is now an agent.
+**A gremlin is a folder you can talk to.** Drop `.gremlin/` into any directory and that directory becomes an agent — persistent, scheduleable, and addressable from the TUI, Telegram, or a shell pipe.
 
-Connect it to Claude Code, OpenAI Codex, Open Code, Pi, your local models - anything that pipes to the CLI. 
+No daemon. No database. No framework. No language runtime. Just bash, markdown, and the filesystem. Where OpenClaw and Hermes need Node and bring their own home directory, config DSL, and update story (OpenClaw's update path is famously fiddly), a gremlin is a folder you can `cp -r`, `git diff`, and `mv`.
 
+<!-- TODO: drop a short looping GIF of the TUI here — user message in, assistant reply landing in transcript -->
 
-## Quick Start
+## Quick start
 
-### Install gremlin into the current directory
+Install into the current directory:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zealtv/gremlin/main/install.sh | bash -s
 ```
 
-### Configure a model preset
-
-Model presets are just executables that read a prompt on stdin and write a reply on stdout. The default preset is `.gremlin/models/default.sh` which looks like this (edit it to match the model CLI you want to use):
+Point it at a model. `.gremlin/models/default.sh` is just an executable that reads a prompt on stdin and writes a reply on stdout — edit it for whichever CLI you use (Claude Code, Codex, Open Code, a local model, anything):
 
 ```sh
 #!/usr/bin/env bash
-# claude sonnet 4.6
-set -euo pipefail
 exec claude -p --model claude-sonnet-4-6 --allowedTools "Bash"
 ```
 
-### Start the runner
+Start the runner and open the TUI:
 
 ```sh
 .gremlin/gremlin start
-```
-
-### Run the TUI
-
-```sh
 .gremlin/gremlin tui
 ```
 
-Run `/help` for to list commands.
+Run `/help` for commands.
 
-### Customize the gremlin:
+### Talk to it from Telegram
 
-- `.gremlin/gremlin.md`: identity, personality, purpose, voice.
-- `.gremlin/context/`: facts loaded into every prompt.
-- `.gremlin/skills/`: markdown skills.
-- `.gremlin/tools/`: bash tools.
-- `.gremlin/models/`: model presets.
+1. Create a bot with `@BotFather` and copy the token.
+2. Get your numeric chat id from `@myidbot`.
+3. Copy `.gremlin/bridges/telegram/config.example` to `config`, fill in `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, then `.gremlin/gremlin telegram start`.
 
+## Features
 
+- **The agent is a folder.** Copy it, fork it, version it, delete it. There is no hidden state.
+- **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, transcripts, memory, and queues.
+- **Bring your own model.** A model preset is just `stdin → stdout`. Swap models with `/model <alias>`. Non-LLM scripts work too.
+- **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin say` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
+- **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.gremlin/.nest/in/`.
+- **Scheduled and persistent.** Background tend + tick loops give you reminders, nightly summaries, and self-initiated work without a separate scheduler.
+- **Append-only transcript.** `transcript.md` is the source of truth. Bridges tail it. Debugging is `cat`.
+- **Memory you control.** Glean stores findings as flat markdown; nothing is auto-injected into prompts. Promote a finding into context with a symlink.
+- **Everything is a file.** Skills, tools, commands, model presets, bridges — every extension point is a directory of small scripts or markdown.
 
-## Structure
+## Layout
 
 ```
-Host_Directory/
+your-folder/
 └── .gremlin/
-    ├── .glean/              <- memory
-    ├── .groundhog/          <- scheduled items
-    ├── .nest/               <- inbound/completed items
-    ├── bin/
-    ├── bridges/             <- TUI and Telegram bridges
-    ├── commands/            <- slash commands
-    ├── context/             <- facts loaded into every prompt
-    ├── docs/
-    ├── models/              <- model presets
-    ├── skills/              <- markdown procedures
-    ├── transcript-archive/  <- archived sessions
-    ├── tools/               <- bash tools
-    ├── .upstream     
-    ├── README.md
-    ├── gremlin             <- gremlin executable
-    ├── gremlin.md          <- identity, personality, purpose, voice
-    └── transcript.md       <- current session
+    ├── gremlin.md           identity, personality, voice
+    ├── context/             facts loaded into every prompt
+    ├── skills/              markdown procedures with triggers
+    ├── tools/               bash tools the gremlin can run
+    ├── models/              stdin → stdout model presets
+    ├── commands/            slash commands
+    ├── bridges/             TUI, Telegram, …
+    ├── .nest/               inbox / claimed / completed items
+    ├── .groundhog/          scheduled work
+    ├── .glean/              memory workbench
+    ├── transcript.md        append-only conversation log
+    └── gremlin              the executable
 ```
 
-## Message Lifecycle
-
-```mermaid
-flowchart TD
-  BRIDGES["Bridges <br/>(TUI, Telegram, bin/say)"]
-  TICK["Tick loop<br/>(scheduled items)"]
-  IN[".nest/in/"]
-  TEND["Tend loop<br/>(claim + dispatch)"]
-  TRANS[("transcript.md")]
-  OUT[".nest/out/ or .nest/dropped/"]
-
-  
-  TICK    -- "fired item"    --> IN
-  BRIDGES -- "user message" --> IN
-  IN --> TEND
-  TEND -- "run.sh → ⚙️ <br> message.md → 💌 <br/>else → model → reply" --> TRANS
-  TEND --> OUT
-  TRANS -. tail .-> BRIDGES
-```
-
-1. **Bridges and `gremlin say` deposit each user message as an item in `.nest/in/`**.
-2. **The tick loop drops scheduled items from groundhog into the same `.nest/in/`**, so all inbound work shares one funnel.
-3. **The tend loop claims one ready item at a time** (renaming it `.tending`) and dispatches by shape: 
-  - an executable `run.sh` runs as a script, 
-  - a lone `message.md` is emitted verbatim, 
-  - anything else goes to the model.
-4. **For model-backed items, the tender appends `## user —` to `transcript.md`, builds the prompt** (`gremlin.md` + `context/` + skills/tools/memory indexes + the transcript + the body), **calls the model, and appends `## assistant —`**.
-5. **The handled item is archived to `.nest/out/`** (or `.nest/dropped/` if it failed or was aborted by `/stop`); the reply itself lives only in the transcript.
-6. **Bridges tail `transcript.md` to fan replies back out** to their channel, closing the loop.
-
-Slash commands (`/stop`, `/help`, …) are a side channel: bridges run them directly via `commands/<cmd>.sh`, bypassing the nest and the model entirely.
-
-
-
-
-## Principles
-
-gremlin uses a family of simple, file-based protocols for messaging, scheduling, and memory.
-
-- 🪺 [nestlings](https://github.com/zealtv/nestlings): queing and actioning work
-- 🦫 [groundhog](https://github.com/zealtv/groundhog): scheduling reocurring tasks
-- 🔮 [glean](https://github.com/zealtv/glean): memory distillation and retrieval
-- 🪡 [loom](https://github.com/zealtv/loom): planning structured work while developing gremlin
-
-Everything is bash and markdown. Simplicity, clarity, and extensibility are the guiding principles.
-
-
-## Sandboxing
-
-The protocol does not enforce a sandbox. Host a gremlin where broad shell and
-file access is acceptable.
-
-For real isolation, wrap `bin/llm.sh` or `bin/run.sh` with OS or harness controls:
-a separate UNIX user, container, VM, `sandbox-exec`, `bwrap`, or equivalent.
-
-
-# More 
+## More
 
 User-facing docs live inside the installed gremlin:
 
-- `.gremlin/README.md`
-- `.gremlin/docs/protocol.md`
-- `.gremlin/docs/composition.md`
+- `.gremlin/README.md` — full usage guide
+- `.gremlin/docs/protocol.md` — loops, transcript, dispatch, models
+- `.gremlin/docs/composition.md` — multiple gremlins, delegation, sandboxing
+
+The underlying file-based protocols are vendored and documented on their own:
+
+- 🪺 [nestlings](https://github.com/zealtv/nestlings) — queueing and actioning work
+- 🦫 [groundhog](https://github.com/zealtv/groundhog) — scheduling recurring tasks
+- 🔮 [glean](https://github.com/zealtv/glean) — memory distillation and retrieval
+- 🪡 [loom](https://github.com/zealtv/loom) — planning structured work
+
+## Sandboxing
+
+The protocol does not enforce a sandbox. Host a gremlin where broad shell and file access is acceptable. For real isolation, wrap `.gremlin/bin/llm.sh` with a separate UNIX user, container, VM, `sandbox-exec`, `bwrap`, or equivalent.
