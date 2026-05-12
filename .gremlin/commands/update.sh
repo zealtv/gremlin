@@ -27,6 +27,8 @@ if [ -z "$url" ]; then
 fi
 
 # Excludes: runtime queues, personal context, identity, per-install state.
+# context/ is skipped as local state; bin/doctor.sh restores managed
+# context/system symlinks after the overlay.
 # No --delete: user-created files (custom skills, tools, commands, presets)
 # survive untouched.
 excludes=(
@@ -91,3 +93,5 @@ count="$(rsync -a --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/" \
   | grep -cE '^[<>ch.][fdLDS]' || true)"
 
 echo "updated: $count file(s)"
+echo "doctor:"
+"$GREMLIN_DIR/bin/doctor.sh" | sed 's/^/  /'
