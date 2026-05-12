@@ -33,7 +33,7 @@ Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands
 ./.gremlin/gremlin say /help
 ```
 
-Use `/new-session` at a real session boundary. It rotates the transcript, starts fresh, and queues a visible memory-review item for the archived session. Use `/discard-session` for temporary sessions that should be archived but not reviewed for memory. `/new` and `/discard` are short aliases.
+Use `/new` at a real session boundary. It rotates the transcript, starts fresh, and queues a visible memory-review item for the archived session. Use `/discard` for temporary sessions that should be archived but not reviewed for memory.
 
 ## Telegram
 

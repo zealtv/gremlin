@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# discard — alias for /discard-session
+# discard — start fresh without memory review
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec "$GREMLIN_DIR/commands/discard-session.sh" "$@"
+"$GREMLIN_DIR/bin/archive.sh"
+echo "fresh transcript"
+echo "memory review skipped"
