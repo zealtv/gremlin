@@ -60,7 +60,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "fetching $url"
+echo "📦 fetching: $url"
 if ! curl -fsSL "$url" -o "$tmp/gremlin.tar.gz"; then
   echo "download failed" >&2
   exit 1
@@ -77,8 +77,9 @@ if [ ! -d "$src" ]; then
 fi
 
 if [ "$dry_run" = "1" ]; then
-  echo "dry run — no changes will be written"
-  rsync -a --dry-run --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/"
+  echo "🔎 dry run — no changes will be written"
+  rsync -a --dry-run --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/" \
+    | grep -vE '^\.[d]\.\.t\.\.\.\. \./$' || true
   exit 0
 fi
 
@@ -89,9 +90,14 @@ if [ ! -e "$PAUSED_FILE" ]; then
   created_pause=1
 fi
 
-count="$(rsync -a --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/" \
-  | grep -cE '^[<>ch.][fdLDS]' || true)"
+changes="$(rsync -a --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/" \
+  | grep -vE '^\.[d]\.\.t\.\.\.\. \./$' || true)"
+if [ -n "$changes" ]; then
+  count="$(printf '%s\n' "$changes" | grep -cE '^[<>ch.][fdLDS]' || true)"
+else
+  count=0
+fi
 
-echo "updated: $count file(s)"
-echo "doctor:"
+echo "✨ updated: $count file(s)"
+echo "🩺 doctor:"
 "$GREMLIN_DIR/bin/doctor.sh" | sed 's/^/  /'

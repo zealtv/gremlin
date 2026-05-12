@@ -9,7 +9,7 @@
 #   - tend-loop.sh (~5s) — process items in .nest/in/
 #   - tick-loop.sh (~60s) — joins in stage 7 (groundhog)
 #
-# Skills indexer call (stage 6) and .paused gate (s14) slot in here too.
+# Startup index refreshes and .paused gate (s14) slot in here too.
 
 set -uo pipefail
 
@@ -18,7 +18,15 @@ HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 
 cd "$HOST_DIR"
 
-"$GREMLIN_DIR/bin/index-skills.sh"
+if ! "$GREMLIN_DIR/bin/index-skills.sh"; then
+  echo "warning: skills index refresh failed" >&2
+fi
+
+if [ -d "$GREMLIN_DIR/.glean" ]; then
+  if ! "$GREMLIN_DIR/.glean/glean.sh" index; then
+    echo "warning: glean index refresh failed" >&2
+  fi
+fi
 
 pids=()
 
