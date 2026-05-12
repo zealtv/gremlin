@@ -20,7 +20,7 @@ GREMLIN_INSTALL_URL=file:///private/tmp/gremlin-s53.tar.gz ./install.sh /private
 
 # Durable session:
 printf '## user -- acceptance\nPlease remember this durable preference: I prefer concise acceptance answers.\n' > .gremlin/transcript.md
-./.gremlin/commands/new-session.sh
+./.gremlin/commands/new.sh
 find .gremlin/.nest/in -maxdepth 2 -type f -print
 cat .gremlin/.nest/in/memory-review-2026-05-11/.model
 ./.gremlin/bin/tend-loop.sh
@@ -31,20 +31,20 @@ cat .gremlin/.glean/findings/INDEX.md
 
 # Promotion and recall:
 ln -sf ../.glean/findings/durable-preference.md .gremlin/context/durable-preference.md
-./.gremlin/commands/discard-session.sh
+./.gremlin/commands/discard.sh
 ./.gremlin/.nest/nestling.sh ingest /tmp/gremlin-s53-recall.md recall.md
 ./.gremlin/bin/tend-loop.sh
 tail -n 12 .gremlin/transcript.md
 
-# Discard and aliases:
-./.gremlin/commands/discard-session.sh
+# Discard:
+./.gremlin/commands/discard.sh
 ./.gremlin/commands/new.sh
 ./.gremlin/commands/discard.sh
 ```
 
 Results:
 
-- `/new-session` rotated `transcript.md` into `transcript-archive/` and queued
+- `/new` rotated `transcript.md` into `transcript-archive/` and queued
   `.nest/in/memory-review-2026-05-11/`.
 - The review item contained `instructions.md` and `.model`.
 - `.model` contained `memory`.
@@ -55,9 +55,9 @@ Results:
 - `findings/INDEX.md` was refreshed with `durable-preference`.
 - Promoting the finding by symlink into `context/` made the recall prompt answer:
   `Your durable preference is concise acceptance answers.`
-- `/discard-session` archived temporary sessions without increasing the
+- `/discard` archived temporary sessions without increasing the
   memory-review item count or finding count.
-- `/new` queued a memory-review item through the long-form path.
+- `/new` queued a memory-review item.
 - `/discard` did not increase the memory-review item count.
 
 This proves the memory loop at the protocol level. It does not evaluate the

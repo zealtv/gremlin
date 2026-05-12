@@ -24,7 +24,7 @@ Loom chain. Only tend it after `s51-session-commands` ties.
 
 - Do not add state to Glean for source tracking.
 - Do not auto-enable scheduled review for fresh installs.
-- Keep the scheduled path secondary to `/new-session`; it is an opt-in rhythm,
+- Keep the scheduled path secondary to `/new`; it is an opt-in rhythm,
   not the primary memory mechanism.
 
 ## Verification
@@ -38,4 +38,4 @@ Loom chain. Only tend it after `s51-session-commands` ties.
 ## Notes
 
 - If the current tick loop strips or ignores `.model` for groundhog material,
-  record that and keep the model override to `/new-session` only for now.
+  record that and keep the model override to `/new` only for now.

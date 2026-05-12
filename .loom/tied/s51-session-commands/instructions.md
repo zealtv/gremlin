@@ -8,17 +8,12 @@ after `s50-distil-skill` ties.
 
 ## Scope
 
-Add canonical long-form commands:
+Add canonical session commands:
 
-- `/new-session` — archive the current transcript, start fresh, and queue a
+- `/new` — archive the current transcript, start fresh, and queue a
   visible memory-review item for the archived session.
-- `/discard-session` — archive the current transcript and start fresh without
+- `/discard` — archive the current transcript and start fresh without
   queueing memory review.
-
-Keep short aliases:
-
-- `/new` delegates to `/new-session`.
-- `/discard` delegates to `/discard-session`.
 
 The memory-review item should be a directory in `.gremlin/.nest/in/`:
 
@@ -43,22 +38,21 @@ the agent may do nothing when no durable memory is earned.
 - Reuse `bin/archive.sh` for transcript rotation.
 - Do not copy whole transcripts into `.glean/in/`.
 - Do not modify Glean's protocol.
-- `/discard-session` archives rather than deletes; its guarantee is no memory
+- `/discard` archives rather than deletes; its guarantee is no memory
   review.
 - Avoid duplicate review item creation for the archive just produced.
 
 ## Verification
 
-1. Run `/new-session` in a disposable gremlin.
+1. Run `/new` in a disposable gremlin.
 2. Confirm the transcript is archived and a fresh transcript exists.
 3. Confirm `.nest/in/` receives a `memory-review-*` directory with
    `instructions.md` and `.model`.
 4. Confirm `.model` contains `memory`.
-5. Run `/discard-session` and confirm no memory-review item is created.
-6. Confirm `/new` and `/discard` delegate to the long forms.
-7. Confirm `/help` documents the long forms clearly.
+5. Run `/discard` and confirm no memory-review item is created.
+6. Confirm `/help` documents the commands clearly.
 
 ## Notes
 
-- The long names should be canonical in docs because they explain the behavior.
-- The short aliases are compatibility and convenience.
+- `/new` and `/discard` are intentionally terse because they are used at
+  session boundaries.

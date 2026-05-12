@@ -11,9 +11,9 @@ memory path works end to end.
 ## Scope
 
 - Use Gremlin normally for several real sessions, not just synthetic tests.
-- Try `/new-session` at natural session boundaries and inspect what the review
+- Try `/new` at natural session boundaries and inspect what the review
   chose to remember, revise, or ignore.
-- Try `/discard-session` for temporary or sensitive work and verify the promise
+- Try `/discard` for temporary or sensitive work and verify the promise
   remains understandable in practice: archived, but not reviewed for memory.
 - Promote a small number of findings into `context/` only when they clearly
   improve future sessions.
@@ -27,14 +27,14 @@ memory path works end to end.
 Run a small matrix of ordinary usage patterns:
 
 1. Durable preference: state a preference that should help future work, then
-   close with `/new-session`. Later, ask for work where the preference should
+   close with `/new`. Later, ask for work where the preference should
    matter.
 2. Project fact: establish a fact about this repo or a nearby project, then
    test whether the resulting finding is discoverable without being promoted.
 3. Working style: let a session reveal process preferences indirectly. Check
    whether the review is cautious about inferring them.
 4. Temporary session: do exploratory or throwaway work, close with
-   `/discard-session`, and verify no memory-review item is queued.
+   `/discard`, and verify no memory-review item is queued.
 5. Correction: contradict or refine an existing remembered point and check
    whether the review revises rather than duplicating.
 6. Silence: end a session with nothing durable in it and confirm that the review
@@ -57,7 +57,7 @@ Score each exercised session qualitatively:
   should stay in Glean?
 - **Correction:** Are updates and contradictions handled by revision rather
   than duplicate accumulation?
-- **User experience:** Do `/new-session`, `/discard-session`, and the visible
+- **User experience:** Do `/new`, `/discard`, and the visible
   review outcome feel clear enough to use daily?
 
 ## Artifact

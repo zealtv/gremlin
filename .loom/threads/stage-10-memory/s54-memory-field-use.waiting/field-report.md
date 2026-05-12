@@ -14,8 +14,8 @@ session log below.
 
 Recommended minimum:
 
-1. three `/new-session` closures from ordinary work;
-2. one `/discard-session` closure for temporary or sensitive work;
+1. three `/new` closures from ordinary work;
+2. one `/discard` closure for temporary or sensitive work;
 3. one correction to an existing finding;
 4. one session where nothing durable should be remembered.
 
@@ -26,12 +26,12 @@ important observations into follow-up Loom stitches after the pass.
 
 | Date | Scenario | Command | Review outcome | Findings touched | Promotion | Score | Notes |
 |---|---|---|---|---|---|---|---|
-|  | Durable preference | `/new-session` |  |  |  |  |  |
-|  | Project fact | `/new-session` |  |  |  |  |  |
-|  | Working style | `/new-session` |  |  |  |  |  |
-|  | Temporary session | `/discard-session` |  |  |  |  |  |
-|  | Correction | `/new-session` |  |  |  |  |  |
-|  | Silence | `/new-session` |  |  |  |  |  |
+|  | Durable preference | `/new` |  |  |  |  |  |
+|  | Project fact | `/new` |  |  |  |  |  |
+|  | Working style | `/new` |  |  |  |  |  |
+|  | Temporary session | `/discard` |  |  |  |  |  |
+|  | Correction | `/new` |  |  |  |  |  |
+|  | Silence | `/new` |  |  |  |  |  |
 
 ## Scoring
 
@@ -89,7 +89,7 @@ Create or link follow-up Loom stitches here before tying `s54`.
 Tie this stitch only when:
 
 - the session log has enough real examples to expose behavior;
-- `/discard-session` has been tested in a real temporary session;
+- `/discard` has been tested in a real temporary session;
 - at least one finding has been promoted or explicitly left unpromoted;
 - at least one recall prompt has been checked in a later session;
 - follow-up stitches exist for important product or protocol changes.

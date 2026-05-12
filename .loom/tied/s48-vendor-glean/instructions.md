@@ -1,7 +1,7 @@
 # s48-vendor-glean
 
 **Outcome.** Gremlin vendors Glean under `.gremlin/.glean/` and ships the memory
-model preset needed by `/new-session` review items.
+model preset needed by `/new` review items.
 
 This is the first implementation loose end after `s47-find-flow` ties.
 
@@ -29,7 +29,7 @@ This is the first implementation loose end after `s47-find-flow` ties.
 - Treat `glean.sh` and `README.md` as upstream-canonical vendored files.
 - Do not edit Glean's protocol shape.
 - Do not add a `.glean/sources/` ledger.
-- Do not wire `/new-session` yet; that belongs to later stitches.
+- Do not wire `/new` yet; that belongs to later stitches.
 
 ## Verification
 

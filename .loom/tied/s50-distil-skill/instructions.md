@@ -31,7 +31,7 @@ The skill should instruct the agent to:
 
 The skill must support two sources:
 
-- a model-backed memory-review item from `/new-session`, pointing at a transcript
+- a model-backed memory-review item from `/new`, pointing at a transcript
   archive;
 - a direct user ask during conversation.
 

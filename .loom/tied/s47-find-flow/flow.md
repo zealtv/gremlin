@@ -7,21 +7,19 @@ automatically turn every transcript into permanent memory.
 
 The session boundary is the user-facing hook:
 
-- `/new-session` archives the current transcript, starts a fresh transcript,
+- `/new` archives the current transcript, starts a fresh transcript,
   and queues a visible memory-review item for the archived session.
-- `/discard-session` archives the current transcript and starts fresh without
+- `/discard` archives the current transcript and starts fresh without
   queueing memory review.
-- `/new` remains a short alias for `/new-session`.
-- `/discard` is a short alias for `/discard-session`.
 
-The long names are canonical in docs and help because they explain the
-behavior at the point of use.
+The terse names are canonical in docs and help because these commands are used
+at session boundaries.
 
 ## Flow
 
 ```text
 conversation
-  -> /new-session
+  -> /new
   -> transcript-archive/<archive>.md
   -> .nest/in/memory-review-<archive-id>/
        instructions.md
@@ -33,11 +31,11 @@ conversation
   -> fresh transcript gets a brief visible outcome
 ```
 
-`/discard-session` shares the archive rotation but stops there:
+`/discard` shares the archive rotation but stops there:
 
 ```text
 conversation
-  -> /discard-session
+  -> /discard
   -> transcript-archive/<archive>.md
   -> fresh transcript
 ```
@@ -56,7 +54,7 @@ explicit command can still be added if real use shows the need.
 
 Do not change Glean's protocol.
 
-Gremlin does not add a `sources/` ledger to `.glean/`, and `/new-session` does
+Gremlin does not add a `sources/` ledger to `.glean/`, and `/new` does
 not copy full transcript archives into `.glean/in/` by default. Transcript
 archives are already the durable raw corpus. `.glean/in/` remains available for
 deliberate raw packets, not as the automatic graveyard for every conversation.
@@ -72,10 +70,10 @@ The memory-review item operates Glean directly:
 ## Duplicate handling
 
 The duplicate problem is avoided by not copying archives into `.glean/in/`.
-Each `/new-session` queues review only for the archive it just created. Archive
+Each `/new` queues review only for the archive it just created. Archive
 names are unique because `archive.sh` already suffixes same-day archives.
 
-If `/new-session` needs to be idempotent around review creation, it can check
+If `/new` needs to be idempotent around review creation, it can check
 for the review item name in `.nest/in/`, `.nest/out/`, and `.nest/dropped/`
 before writing. This is local to the command and does not become Glean state.
 If `.nest/out/` is swept later, no duplicate arises from old archives because
@@ -107,7 +105,7 @@ memory
 
 Ship `.gremlin/models/memory.sh` as a thin wrapper around `default.sh`. Users
 can later replace it with a cheaper, slower, or more specialized model preset
-without changing `/new-session` or the tender.
+without changing `/new` or the tender.
 
 ## Update behavior
 
@@ -133,12 +131,12 @@ The load-bearing test is cold-start recall after a reviewed session:
 
 1. Fresh gremlin has empty `.glean/findings/`.
 2. User states a durable preference in a session.
-3. User runs `/new-session`.
+3. User runs `/new`.
 4. Memory review creates or revises a finding and refreshes `INDEX.md`.
 5. Promote the finding by symlink into `.gremlin/context/`.
 6. Start another fresh session.
 7. Ask a question that depends on the preference.
 8. The answer reflects the finding because it is loaded through `context/`.
 
-`/discard-session` gets the negative test: the same preference in a discarded
+`/discard` gets the negative test: the same preference in a discarded
 session should not produce a memory-review item or finding.

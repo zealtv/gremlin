@@ -22,17 +22,17 @@ from the concrete child stitches below. The design record lives in
 
 **Session close is the review point.**
 
-- `/new-session` archives the current transcript, starts a fresh transcript,
+- `/new` archives the current transcript, starts a fresh transcript,
   and queues a visible memory-review item for the archived session.
-- `/discard-session` archives the current transcript and starts fresh without
+- `/discard` archives the current transcript and starts fresh without
   queueing memory review.
-- `/new` aliases `/new-session`; `/discard` aliases `/discard-session`.
+- `/new` and `/discard` are the canonical session commands.
 - The review item is model-backed, carries `.model = memory`, and asks the
   agent to review the archive against `.glean/distil.md`.
 
 **Automatic review, not automatic permanent memory.**
 
-- `/new-session` does not copy whole transcripts into `.glean/in/`.
+- `/new` does not copy whole transcripts into `.glean/in/`.
 - Transcript archives remain the durable raw corpus.
 - `.glean/in/` remains available for deliberate raw packets, not the automatic
   graveyard for every conversation.
@@ -79,11 +79,10 @@ s54-memory-field-use
 - `s49-init-wires-glean` — ensure install/init creates a usable `.glean/`.
 - `s50-distil-skill` — add the triggered memory/distil skill used by manual
   asks and review items.
-- `s51-session-commands` — add `/new-session`, `/discard-session`, and the
-  short aliases `/new` and `/discard`.
+- `s51-session-commands` — add `/new` and `/discard`.
 - `s52-update-excludes` — preserve local Glean state across `/update` while
   still overlaying canonical Glean files.
-- `s53-acceptance-memory` — verify `/new-session`, `/discard-session`, the
+- `s53-acceptance-memory` — verify `/new`, `/discard`, the
   memory model preset, and cold-start recall through promoted findings.
 - `s54-memory-field-use` — pressure test the system in ordinary day-to-day use,
   assess memory quality, and turn observed friction into follow-up stitches.
@@ -92,7 +91,7 @@ s54-memory-field-use
 
 - Glean rebuild is complete. Treat `github.com/zealtv/glean` as canonical.
 - Groundhog paused-items support has landed, but periodic memory review is
-  deferred. `/new-session` is the primary distillation trigger for this stage.
+  deferred. `/new` is the primary distillation trigger for this stage.
 
 ## Verification gate
 
@@ -100,7 +99,7 @@ Cold-start recall:
 
 1. Fresh install produces an empty `.gremlin/.glean/findings/`.
 2. User establishes a durable preference in conversation.
-3. User runs `/new-session`.
+3. User runs `/new`.
 4. A memory-review item is queued with `.model = memory` and tended.
 5. The review creates or revises a finding and refreshes `findings/INDEX.md`.
 6. Promote the finding by symlink into `.gremlin/context/`.
@@ -111,7 +110,7 @@ Cold-start recall:
 Discard path:
 
 1. User establishes a temporary preference.
-2. User runs `/discard-session`.
+2. User runs `/discard`.
 3. No memory-review item is queued.
 4. No finding is created from that discarded session.
 
@@ -127,12 +126,12 @@ If cold-start recall works, it is memory. If not, it is a filing cabinet.
 
 ## Notes
 
-- `/new-session` is intentionally transparent rather than quiet: the fresh
+- `/new` is intentionally transparent rather than quiet: the fresh
   transcript receives a short memory-review outcome.
-- `/discard-session` archives rather than deletes; its promise is no memory
+- `/discard` archives rather than deletes; its promise is no memory
   review, not no record.
 - A future quiet review item shape can be considered after this visible path is
   proven.
-- A paused Groundhog memory-review rhythm is deferred. `/new-session` is the
+- A paused Groundhog memory-review rhythm is deferred. `/new` is the
   primary distillation trigger; scheduled review can return later if real use
   shows a need for periodic corpus cleanup or `.glean/in/` draining.
