@@ -109,19 +109,18 @@ trap 'rm -f "$prompt_file" "$reply_file" "$PIDFILE"' EXIT
   cat "$GREMLIN_DIR/gremlin.md"
   echo
   if [ -d "$GREMLIN_DIR/context" ]; then
+    if [ -d "$GREMLIN_DIR/context/system" ]; then
+      for f in "$GREMLIN_DIR/context/system"/*.md; do
+        [ -L "$f" ] || continue
+        cat "$f"
+        echo
+      done
+    fi
     for f in "$GREMLIN_DIR/context"/*.md; do
       [ -e "$f" ] || continue
       cat "$f"
       echo
     done
-  fi
-  if [ -f "$GREMLIN_DIR/skills/INDEX.md" ]; then
-    cat "$GREMLIN_DIR/skills/INDEX.md"
-    echo
-  fi
-  if [ -f "$GREMLIN_DIR/tools/README.md" ]; then
-    cat "$GREMLIN_DIR/tools/README.md"
-    echo
   fi
   if [ -s "$TRANSCRIPT" ]; then
     cat "$TRANSCRIPT"
