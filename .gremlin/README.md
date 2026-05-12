@@ -64,8 +64,8 @@ More detail: `bridges/telegram/README.md`.
 ## Customize
 
 - `gremlin.md`: identity, personality, purpose, voice.
-- `context/*.md`: facts loaded into every prompt.
-- `.glean/`: memory workbench for distilled findings, fetched on demand.
+- `context/`: the always-loaded broadcast surface; `context/system/` is gremlin-managed.
+- `.glean/`: memory workbench for distilled findings; see `.glean/README.md`.
 - `skills/*.md`: procedures the gremlin can follow.
 - `tools/*.sh`: bash tools the gremlin can run.
 - `models/*.sh`: model runner presets.
@@ -77,7 +77,7 @@ Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is re
 
 `.gremlin/.glean/` is the local memory workbench. It stores raw distillation inbox items in `.glean/in/`, distilled findings in `.glean/findings/`, completed inbox residue in `.glean/out/`, and retired findings in `.glean/dropped/`.
 
-Findings are not automatically loaded into every prompt. Search or fetch them when they are relevant, then promote only the small set that should always be in context by symlinking them into `.gremlin/context/`:
+The generated finding catalog is broadcast by default through `context/system/memory.md`. Search or fetch finding bodies when they are relevant, then promote only the small set that should always be fully broadcast by symlinking them into `.gremlin/context/`:
 
 ```sh
 ln -s ../.glean/findings/<id>.md ./.gremlin/context/<id>.md
