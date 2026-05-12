@@ -1,0 +1,28 @@
+--- .loom/threads/unify-prompt-build/s06-acceptance.stitching/prompt-no-memory.md	2026-05-12 23:08:28
++++ .loom/threads/unify-prompt-build/s06-acceptance.stitching/prompt-memory-restored.md	2026-05-12 23:09:02
+@@ -15,6 +15,9 @@
+ 
+ Don't claim you've done something you haven't. If a skill says "write a file", actually write it via bash. If you can't, say so plainly.
+ 
++<!-- auto-generated; run glean.sh index to refresh -->
++
++
+ # skills index
+ 
+ Always-applicable skills are inlined below. For triggered skills, the trigger is listed; `cat skills/<name>.md` when a trigger matches the user's request.
+\ No newline at end of file
+@@ -56,5 +59,11 @@
+ ## user — 2026-05-12T13:08:19Z
+ S06 no memory probe
+ 
++## assistant — 2026-05-12T13:08:19Z
++captured prompt-no-memory
+ 
+-S06 no memory probe
+\ No newline at end of file
++## user — 2026-05-12T13:08:51Z
++S06 memory restored probe
++
++
++S06 memory restored probe
+\ No newline at end of file

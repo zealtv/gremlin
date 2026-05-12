@@ -1,0 +1,34 @@
+--- .loom/threads/unify-prompt-build/s06-acceptance.stitching/prompt-fresh.md	2026-05-12 23:07:47
++++ .loom/threads/unify-prompt-build/s06-acceptance.stitching/prompt-marker.md	2026-05-12 23:09:39
+@@ -50,8 +50,28 @@
+ |------|------|---------|
+ | `now.sh` | — | current local time, ISO-8601 with offset (e.g. `2026-05-01T21:15:00+1000`) |
+ 
++S06 user context marker phrase
++
+ ## user — 2026-05-12T13:07:35Z
+ S06 fresh probe
+ 
++## assistant — 2026-05-12T13:07:35Z
++captured prompt-fresh
+ 
+-S06 fresh probe
+\ No newline at end of file
++## user — 2026-05-12T13:08:19Z
++S06 no memory probe
++
++## assistant — 2026-05-12T13:08:19Z
++captured prompt-no-memory
++
++## user — 2026-05-12T13:08:51Z
++S06 memory restored probe
++
++## assistant — 2026-05-12T13:08:51Z
++captured prompt-memory-restored
++
++## user — 2026-05-12T13:09:30Z
++S06 marker probe
++
++
++S06 marker probe
+\ No newline at end of file
