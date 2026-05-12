@@ -20,6 +20,7 @@ Each command is a bash script directly under `commands/`.
 |---------|---------|
 | `/new` | start a fresh transcript and queue memory review for the ended session |
 | `/discard` | start a fresh transcript without memory review |
+| `/doctor` | repair gremlin-managed files |
 | `/model` | list or set the active model preset |
 | `/update` | pull canonical gremlin from `.upstream` and lay it over this copy |
 | `/sweep` | remove old nestling and groundhog archive entries |
