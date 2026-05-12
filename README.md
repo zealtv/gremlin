@@ -2,7 +2,7 @@
 
 **A gremlin is a folder you can talk to.** Drop `.gremlin/` into any directory and that directory becomes an agent — persistent, scheduleable, and addressable from the TUI, Telegram, or a shell pipe.
 
-No daemon. No database. No framework. No language runtime. Just bash, markdown, and the filesystem. Where OpenClaw and Hermes need Node and bring their own home directory, config DSL, and update story (OpenClaw's update path is famously fiddly), a gremlin is a folder you can `cp -r`, `git diff`, and `mv`.
+No daemon. No database. No framework. No language runtime. Just bash, markdown, and the filesystem. A gremlin is a folder you can `cp -r`, `git diff`, and `mv`.
 
 <!-- TODO: drop a short looping GIF of the TUI here — user message in, assistant reply landing in transcript -->
 
