@@ -101,7 +101,7 @@ From a script or shell:
 ./.gremlin/gremlin update
 ```
 
-`/update` overlays canonical files while preserving identity, context, transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`, and `.paused`. Canonical `.glean/glean.sh`and`.glean/README.md`still update;`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and `.glean/distil.md` are local state.
+`/update` overlays canonical files while preserving identity, context, transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`, and `.paused`. Canonical `.glean/glean.sh`and`.glean/README.md`still update;`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and `.glean/distil.md` are local state. After the overlay, `/update` runs `gremlin doctor` to restore missing managed `context/system/` symlinks without touching top-level context files.
 
 
 ## Developing
