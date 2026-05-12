@@ -45,7 +45,7 @@ Run `/help` for commands.
 - **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.gremlin/.nest/in/`.
 - **Scheduled and persistent.** Background tend + tick loops give you reminders, nightly summaries, and self-initiated work without a separate scheduler.
 - **Append-only transcript.** `transcript.md` is the source of truth. Bridges tail it. Debugging is `cat`.
-- **Memory you control.** Glean stores findings as flat markdown; nothing is auto-injected into prompts. Promote a finding into context with a symlink.
+- **Memory you control.** Glean stores findings as flat markdown; the catalog is broadcast by default, bodies are fetched on demand, and selected findings can be promoted into full context with a symlink.
 - **Everything is a file.** Skills, tools, commands, model presets, bridges — every extension point is a directory of small scripts or markdown.
 
 ## Layout
@@ -54,7 +54,7 @@ Run `/help` for commands.
 your-folder/
 └── .gremlin/
     ├── gremlin.md           identity, personality, voice
-    ├── context/             facts loaded into every prompt
+    ├── context/             always-loaded context, including managed system/ links
     ├── skills/              markdown procedures with triggers
     ├── tools/               bash tools the gremlin can run
     ├── models/              stdin → stdout model presets
