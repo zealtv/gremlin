@@ -13,7 +13,7 @@ Gremlin contains three nested protocols worth reading directly:
 ```text
 .gremlin/
   gremlin.md            # identity: personality, purpose, voice
-  context/              # facts loaded into every prompt
+  context/              # always-loaded broadcast surface
   gremlin               # user-facing wrapper
   transcript.md         # append-only conversation log
   transcript-archive/   # rotated transcripts
@@ -37,11 +37,16 @@ the loops from the host folder rather than from inside `.gremlin/`.
 The tender builds each prompt from:
 
 1. `gremlin.md`
-2. sorted `context/*.md`
-3. `skills/INDEX.md`
-4. `tools/README.md`
-5. `transcript.md`
-6. the current item body
+2. sorted `context/system/*.md` symlinks
+3. sorted top-level `context/*.md`
+4. `transcript.md`
+5. the current item body
+
+`context/` is the always-loaded broadcast surface. `context/system/` is the
+gremlin-managed part of that surface: entries are symlinks by convention, and
+the tender reads only symlinked `.md` entries there, so real files such as
+`context/system/README.md` are ignored. `gremlin doctor` creates or restores the
+managed symlinks for skills, tools, and memory.
 
 Docs are not loaded automatically. Read this file, `README.md`, or
 `docs/composition.md` only when the task calls for protocol detail.
@@ -117,10 +122,10 @@ Memory review items use the same mechanism by writing `memory` into `.model`.
 - `dropped/` holds retired findings and reason files.
 - `distil.md` is the host-local brief for deciding what deserves memory.
 
-Glean findings are not part of the tender's always-loaded prompt by default.
-`context/` remains the broadcast surface. Promote a finding by symlinking it
-into `context/`; demote it by removing the symlink while leaving the finding in
-Glean.
+Glean's generated `findings/INDEX.md` is broadcast by default through
+`context/system/memory.md`. Finding bodies stay in Glean and are fetched on
+demand. Promote a full finding by symlinking it into top-level `context/`;
+demote it by removing the symlink while leaving the finding in Glean.
 
 ## Loops
 

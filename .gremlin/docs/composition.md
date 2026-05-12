@@ -43,6 +43,18 @@ A useful convention for personal shared context is:
 
 Each gremlin can symlink selected files from its own `context/` directory.
 
+## Surfaces
+
+`context/` is the always-loaded surface for a gremlin. The managed
+`context/system/` subdirectory can expose generated indexes by symlink, such as
+the skills, tools, and memory catalogs.
+
+A future peer-gremlin directory could follow the same shape: generate a
+`peers/INDEX.md` summary and symlink it into `context/system/peers.md` so it is
+broadcast every turn. That is only a described shape in this stage, not an
+implemented feature. Delegation today is still the inbox symlink described
+above, such as `peers/<name> -> ../../other/.gremlin/.nest/in/`.
+
 ## Sandboxing
 
 Sandboxing is convention, not enforcement. Host a gremlin where broad file and
