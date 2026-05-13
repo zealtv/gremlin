@@ -31,3 +31,11 @@ Add a command by dropping a script into this folder. **Name custom additions dis
 
 `/update` reads the canonical tarball URL from `.gremlin/.upstream`. Edit that
 file to track a fork or a local tarball (`file:///path/to/gremlin.tar.gz`).
+
+`/update --dry-run` reports what would change without writing.
+
+`/update --revert <path>` fetches canonical and copies one file over the local
+copy, overriding the exclusion list. Use it to pull a clean copy of files
+`/update` normally preserves — `models/default.sh`, `models/memory.sh`,
+`gremlin.md`, `.glean/distil.md` — when a local edit went wrong. Single files
+only; directories are intentionally not supported.

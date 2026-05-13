@@ -56,3 +56,24 @@ done
 repair_link "skills.md" "../../skills/INDEX.md"
 repair_link "tools.md" "../../tools/README.md"
 repair_link "memory.md" "../../.glean/findings/INDEX.md"
+
+check_preset() {
+  local alias="$1"
+  local path="$GREMLIN_DIR/models/$alias.sh"
+  if [ ! -e "$path" ]; then
+    echo "‼️  models/$alias.sh MISSING — items with .model=$alias will silently fall back to default.sh"
+    return
+  fi
+  if [ ! -x "$path" ]; then
+    echo "‼️  models/$alias.sh NOT EXECUTABLE — items with .model=$alias will silently fall back to default.sh"
+    return
+  fi
+  if [ "$(head -c 2 "$path")" != "#!" ]; then
+    echo "‼️  models/$alias.sh has no shebang — likely broken"
+    return
+  fi
+  echo "ok models/$alias.sh"
+}
+
+check_preset "default"
+check_preset "memory"

@@ -43,7 +43,29 @@ Before creating a new finding, search for related findings:
 Prefer revising an existing finding when it already covers the ground. Create a
 new finding only when the material has a distinct, durable use.
 
+### Light curation in passing
+
+Your fetch already loaded the neighbourhood — use it. While you have those
+findings in hand:
+
+- if two fetched findings substantially overlap with each other or with what
+  you're about to write, **merge** rather than create a third — pick the best
+  home and revise it, then `drop` the redundant one with a reason;
+- if a fetched finding is **contradicted** by the new material, drop the old
+  one with a reason rather than letting both coexist;
+- if a fetched finding has clearly grown to cover two distinct ideas, **note
+  it in your reply for the next curate pass** but do not split it here —
+  splits are riskier than merges and belong in the `curate` skill's
+  deliberate, corpus-wide pass.
+
+Keep curation scoped to findings the fetch actually returned. Do not go
+rummaging through the corpus.
+
 ## Act
+
+Every finding must include a non-empty `## Triggers` section. If you cannot
+list at least one trigger term, the material is not yet ready to be a
+finding — leave it for a later pass or record it under a clearer angle.
 
 Findings are flat markdown files under `.gremlin/.glean/findings/`:
 
@@ -58,7 +80,9 @@ Why this memory was earned.
 
 ## Triggers
 
-- terms that should bring it to mind
+- terms that should bring it to mind (required — strict `fetch` searches this
+  section, so a finding without triggers is effectively only findable by id,
+  title, or description)
 
 ## Associations
 
@@ -89,15 +113,27 @@ After creating, revising, or dropping findings, refresh the index:
 
 ## Promotion
 
-Most findings should stay in Glean and be fetched on demand. If a finding should
-affect every future prompt, mention explicit promotion by symlink:
+Most findings should stay in Glean and be fetched on demand. A small subset
+should affect every future prompt — these belong in `context/` as
+always-loaded material.
+
+Suggest promotion (do not perform it) when a created or revised finding has
+all of these traits:
+
+- describes the **user** or the **project** itself, not your tools or skills;
+- the user would reasonably expect future sessions to act on it without being
+  reminded;
+- it is durable — not tied to a single task or week.
+
+When suggesting, hand the user a ready-to-paste command in your reply:
 
 ```sh
 ln -s ../.glean/findings/<id>.md .gremlin/context/<id>.md
 ```
 
-Do not promote automatically unless the user asked for always-loaded memory or
-the review item explicitly requires it.
+Never create the symlink yourself unless the user asked for always-loaded
+memory or the review item explicitly requires it. Promoting is cheap; undoing
+a bloated always-loaded surface is not.
 
 ## Reply
 
@@ -106,4 +142,8 @@ Summarize the result briefly:
 - created, revised, dropped, completed, or nothing earned;
 - finding ids affected;
 - whether `index` was refreshed;
-- any suggested promotion into `context/`.
+- any merges or drops done in passing, with reasons;
+- any findings that look like they have grown to cover two ideas — flagged
+  for the next `curate` pass, not split here;
+- any suggested promotion into `context/`, with the ready-to-paste symlink
+  command.

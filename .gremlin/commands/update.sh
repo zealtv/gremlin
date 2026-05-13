@@ -7,12 +7,27 @@ UPSTREAM_FILE="$GREMLIN_DIR/.upstream"
 PAUSED_FILE="$GREMLIN_DIR/.paused"
 
 dry_run=0
-if [ "${1:-}" = "--dry-run" ]; then
-  dry_run=1
-elif [ "$#" -gt 0 ]; then
-  echo "usage: /update [--dry-run]" >&2
-  exit 2
-fi
+revert_path=""
+case "${1:-}" in
+  "")
+    ;;
+  --dry-run)
+    dry_run=1
+    [ "$#" -eq 1 ] || { echo "usage: /update [--dry-run | --revert <path>]" >&2; exit 2; }
+    ;;
+  --revert)
+    [ "$#" -eq 2 ] || { echo "usage: /update --revert <path>" >&2; exit 2; }
+    revert_path="$2"
+    case "$revert_path" in
+      /*|*..*) echo "--revert path must be relative and must not contain ..; got: $revert_path" >&2; exit 2 ;;
+      "") echo "--revert path is empty" >&2; exit 2 ;;
+    esac
+    ;;
+  *)
+    echo "usage: /update [--dry-run | --revert <path>]" >&2
+    exit 2
+    ;;
+esac
 
 if [ ! -f "$UPSTREAM_FILE" ]; then
   echo "no .upstream file at $UPSTREAM_FILE" >&2
@@ -49,6 +64,12 @@ excludes=(
   --exclude='.upstream'
   --exclude='.model'
   --exclude='.paused'
+  # User-specialisable model presets. The README invites editing these;
+  # leave them alone on update. Custom presets (models/local.sh, etc.) are
+  # already safe because rsync has no --delete. Use /update --revert
+  # models/default.sh (or memory.sh) to pull the canonical copy back.
+  --exclude='models/default.sh'
+  --exclude='models/memory.sh'
 )
 
 tmp="$(mktemp -d)"
@@ -74,6 +95,23 @@ src="$extracted/.gremlin/"
 if [ ! -d "$src" ]; then
   echo "tarball does not contain a .gremlin/ at its root" >&2
   exit 1
+fi
+
+if [ -n "$revert_path" ]; then
+  src_file="$src$revert_path"
+  if [ ! -e "$src_file" ]; then
+    echo "no such path in canonical: $revert_path" >&2
+    exit 1
+  fi
+  if [ ! -f "$src_file" ]; then
+    echo "--revert supports single files only; $revert_path is not a regular file in canonical" >&2
+    exit 2
+  fi
+  dst_file="$GREMLIN_DIR/$revert_path"
+  mkdir -p "$(dirname "$dst_file")"
+  cp -p "$src_file" "$dst_file"
+  echo "↩️  reverted $revert_path to canonical"
+  exit 0
 fi
 
 if [ "$dry_run" = "1" ]; then
