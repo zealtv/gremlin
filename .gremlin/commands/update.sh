@@ -114,10 +114,15 @@ if [ -n "$revert_path" ]; then
   exit 0
 fi
 
+# rsync itemize lines beginning with '.' mean "no transfer; attributes
+# may have synced." Treat them as not-a-change for both the dry-run
+# preview and the count.
+noop='^\.'
+
 if [ "$dry_run" = "1" ]; then
   echo "🔎 dry run — no changes will be written"
   rsync -a --dry-run --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/" \
-    | grep -vE '^\.[d]\.\.t\.\.\.\. \./$' || true
+    | grep -vE "$noop" || true
   exit 0
 fi
 
@@ -129,12 +134,9 @@ if [ ! -e "$PAUSED_FILE" ]; then
 fi
 
 changes="$(rsync -a --itemize-changes "${excludes[@]}" "$src" "$GREMLIN_DIR/" \
-  | grep -vE '^\.[d]\.\.t\.\.\.\. \./$' || true)"
-if [ -n "$changes" ]; then
-  count="$(printf '%s\n' "$changes" | grep -cE '^[<>ch.][fdLDS]' || true)"
-else
-  count=0
-fi
+  | grep -vE "$noop" || true)"
+count=0
+[ -n "$changes" ] && count="$(printf '%s\n' "$changes" | wc -l | tr -d ' ')"
 
 echo "✨ updated: $count file(s)"
 echo "🩺 doctor:"
