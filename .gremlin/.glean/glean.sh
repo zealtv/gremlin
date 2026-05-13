@@ -219,12 +219,13 @@ cmd_index() {
   require_glean
   local dir="$GLEAN_DIR/findings"
   local idx="$dir/INDEX.md"
+  local landing="$idx.$$.landing"
   mkdir -p "$dir"
 
   local files=()
   mapfile -t files < <(find "$dir" -mindepth 1 -maxdepth 1 -type f -name '*.md' ! -name 'INDEX.md' 2>/dev/null | sort)
 
-  {
+  if ! {
     echo "<!-- auto-generated; run glean.sh index to refresh -->"
     echo
     local f id title desc
@@ -236,7 +237,15 @@ cmd_index() {
       [[ -n "$desc" ]] || desc="(no description)"
       echo "- [[$id]] — $title — $desc"
     done
-  } > "$idx"
+  } > "$landing"; then
+    rm -f "$landing"
+    return 1
+  fi
+
+  if ! mv "$landing" "$idx"; then
+    rm -f "$landing"
+    return 1
+  fi
 
   echo "$idx"
 }
@@ -254,6 +263,21 @@ cmd_fetch() {
   local dir="$GLEAN_DIR/findings"
   local files=()
   mapfile -t files < <(find "$dir" -mindepth 1 -maxdepth 1 -type f -name '*.md' ! -name 'INDEX.md' 2>/dev/null | sort)
+
+  if (( ${#files[@]} > 0 )); then
+    local idx="$dir/INDEX.md"
+    if [[ ! -e "$idx" ]]; then
+      echo "warning: INDEX.md is missing; run glean.sh index" >&2
+    else
+      local candidate
+      for candidate in "${files[@]}"; do
+        if [[ "$candidate" -nt "$idx" ]]; then
+          echo "warning: INDEX.md is stale; run glean.sh index" >&2
+          break
+        fi
+      done
+    fi
+  fi
 
   local f haystack term
   for f in "${files[@]}"; do
@@ -368,6 +392,10 @@ print_dropped() {
 
 cmd_status() {
   require_glean
+  if ! cmd_index >/dev/null 2>/dev/null; then
+    echo "warning: failed to refresh INDEX.md" >&2
+  fi
+
   echo "in"
   print_dir_entries "$GLEAN_DIR/in"
   echo
