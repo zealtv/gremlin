@@ -84,6 +84,22 @@ If present, read it before tending.
 
 Keep it short. Keep it concrete.
 
+## Vendoring
+
+To add a nest to another project, copy `nestling.sh` and `README.md` into
+the project's `.nest/` directory, then run `./.nest/nestling.sh ensure` to
+seed the trays:
+
+```sh
+mkdir -p <project>/.nest
+cp nestling.sh README.md <project>/.nest/
+<project>/.nest/nestling.sh ensure
+```
+
+`ensure` creates `in/`, `out/`, and `dropped/` next to itself.
+`nestling.sh` operates on the `.nest/` directory it lives in, so each
+vendored copy is self-contained.
+
 ## Commands
 
 ```

@@ -122,6 +122,23 @@ longer earn their place.
 swept — so old reasoning remains available to read later.
 
 
+## Vendoring
+
+To add glean to another project, copy `glean.sh` and `README.md` into the
+project's `.glean/` directory, then run `./.glean/glean.sh init` to seed
+the trays:
+
+```sh
+mkdir -p <project>/.glean
+cp glean.sh README.md <project>/.glean/
+<project>/.glean/glean.sh init
+```
+
+`init` creates `in/`, `findings/`, `out/`, and `dropped/` next to itself,
+and seeds `distil.md` if one is not already present. `glean.sh` operates
+on the `.glean/` directory it lives in, so each vendored copy is
+self-contained.
+
 ## Commands
 
 ```
