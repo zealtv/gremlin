@@ -66,8 +66,9 @@ Start the runner and bridge:
 ```
 
 Send a normal Telegram text message. It should appear in the TUI/transcript, and
-one assistant reply should return to Telegram. Telegram delivery is poll-based;
-in local testing it lagged the TUI by several seconds.
+one assistant reply should return to Telegram. Outbound delivery runs on its own
+loop, so an assistant turn lands in Telegram within `TELEGRAM_PUSH_INTERVAL`
+seconds (default `1`) of being appended to the transcript.
 
 To verify proactive outbound, ask for a short reminder:
 
@@ -77,6 +78,34 @@ remind me in 1 minute to test telegram
 
 The reminder should land under `.gremlin/.groundhog/`, appear in the transcript
 when fired, and then push to Telegram.
+
+## Loops
+
+The bridge daemon (`telegram run`) is a supervisor that forks three independent
+background loops and reaps them on `INT`/`TERM`:
+
+- **inbound poll** — calls `getUpdates` with a long-poll (up to
+  `TELEGRAM_POLL_TIMEOUT` seconds, default `30`). On failure it logs and sleeps
+  `TELEGRAM_POLL_SLEEP` (default `1`) before retrying. Long-poll keeps inbound
+  latency near zero without spinning the Telegram API.
+- **outbound push** — tails `transcript.md` and sends new assistant and system
+  turns. On success it sleeps `TELEGRAM_PUSH_INTERVAL` (default `1`); on failure
+  it sleeps `TELEGRAM_OUTBOUND_BACKOFF` (default `5`). Splitting this from the
+  inbound loop means an assistant turn that lands during a long-poll no longer
+  waits up to `TELEGRAM_POLL_TIMEOUT` for delivery.
+- **typing pulse** — every `TELEGRAM_PULSE_INTERVAL` seconds (default `4`),
+  sends `sendChatAction typing` if a telegram-origin nest item is outstanding.
+
+If any loop exits unexpectedly, the supervisor kills the others and exits so
+the recorded pid matches reality.
+
+### In-flight inference
+
+The pulser keeps no state. Each tick it globs
+`.nest/in/*-telegram-*.md*` — the trailing `*` covers both pending (`*.md`) and
+claimed (`*.md.tending`) items. When the tender moves the item to `.nest/out/`,
+the glob goes empty and the pulser naturally goes quiet. No flag files, no
+counters, no per-message bookkeeping.
 
 ## Behavior
 
@@ -102,7 +131,8 @@ when fired, and then push to Telegram.
   inbound messages.
 - Runner paused: messages can be ingested while `.gremlin/.paused` exists, but
   replies wait until it is removed.
-- Stop seems slow: `getUpdates` long-polls, so `telegram stop` can take up to the
-  poll timeout.
+- Stop seems slow: `getUpdates` long-polls, so `telegram stop` can take up to
+  `TELEGRAM_POLL_TIMEOUT` to return — the supervisor's `TERM` kills the child
+  `curl`, and `telegram.sh` honours `TELEGRAM_STOP_TIMEOUT` (default `35`).
 - Duplicate old replies after first startup should not happen. A missing
   `.cursor` initializes to the current end of `transcript.md`.

@@ -23,6 +23,8 @@ TRANSCRIPT="${TELEGRAM_TRANSCRIPT:-$GREMLIN_DIR/transcript.md}"
 POLL_TIMEOUT="${TELEGRAM_POLL_TIMEOUT:-30}"
 POLL_SLEEP="${TELEGRAM_POLL_SLEEP:-1}"
 OUTBOUND_BACKOFF="${TELEGRAM_OUTBOUND_BACKOFF:-5}"
+PUSH_INTERVAL="${TELEGRAM_PUSH_INTERVAL:-1}"
+PULSE_INTERVAL="${TELEGRAM_PULSE_INTERVAL:-4}"
 STOP_TIMEOUT="${TELEGRAM_STOP_TIMEOUT:-35}"
 
 usage() {
@@ -137,6 +139,36 @@ send_message() {
   if [ "$ok" != "true" ]; then
     description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
     echo "telegram: sendMessage failed: $description" >&2
+    return 1
+  fi
+}
+
+send_chat_action() {
+  local action="$1"
+  local response ok description
+
+  if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
+    echo "telegram: mock chat action failure" >&2
+    return 1
+  fi
+
+  if [ -n "${TELEGRAM_TEST_SEND_LOG:-}" ]; then
+    {
+      printf '%s\n' "---"
+      printf 'action=%s\n' "$action"
+    } >> "$TELEGRAM_TEST_SEND_LOG"
+    return 0
+  fi
+
+  response="$(curl -fsS -X POST \
+    --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+    --data-urlencode "action=$action" \
+    "$(telegram_api sendChatAction)")" || return 1
+
+  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
+  if [ "$ok" != "true" ]; then
+    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
+    echo "telegram: sendChatAction failed: $description" >&2
     return 1
   fi
 }
@@ -396,6 +428,39 @@ cmd_stop() {
   exit 1
 }
 
+inbound_loop() {
+  while :; do
+    if ! poll_once; then
+      echo "telegram poll failed; retrying after $POLL_SLEEP seconds" >&2
+      sleep "$POLL_SLEEP" &
+      wait "$!" || true
+    fi
+  done
+}
+
+outbound_loop() {
+  while :; do
+    if push_transcript_once; then
+      sleep "$PUSH_INTERVAL" &
+      wait "$!" || true
+    else
+      echo "telegram outbound failed; retrying after $OUTBOUND_BACKOFF seconds" >&2
+      sleep "$OUTBOUND_BACKOFF" &
+      wait "$!" || true
+    fi
+  done
+}
+
+pulser_loop() {
+  while :; do
+    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*.md*" >/dev/null; then
+      send_chat_action typing || true
+    fi
+    sleep "$PULSE_INTERVAL" &
+    wait "$!" || true
+  done
+}
+
 cmd_run() {
   load_config
   require_runtime
@@ -406,17 +471,26 @@ cmd_run() {
   echo "transcript: $TRANSCRIPT"
   ensure_cursor
 
-  trap 'echo "telegram bridge daemon stopping"; exit 0' INT TERM
+  inbound_loop &
+  local inbound_pid=$!
+  outbound_loop &
+  local outbound_pid=$!
+  pulser_loop &
+  local pulser_pid=$!
+
+  trap 'echo "telegram bridge daemon stopping"; kill '"$inbound_pid $outbound_pid $pulser_pid"' 2>/dev/null; wait; exit 0' INT TERM
+
+  local pid
   while :; do
-    if ! poll_once; then
-      echo "telegram poll failed; retrying after $POLL_SLEEP seconds" >&2
-    fi
-    until push_transcript_once; do
-      echo "telegram outbound failed; retrying after $OUTBOUND_BACKOFF seconds" >&2
-      sleep "$OUTBOUND_BACKOFF" &
-      wait "$!" || true
+    for pid in "$inbound_pid" "$outbound_pid" "$pulser_pid"; do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        echo "telegram loop $pid exited unexpectedly; shutting down supervisor" >&2
+        kill "$inbound_pid" "$outbound_pid" "$pulser_pid" 2>/dev/null || true
+        wait || true
+        exit 1
+      fi
     done
-    sleep "$POLL_SLEEP" &
+    sleep 1 &
     wait "$!" || true
   done
 }
