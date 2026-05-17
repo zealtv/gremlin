@@ -172,7 +172,16 @@ iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Transcript format: `## <role> — <iso>` header, body, single blank line.
 # One `>>` per turn so concurrent appends with `say` don't interleave.
-printf '## assistant — %s\n%s\n\n' "$iso" "$reply" >> "$TRANSCRIPT"
+#
+# Empty reply on a clean exit: the preset returned no stdout (a harness
+# refusal, an auth/rate condition that leaked to stderr, etc). Surface it
+# as a loud system error rather than a silent empty `## assistant —`,
+# which bridges correctly decline to push.
+if [ -z "${reply//[[:space:]]/}" ]; then
+  printf '## system — %s\n⚠️ error: empty model reply\n\n' "$iso" >> "$TRANSCRIPT"
+else
+  printf '## assistant — %s\n%s\n\n' "$iso" "$reply" >> "$TRANSCRIPT"
+fi
 
 # Archive the inbound item into .nest/out/. The reply is already in the
 # transcript; the protocol wants out/ to record what was actioned, not
