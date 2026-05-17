@@ -201,7 +201,10 @@ pairs, never new role headers.
 Initial sub-categories:
 
 - `⚙️ run:` — a script ran (scheduled `run.sh` body).
-- `⚠️ error:` — runtime failure worth surfacing (e.g. `run.sh` exited non-zero).
+- `⚠️ error:` — runtime failure worth surfacing. Known shapes: `run.sh exited
+  <code>` (with optional tail of stdout), `empty model reply` (the preset
+  exited 0 with no stdout — surfaced loudly so bridges have something to push
+  instead of a silent empty `## assistant —`).
 - `💌 message:` — scheduled `message.md` body emitted by the tender (any flavour: reminder, summary, status — the role is "voice from outside the conversation").
 - `✋ item aborted` — `/stop` cancelled the in-flight model call. Terse fixed-form line; no message tail.
 
