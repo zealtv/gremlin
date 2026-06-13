@@ -11,6 +11,7 @@ usage:
   glean.sh drop <id> [reason...]
   glean.sh index
   glean.sh fetch [--all] <q...>
+  glean.sh recall [text...]
   glean.sh status
   glean.sh sweep [days]
 USAGE
@@ -138,7 +139,11 @@ A finding is one markdown file at `findings/<id>.md`:
 - **Body** — free markdown. Common sections (all optional):
   - `## Why` — motivation, source, the experience that earned this finding.
   - `## Triggers` — phrases, topics, or symptoms that should bring this
-    finding to mind. `fetch` searches this by default.
+    finding to mind, one per bullet (or comma separated). `fetch` searches
+    these by default, and `recall` fires a finding when one of its trigger
+    phrases appears in an incoming text. Triggers are optional, but a finding
+    with none can only surface through `INDEX.md` — it will never be recalled
+    automatically. Write concrete phrases a real message would contain.
   - `## Associations` — wikilinks to related findings: `- [[other-id]]`.
   - `## Context` — examples, references, longer notes.
 
@@ -301,6 +306,55 @@ cmd_fetch() {
   done
 }
 
+# recall is the inverse of fetch: the input text is the haystack and each
+# finding's `## Triggers` phrases are the needles. A finding is returned when
+# any of its trigger phrases occurs in the text. This is the primitive a host
+# wires into reply-time recall — pipe an inbound message in, get the findings
+# worth loading out. Findings without triggers never match here (they still
+# surface through INDEX.md).
+cmd_recall() {
+  require_glean
+  local input
+  if (( $# > 0 )); then
+    input="$*"
+  else
+    input="$(cat)"
+  fi
+  # Lowercase once; phrases are matched case-insensitively as plain substrings.
+  local lc_input
+  lc_input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
+  [[ -n "${lc_input//[[:space:]]/}" ]] || return 0
+
+  local dir="$GLEAN_DIR/findings"
+  local files=()
+  mapfile -t files < <(find "$dir" -mindepth 1 -maxdepth 1 -type f -name '*.md' ! -name 'INDEX.md' 2>/dev/null | sort)
+
+  local f triggers line phrase
+  for f in "${files[@]}"; do
+    triggers="$(extract_triggers "$f")"
+    [[ -n "$triggers" ]] || continue
+    while IFS= read -r line; do
+      # Strip a leading list marker (-, *, +) then split the rest on commas so
+      # both bullet-per-phrase and comma-separated trigger styles parse.
+      line="${line#"${line%%[![:space:]]*}"}"   # ltrim
+      line="${line#[-*+] }"
+      local IFS=','
+      for phrase in $line; do
+        # trim surrounding whitespace and lowercase
+        phrase="${phrase#"${phrase%%[![:space:]]*}"}"
+        phrase="${phrase%"${phrase##*[![:space:]]}"}"
+        phrase="$(printf '%s' "$phrase" | tr '[:upper:]' '[:lower:]')"
+        # Ignore trivially short phrases that would over-match.
+        [[ "${#phrase}" -ge 2 ]] || continue
+        if printf '%s' "$lc_input" | grep -qF -- "$phrase"; then
+          printf '%s\n' "$f"
+          break 2
+        fi
+      done
+    done <<< "$triggers"
+  done
+}
+
 cmd_complete() {
   require_glean
   local id="${1:-}"
@@ -438,6 +492,7 @@ main() {
     drop) shift; cmd_drop "$@" ;;
     index) shift; cmd_index "$@" ;;
     fetch) shift; cmd_fetch "$@" ;;
+    recall) shift; cmd_recall "$@" ;;
     status) shift; cmd_status "$@" ;;
     sweep) shift; cmd_sweep "$@" ;;
     -h|--help|help|"") usage ;;

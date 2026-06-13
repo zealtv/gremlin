@@ -122,6 +122,28 @@ trap 'rm -f "$prompt_file" "$reply_file" "$PIDFILE"' EXIT
       echo
     done
   fi
+  # Auto-recall: pull in findings whose Glean triggers fire on this message, so
+  # memory is used deterministically instead of only when the agent chooses to
+  # search. Promoted findings already arrive through context/ above; skip those
+  # by basename to avoid loading them twice. Capped to keep context lean.
+  if [ -x "$GREMLIN_DIR/.glean/glean.sh" ]; then
+    recalled=0
+    while IFS= read -r finding; do
+      [ -n "$finding" ] || continue
+      base="$(basename "$finding")"
+      if [ -e "$GREMLIN_DIR/context/$base" ] || [ -e "$GREMLIN_DIR/context/system/$base" ]; then
+        continue
+      fi
+      if [ "$recalled" -eq 0 ]; then
+        printf '## recalled memory\n\n'
+        printf 'Findings whose triggers matched this message — treat as background context.\n\n'
+      fi
+      cat "$finding"
+      echo
+      recalled=$((recalled + 1))
+      if [ "$recalled" -ge 5 ]; then break; fi
+    done < <(printf '%s' "$body" | "$GREMLIN_DIR/.glean/glean.sh" recall 2>/dev/null)
+  fi
   if [ -s "$TRANSCRIPT" ]; then
     cat "$TRANSCRIPT"
     echo

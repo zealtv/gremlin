@@ -34,7 +34,7 @@ A finding is one markdown file at `findings/<id>.md`, it only needs two things:
 
 Everything else is free prose. Findings can link to other resources. The supplied `distil.md` *suggests* common sections:
 
-- **Triggers** — comma separated items under `## Triggers` are keywords searched by the `fetch` command.
+- **Triggers** — phrases under `## Triggers` (one per bullet, or comma separated) that should bring this finding to mind. They are searched by `fetch` and are the needles `recall` matches against an incoming text. Triggers are optional, but they are what makes a finding *recallable* automatically — a finding with none still surfaces through `INDEX.md`, but nothing will pull its body in by topic.
 - **Associations** — wikilinks `[[id]]` under `##Associations` that resolve to `findings/<id>.md`. Associations are just bullet links - nothing parses them, but they read well and an agent can grep for backlinks trivially.
 - **Context** — examples, references, and longer notes can live under `## Context`, and can be loaded on demand for leaner systems.
 - **Why** - reasoning or historical context.
@@ -48,6 +48,7 @@ Three tiers of cost, by design:
 |---|---|---|
 | **Always loaded** | `findings/INDEX.md` | A host symlinks this into its always-loaded context surface. The agent sees one bullet per finding (id + title + description). |
 | **Fetched on demand** | `findings/<id>.md` body | Agent runs `fetch` to get matching paths, then reads the bodies. |
+| **Recalled by trigger** | `findings/<id>.md` body | A host pipes an inbound text through `recall` and loads the matched bodies automatically, without the agent choosing to search. |
 | **Read by hand** | Anything else | Long examples, references — surface a finding as a starting point and follow links. |
 
 Promotion to always-loaded is the host's call (e.g. by symlinking a specific
@@ -106,6 +107,23 @@ Fetch has two modes.
 Strict by default keeps the agent's context lean and rewards writers who curate their
 Triggers section.
 
+### Recall
+
+`recall` is the inverse of `fetch`. Where `fetch` takes a query and asks *"which
+findings mention these terms?"*, `recall` takes a block of text — typically an
+inbound message — and asks *"which findings' triggers fire on this text?"*
+
+```sh
+./glean.sh recall "logged a protein bread and a roo burger"   # text as args
+echo "$inbound_message" | ./glean.sh recall                   # or on stdin
+```
+
+It prints the path of every finding with at least one `## Triggers` phrase
+occurring (case-insensitively) in the text. Findings without triggers never
+match. This is the primitive a host wires into reply-time recall: pipe each
+incoming message through `recall` and load the matched bodies into context, so
+findings are used deterministically instead of relying on the agent to search.
+
 
 ### Curate
 
@@ -148,6 +166,7 @@ self-contained.
 ./glean.sh drop <id> [reason...]    # findings/<id>.md → dropped/, with reason
 ./glean.sh index                    # regenerate findings/INDEX.md
 ./glean.sh fetch [--all] <q...>     # paths of findings matching query
+./glean.sh recall [text...]         # paths of findings whose triggers fire on text (stdin if no args)
 ./glean.sh status                   # list trays
 ./glean.sh sweep [days]             # remove out/ entries older than N days (default 14)
 ```
