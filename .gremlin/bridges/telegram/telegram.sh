@@ -346,7 +346,10 @@ poll_once() {
   require_runtime
 
   offset="$(read_update_offset)"
-  response="$(get_updates "$offset")"
+  if ! response="$(get_updates "$offset")"; then
+    echo "telegram: getUpdates request failed" >&2
+    return 1
+  fi
   ok="$(printf '%s\n' "$response" | jq -r '.ok')"
   if [ "$ok" != "true" ]; then
     description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
@@ -389,7 +392,11 @@ cmd_start() {
 
   load_config
 
-  nohup "$0" run >> "$LOG" 2>&1 &
+  if command -v setsid >/dev/null 2>&1; then
+    nohup setsid "$0" run >> "$LOG" 2>&1 < /dev/null &
+  else
+    nohup "$0" run >> "$LOG" 2>&1 < /dev/null &
+  fi
   pid="$!"
   printf '%s\n' "$pid" > "$PIDFILE"
   disown "$pid" 2>/dev/null || true
@@ -453,7 +460,8 @@ outbound_loop() {
 
 pulser_loop() {
   while :; do
-    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*.md*" >/dev/null; then
+    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*.md" >/dev/null \
+      || { [ -s "$GREMLIN_DIR/.tending.pid" ] && kill -0 "$(sed -n '1p' "$GREMLIN_DIR/.tending.pid")" 2>/dev/null; }; then
       send_chat_action typing || true
     fi
     sleep "$PULSE_INTERVAL" &
