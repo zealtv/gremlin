@@ -101,6 +101,51 @@ telegram_api() {
   printf 'https://api.telegram.org/bot%s/%s\n' "$TELEGRAM_BOT_TOKEN" "$1"
 }
 
+telegram_file_url() {
+  printf 'https://api.telegram.org/file/bot%s/%s\n' "$TELEGRAM_BOT_TOKEN" "$1"
+}
+
+# download_file <file_id> <dest>: resolve a Telegram file_id to its path via
+# getFile, then download the bytes to <dest>. In tests, TELEGRAM_TEST_FILE_SRC
+# short-circuits the network by copying a local fixture instead.
+download_file() {
+  local file_id="$1"
+  local dest="$2"
+  local response ok file_path
+
+  if [ -n "${TELEGRAM_TEST_FILE_SRC:-}" ]; then
+    cp "$TELEGRAM_TEST_FILE_SRC" "$dest"
+    return 0
+  fi
+
+  response="$(curl -fsS --get \
+    --data-urlencode "file_id=$file_id" \
+    "$(telegram_api getFile)")" || return 1
+  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
+  if [ "$ok" != "true" ]; then
+    echo "telegram: getFile failed for $file_id" >&2
+    return 1
+  fi
+  file_path="$(printf '%s\n' "$response" | jq -r '.result.file_path? // empty')"
+  [ -n "$file_path" ] || { echo "telegram: getFile returned no file_path" >&2; return 1; }
+
+  curl -fsS -o "$dest" "$(telegram_file_url "$file_path")" || return 1
+}
+
+# image_resize <src> <dest>: best-effort scaled copy (longest side ~1024px).
+# Uses ImageMagick when present; returns non-zero if no resizer is available so
+# the caller can fall back to the original.
+image_resize() {
+  local src="$1" dest="$2"
+  if command -v magick >/dev/null 2>&1; then
+    magick "$src" -resize '1024x1024>' "$dest" 2>/dev/null
+  elif command -v convert >/dev/null 2>&1; then
+    convert "$src" -resize '1024x1024>' "$dest" 2>/dev/null
+  else
+    return 1
+  fi
+}
+
 get_updates() {
   local offset="$1"
   if [ -n "${TELEGRAM_TEST_UPDATES_FILE:-}" ]; then
@@ -359,15 +404,59 @@ ingest_text() {
   echo "ingested telegram text as $name"
 }
 
+# ingest_photo <file_id> <ext> <caption>: download the photo and ingest it as a
+# model-backed nest item directory — source.<ext>, an optional scaled
+# preview.<ext>, instructions.md framing the turn, and `.model = image` so the
+# tender runs the dedicated image preset.
+ingest_photo() {
+  local file_id="$1"
+  local ext="$2"
+  local caption="$3"
+  local itemdir src preview name suffix preview_note=""
+
+  itemdir="$(mktemp -d "$BRIDGE_DIR/telegram-photo.XXXXXX")"
+  src="$itemdir/source.$ext"
+
+  if ! download_file "$file_id" "$src"; then
+    rm -rf "$itemdir"
+    echo "telegram: failed to download photo $file_id" >&2
+    return 1
+  fi
+
+  preview="$itemdir/preview.$ext"
+  if image_resize "$src" "$preview"; then
+    preview_note="A scaled-down preview is at \`preview.$ext\`; the full-resolution original is at \`source.$ext\`. Look at the preview first and open the original only if you need finer detail."
+  else
+    rm -f "$preview"
+    preview_note="The image is at \`source.$ext\`."
+  fi
+
+  {
+    printf 'The user sent a photo via Telegram.\n\n'
+    [ -n "$caption" ] && printf 'Caption: %s\n\n' "$caption"
+    printf '%s\n\n' "$preview_note"
+    printf 'Look at the image and respond to the user about it.\n'
+  } > "$itemdir/instructions.md"
+  printf 'image\n' > "$itemdir/.model"
+
+  suffix="$(basename "$itemdir")"
+  suffix="${suffix#telegram-photo.}"
+  name="$(date -u +%Y%m%dT%H%M%SZ)-telegram-photo-$suffix"
+  "$NESTLING" ingest "$itemdir" "$name" >/dev/null
+  rm -rf "$itemdir"
+  echo "ingested telegram photo as $name"
+}
+
 handle_update() {
   local update="$1"
-  local update_id chat_id text next_offset
+  local update_id chat_id text caption photo_id doc_mime doc_id ext next_offset
 
   update_id="$(printf '%s\n' "$update" | jq -r '.update_id')"
   next_offset=$((update_id + 1))
 
   chat_id="$(printf '%s\n' "$update" | jq -r '.message.chat.id? // empty')"
   text="$(printf '%s\n' "$update" | jq -r '.message.text? // empty')"
+  caption="$(printf '%s\n' "$update" | jq -r '.message.caption? // empty')"
 
   if [ -z "$chat_id" ]; then
     echo "ignored telegram update: no message chat"
@@ -380,6 +469,32 @@ handle_update() {
     write_update_offset "$next_offset"
     return 0
   fi
+
+  # Photos arrive as an array of sizes; the last is the largest. Always JPEG.
+  photo_id="$(printf '%s\n' "$update" | jq -r '.message.photo[-1].file_id? // empty')"
+  if [ -n "$photo_id" ]; then
+    if ! ingest_photo "$photo_id" "jpg" "$caption"; then
+      echo "telegram: photo ingest failed for update $update_id" >&2
+    fi
+    write_update_offset "$next_offset"
+    return 0
+  fi
+
+  # Images can also arrive as documents (sent as a file). Derive the extension
+  # from the declared mime type.
+  doc_mime="$(printf '%s\n' "$update" | jq -r '.message.document.mime_type? // empty')"
+  case "$doc_mime" in
+    image/*)
+      doc_id="$(printf '%s\n' "$update" | jq -r '.message.document.file_id? // empty')"
+      ext="${doc_mime#image/}"
+      [ "$ext" = "jpeg" ] && ext="jpg"
+      if ! ingest_photo "$doc_id" "$ext" "$caption"; then
+        echo "telegram: document image ingest failed for update $update_id" >&2
+      fi
+      write_update_offset "$next_offset"
+      return 0
+      ;;
+  esac
 
   if [ -z "$text" ]; then
     echo "ignored telegram update: non-text message"
@@ -542,7 +657,7 @@ outbound_loop() {
 
 pulser_loop() {
   while :; do
-    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*.md" >/dev/null \
+    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*" >/dev/null \
       || { [ -s "$GREMLIN_DIR/.tending.pid" ] && kill -0 "$(sed -n '1p' "$GREMLIN_DIR/.tending.pid")" 2>/dev/null; }; then
       send_chat_action typing || true
     fi

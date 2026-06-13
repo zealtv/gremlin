@@ -101,17 +101,25 @@ the recorded pid matches reality.
 
 ### In-flight inference
 
-The pulser keeps no state. Each tick it globs
-`.nest/in/*-telegram-*.md*` — the trailing `*` covers both pending (`*.md`) and
-claimed (`*.md.tending`) items. When the tender moves the item to `.nest/out/`,
-the glob goes empty and the pulser naturally goes quiet. No flag files, no
-counters, no per-message bookkeeping.
+The pulser keeps no state. Each tick it globs `.nest/in/*-telegram-*` — matching
+text items (`*.md`), claimed items (`*.tending`), and media item directories
+alike. When the tender moves the item to `.nest/out/`, the glob goes empty and
+the pulser naturally goes quiet. No flag files, no counters, no per-message
+bookkeeping.
 
 ## Behavior
 
-- Only text messages from `TELEGRAM_CHAT_ID` are accepted.
-- Messages from other chats are ignored.
-- Non-text updates are ignored.
+- Only messages from `TELEGRAM_CHAT_ID` are accepted; other chats are ignored.
+- Text messages are written into `.nest/in/` as before.
+- Images (a photo, or a document with an `image/*` mime type) are captured: the
+  bridge downloads the file into a nest item directory as `source.<ext>`, writes
+  an `instructions.md` framing the turn (with any caption), and stamps the item
+  with `.model = image` so the tender runs the vision preset (`models/image.sh`).
+  If ImageMagick is available, a scaled `preview.<ext>` is added and the model is
+  pointed at it first, with the original available on demand; without a resizer
+  the original is used directly. The tender appends the attachment's absolute
+  path so the model can open it.
+- Other non-text updates (stickers, voice, video, …) are still ignored.
 - On first launch, a missing `.cursor` initializes to the current end of
   `transcript.md`; old transcript history is not pushed to Telegram.
 - Every new assistant or system turn is pushed to the configured chat.

@@ -47,6 +47,12 @@ label. Three presets ship as starting points:
   invocations for several agent CLIs.
 - `memory.sh` — conventional alias for memory-review work. It delegates to
   `default.sh` unless you specialize it.
+- `image.sh` — conventional alias for understanding inbound images. The
+  Telegram bridge stamps a received photo with `.model = image`, so this preset
+  runs for that turn (per-item `.model` override). Point it at a vision-capable
+  invocation — for claude, include `Read` in `--allowedTools` so it can open the
+  image file; codex/gpt-5.x reads images natively. Delegates to `default.sh`
+  until specialized.
 - `echo.sh` — script-only example that echoes the incoming item
   back, useful as a starting point for routers, fixed-response
   bots, lookup tables, or local rule engines that need a

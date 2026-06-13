@@ -91,6 +91,27 @@ if [ -d "$claimed_path" ]; then
   else
     body=""
   fi
+  # Surface attachment files (anything besides the control files) as absolute
+  # paths so the model can open them — e.g. an image the bridge downloaded.
+  # The item dir was renamed on claim, so these post-claim paths are the
+  # authoritative ones; instructions.md refers to the files by bare name.
+  attachments=""
+  for af in "$claimed_path"/*; do
+    [ -e "$af" ] || continue
+    case "$(basename "$af")" in
+      instructions.md | message.md | run.sh) continue ;;
+    esac
+    attachments="${attachments}- ${af}
+"
+  done
+  if [ -n "$attachments" ]; then
+    body="${body}
+
+## attachments
+
+Files attached to this message (absolute paths you can open):
+${attachments}"
+  fi
 else
   body="$(cat "$claimed_path")"
 fi
