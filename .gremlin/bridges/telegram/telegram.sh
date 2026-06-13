@@ -13,6 +13,7 @@ fi
 
 BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GREMLIN_DIR="$(cd "$BRIDGE_DIR/../.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 CONFIG="$BRIDGE_DIR/config"
 LOG="$BRIDGE_DIR/telegram.log"
 PIDFILE="$BRIDGE_DIR/telegram.pid"
@@ -143,6 +144,56 @@ send_message() {
   fi
 }
 
+send_photo() {
+  local photo="$1"
+  local caption="${2:-}"
+  local response ok description
+
+  if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
+    echo "telegram: mock photo failure" >&2
+    return 1
+  fi
+
+  if [ -n "${TELEGRAM_TEST_SEND_LOG:-}" ]; then
+    {
+      printf '%s\n' "---"
+      printf 'photo=%s\n' "$photo"
+      [ -n "$caption" ] && printf 'caption=%s\n' "$caption"
+    } >> "$TELEGRAM_TEST_SEND_LOG"
+    return 0
+  fi
+
+  # http(s) targets are handed to Telegram as a URL; everything else is a local
+  # file uploaded with multipart form data.
+  case "$photo" in
+    http://* | https://*)
+      response="$(curl -fsS -X POST \
+        --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+        --data-urlencode "photo=$photo" \
+        --data-urlencode "caption=$caption" \
+        "$(telegram_api sendPhoto)")" || return 1
+      ;;
+    *)
+      if [ ! -f "$photo" ]; then
+        echo "telegram: photo not found: $photo" >&2
+        return 1
+      fi
+      response="$(curl -fsS -X POST \
+        -F "chat_id=$TELEGRAM_CHAT_ID" \
+        -F "caption=$caption" \
+        -F "photo=@$photo" \
+        "$(telegram_api sendPhoto)")" || return 1
+      ;;
+  esac
+
+  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
+  if [ "$ok" != "true" ]; then
+    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
+    echo "telegram: sendPhoto failed: $description" >&2
+    return 1
+  fi
+}
+
 send_chat_action() {
   local action="$1"
   local response ok description
@@ -230,6 +281,37 @@ extract_pushable_turns() {
   '
 }
 
+# A pushable turn may embed images as markdown: ![caption](path-or-url).
+# Each reference becomes a sendPhoto (caption from the alt text); the remaining
+# text, with the image markdown stripped, is sent as a normal message. Local
+# paths are resolved against the host folder so the gremlin can reference files
+# it created with a relative path.
+push_turn() {
+  local turn="$1"
+  local images text line photo caption
+
+  images="$(printf '%s\n' "$turn" | grep -oE '!\[[^]]*\]\([^)]+\)' || true)"
+  text="$(printf '%s\n' "$turn" | sed -E 's/!\[[^]]*\]\([^)]+\)//g')"
+
+  if [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
+    send_message "$text" || return 1
+  fi
+
+  [ -n "$images" ] || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    caption="$(printf '%s' "$line" | sed -E 's/^!\[([^]]*)\].*/\1/')"
+    photo="$(printf '%s' "$line" | sed -E 's/^!\[[^]]*\]\(([^)]+)\)$/\1/')"
+    case "$photo" in
+      http://* | https://* | /*) : ;;
+      *) photo="$HOST_DIR/$photo" ;;
+    esac
+    send_photo "$photo" "$caption" || return 1
+  done <<EOF_IMAGES
+$images
+EOF_IMAGES
+}
+
 push_transcript_once() {
   local cursor size chunk sent_any=0 turn
 
@@ -252,7 +334,7 @@ push_transcript_once() {
   chunk="$(tail -c +"$((cursor + 1))" "$TRANSCRIPT")"
   while IFS= read -r -d "$(printf '\034')" turn; do
     [ -n "$turn" ] || continue
-    send_message "$turn" || return 1
+    push_turn "$turn" || return 1
     sent_any=1
   done < <(printf '%s\n' "$chunk" | extract_pushable_turns)
 

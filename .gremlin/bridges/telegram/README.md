@@ -117,6 +117,12 @@ counters, no per-message bookkeeping.
 - Every new assistant or system turn is pushed to the configured chat.
   System turns (`⚙️ run:`, `⚠️ error:`, `💌 message:`, …) go through with their
   emoji+label intact — the body is sent verbatim.
+- Images: a turn may embed `![caption](path-or-url)`. Each reference is sent as
+  a photo (`sendPhoto`) with the alt text as the caption; the rest of the turn,
+  with the image markdown stripped, is sent as a normal message. A relative
+  `path` resolves against the host folder (the gremlin's working directory); an
+  absolute path or an `http(s)://` URL is used as-is. A missing local file logs
+  an error and fails the push rather than sending a broken turn.
 - `/start` is not special-cased; Telegram's setup message reaches the gremlin as
   ordinary text.
 
