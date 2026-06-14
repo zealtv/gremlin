@@ -657,7 +657,8 @@ outbound_loop() {
 
 pulser_loop() {
   while :; do
-    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*" >/dev/null \
+    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*.md" >/dev/null \
+      || find "$GREMLIN_DIR/.nest/in" -maxdepth 1 -type d -name '*-telegram-*' ! -name '*.tending' | read -r _ \
       || { [ -s "$GREMLIN_DIR/.tending.pid" ] && kill -0 "$(sed -n '1p' "$GREMLIN_DIR/.tending.pid")" 2>/dev/null; }; then
       send_chat_action typing || true
     fi

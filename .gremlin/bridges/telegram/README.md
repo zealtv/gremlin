@@ -101,11 +101,13 @@ the recorded pid matches reality.
 
 ### In-flight inference
 
-The pulser keeps no state. Each tick it globs `.nest/in/*-telegram-*` — matching
-text items (`*.md`), claimed items (`*.tending`), and media item directories
-alike. When the tender moves the item to `.nest/out/`, the glob goes empty and
-the pulser naturally goes quiet. No flag files, no counters, no per-message
-bookkeeping.
+The pulser keeps no state. Each tick it checks for ready Telegram text items
+(`*-telegram-*.md`), ready media item directories (`*-telegram-*` directories
+that are not `*.tending`), or a live `.tending.pid`. Claimed `*.tending` items
+alone do not count as active work; otherwise a stale claim would keep Telegram
+showing `typing` forever. When the tender finishes and moves the item to
+`.nest/out/`, all three checks go quiet. No flag files, no counters, no
+per-message bookkeeping.
 
 ## Behavior
 
