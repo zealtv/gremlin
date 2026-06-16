@@ -7,3 +7,4 @@
 .gremlin/bridges/*/.update-offset
  
 .claude/
+.loom/

@@ -111,9 +111,10 @@ Keep personal state out of this repo.
 - Run and personalize a copy outside the repo.
 - Never run `say` or the TUI against the repo's reference `.gremlin/`.
 - Promote personal-copy ideas back by rewriting generic versions in canonical.
-- Use `.gremlin/.nest/README.md`, `.gremlin/.groundhog/README.md`, and
-  `.loom/README.md` to understand the nested protocols.
-- Use `.loom/threads/` for planned work; current and future items belong there.
+- Use `.gremlin/.nest/README.md` and `.gremlin/.groundhog/README.md` to
+  understand the nested protocols.
+- Plan work in a local [loom](https://github.com/zealtv/loom) (`.loom/`); it is
+  development state, kept out of this repo via `.gitignore`.
 
 Before pushing:
 
