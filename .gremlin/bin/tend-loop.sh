@@ -130,8 +130,9 @@ printf '## user — %s\n%s\n\n' "$iso_user" "$body" >> "$TRANSCRIPT"
 prompt_file="$(mktemp)"
 reply_file="$(mktemp)"
 err_file="$(mktemp)"
+timeout_flag="$(mktemp)"
 PIDFILE="$GREMLIN_DIR/.tending.pid"
-trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$PIDFILE"' EXIT
+trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$timeout_flag" "$PIDFILE"' EXIT
 
 {
   cat "$GREMLIN_DIR/gremlin.md"
@@ -199,9 +200,38 @@ set +m
 printf '%s\n' "$llm_pid" > "$PIDFILE.tmp"
 mv "$PIDFILE.tmp" "$PIDFILE"
 
+# Watchdog: bound the model call so a hung preset can't wedge the claim
+# forever. On overrun, signal the whole process group — the same pgid /stop
+# targets (set -m made llm_pid its own pgid) — so the preset's children die
+# too, and flag it as a timeout. GREMLIN_MODEL_TIMEOUT=0 disables the bound.
+timeout_secs="${GREMLIN_MODEL_TIMEOUT:-900}"
+case "$timeout_secs" in ''|*[!0-9]*) timeout_secs=0 ;; esac
+watchdog_pid=""
+if [ "$timeout_secs" -gt 0 ]; then
+  (
+    sleep "$timeout_secs"
+    kill -0 "$llm_pid" 2>/dev/null || exit 0
+    printf 'timeout\n' > "$timeout_flag"
+    kill -TERM -- "-$llm_pid" 2>/dev/null || true
+    sleep 5
+    kill -KILL -- "-$llm_pid" 2>/dev/null || true
+  ) &
+  watchdog_pid=$!
+fi
+
 rc=0
 wait "$llm_pid" || rc=$?
+
+# Model settled (finished or was killed) — retire the watchdog so its sleep
+# doesn't outlive the turn.
+if [ -n "$watchdog_pid" ]; then
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+fi
 rm -f "$PIDFILE"
+
+timed_out=0
+[ -s "$timeout_flag" ] && timed_out=1
 
 # Abort path: /stop kills the pgid and moves the claim out of .nest/in/
 # into .nest/dropped/. If the claim is gone, treat this as a clean abort
@@ -211,21 +241,26 @@ if [ "$rc" -ne 0 ] && [ ! -e "$claimed_path" ]; then
   exit 0
 fi
 
-# Failure path: the model exited non-zero but the claim is still here (not the
-# /stop abort above). Surface it loudly in the transcript with the exit code and
-# any stderr tail, then resolve the claim through the recovery policy — re-queue
-# if recoverable and under its attempt limit, otherwise drop — so it never sits
-# as silent *.tending residue.
+# Failure path: the model exited non-zero (a real failure, or killed by the
+# timeout watchdog) but the claim is still here — not the /stop abort above.
+# Surface it loudly in the transcript with any stderr tail, then resolve the
+# claim through the recovery policy — re-queue if recoverable and under its
+# attempt limit, otherwise drop — so it never sits as silent *.tending residue.
 if [ "$rc" -ne 0 ]; then
-  echo "tend-loop: llm.sh exited $rc" >&2
+  if [ "$timed_out" -eq 1 ]; then
+    detail="model timed out after ${timeout_secs}s"
+  else
+    detail="model exited $rc"
+  fi
+  echo "tend-loop: $detail" >&2
   iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   err_tail="$(tail -n 20 "$err_file" 2>/dev/null)"
   if [ -n "${err_tail//[[:space:]]/}" ]; then
-    printf '## system — %s\n⚠️ error: model exited %d\n%s\n\n' "$iso" "$rc" "$err_tail" >> "$TRANSCRIPT"
+    printf '## system — %s\n⚠️ error: %s\n%s\n\n' "$iso" "$detail" "$err_tail" >> "$TRANSCRIPT"
   else
-    printf '## system — %s\n⚠️ error: model exited %d\n\n' "$iso" "$rc" >> "$TRANSCRIPT"
+    printf '## system — %s\n⚠️ error: %s\n\n' "$iso" "$detail" >> "$TRANSCRIPT"
   fi
-  outcome="$("$NESTLING" resolve "$name" "model exited $rc" 2>&1)" \
+  outcome="$("$NESTLING" resolve "$name" "$detail" 2>&1)" \
     || echo "tend-loop: resolve failed for $name: $outcome" >&2
   exit "$rc"
 fi
