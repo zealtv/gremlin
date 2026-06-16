@@ -40,6 +40,12 @@ NESTLING="$NEST/nestling.sh"
 LLM="$GREMLIN_DIR/bin/llm.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 
+# Self-heal before listing: re-queue or drop any claim a previous tender left
+# as stale *.tending (crash, hang, hard kill). Guarded internally against live
+# tenders, and we only reach here between turns, so it never races a model
+# call. Quiet on the no-op common case.
+"$NESTLING" recover >/dev/null 2>&1 || true
+
 items="$("$NESTLING" list)"
 [ -n "$items" ] || exit 0
 
@@ -123,8 +129,9 @@ printf '## user — %s\n%s\n\n' "$iso_user" "$body" >> "$TRANSCRIPT"
 
 prompt_file="$(mktemp)"
 reply_file="$(mktemp)"
+err_file="$(mktemp)"
 PIDFILE="$GREMLIN_DIR/.tending.pid"
-trap 'rm -f "$prompt_file" "$reply_file" "$PIDFILE"' EXIT
+trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$PIDFILE"' EXIT
 
 {
   cat "$GREMLIN_DIR/gremlin.md"
@@ -186,7 +193,7 @@ fi
 # `set -m` makes the backgrounded command its own pgid (== pid in bash),
 # portably across macOS and Linux without depending on `setsid`.
 set -m
-"$LLM" < "$prompt_file" > "$reply_file" &
+"$LLM" < "$prompt_file" > "$reply_file" 2> "$err_file" &
 llm_pid=$!
 set +m
 printf '%s\n' "$llm_pid" > "$PIDFILE.tmp"
@@ -204,8 +211,22 @@ if [ "$rc" -ne 0 ] && [ ! -e "$claimed_path" ]; then
   exit 0
 fi
 
+# Failure path: the model exited non-zero but the claim is still here (not the
+# /stop abort above). Surface it loudly in the transcript with the exit code and
+# any stderr tail, then resolve the claim through the recovery policy — re-queue
+# if recoverable and under its attempt limit, otherwise drop — so it never sits
+# as silent *.tending residue.
 if [ "$rc" -ne 0 ]; then
   echo "tend-loop: llm.sh exited $rc" >&2
+  iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  err_tail="$(tail -n 20 "$err_file" 2>/dev/null)"
+  if [ -n "${err_tail//[[:space:]]/}" ]; then
+    printf '## system — %s\n⚠️ error: model exited %d\n%s\n\n' "$iso" "$rc" "$err_tail" >> "$TRANSCRIPT"
+  else
+    printf '## system — %s\n⚠️ error: model exited %d\n\n' "$iso" "$rc" >> "$TRANSCRIPT"
+  fi
+  outcome="$("$NESTLING" resolve "$name" "model exited $rc" 2>&1)" \
+    || echo "tend-loop: resolve failed for $name: $outcome" >&2
   exit "$rc"
 fi
 
