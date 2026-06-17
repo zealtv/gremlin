@@ -27,6 +27,11 @@
 
 set -euo pipefail
 
+if [ -d "${HOME:-}/.local/bin" ]; then
+  PATH="$HOME/.local/bin:$PATH"
+fi
+export PATH
+
 # --- claude (anthropic) -------------------------------------------------
 # Currently active. Sonnet is the balanced default. `Read` is included so the
 # gremlin can open files in its host folder — and so inbound photo turns
