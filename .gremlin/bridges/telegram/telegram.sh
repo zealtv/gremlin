@@ -159,8 +159,135 @@ get_updates() {
     "$(telegram_api getUpdates)"
 }
 
-send_message() {
+# Convert the small Markdown subset that agents emit into Telegram-flavoured
+# HTML (parse_mode=HTML). HTML needs only & < > escaped, versus MarkdownV2 with
+# its 18 reserved characters, so it survives free-form prose far better. This is
+# deliberately agnostic to which agent wrote the text: it keys off Markdown
+# markup, never the author. Anything it cannot map cleanly is left as plain
+# text; anything it gets wrong is caught by the plain-text fallback in the
+# senders, since a malformed entity makes Telegram reject the whole message.
+#
+# Mappings: # headers -> <b><u>..</u></b>; **bold**/*italic*; ~~strike~~;
+# ||spoiler||; `code`; fenced ```lang blocks -> <pre><code class="language-..">;
+# > quotes -> <blockquote> (expandable when long); [text](url) -> <a>. Underscore
+# emphasis is intentionally NOT supported: snake_case and dunder identifiers are
+# common in this codebase-adjacent traffic and must not be mangled into italics.
+markdown_to_telegram_html() {
+  awk '
+  BEGIN { incode = 0; inquote = 0; qbuf = ""; codeclose = "" }
+
+  function esc(s) {
+    gsub(/&/, "\\&amp;", s)
+    gsub(/</, "\\&lt;", s)
+    gsub(/>/, "\\&gt;", s)
+    return s
+  }
+
+  # Replace each occurrence of a paired single-line marker with open/close tags.
+  function wrap(s, re, mlen, o, c,   out, pre, inner) {
+    out = ""
+    while (match(s, re)) {
+      pre = substr(s, 1, RSTART - 1)
+      inner = substr(s, RSTART + mlen, RLENGTH - 2 * mlen)
+      out = out pre o inner c
+      s = substr(s, RSTART + RLENGTH)
+    }
+    return out s
+  }
+
+  function links(s,   out, m, pre, rb, txt, url) {
+    out = ""
+    while (match(s, /\[[^][]*\]\([^()]*\)/)) {
+      m = substr(s, RSTART, RLENGTH)
+      pre = substr(s, 1, RSTART - 1)
+      rb = index(m, "]")
+      txt = substr(m, 2, rb - 2)
+      url = substr(m, rb + 2, length(m) - rb - 2)
+      out = out pre "<a href=\"" url "\">" txt "</a>"
+      s = substr(s, RSTART + RLENGTH)
+    }
+    return out s
+  }
+
+  # Inline formatting for escaped text that holds no inline-code span.
+  function fmt(s) {
+    s = links(s)
+    s = wrap(s, "\\*\\*[^*]+\\*\\*", 2, "<b>", "</b>")
+    s = wrap(s, "\\*[^*]+\\*", 1, "<i>", "</i>")
+    s = wrap(s, "~~[^~]+~~", 2, "<s>", "</s>")
+    s = wrap(s, "\\|\\|[^|]+\\|\\|", 2, "<tg-spoiler>", "</tg-spoiler>")
+    return s
+  }
+
+  # Inline formatting with backtick code spans protected from fmt.
+  function inl(s,   n, arr, i, out) {
+    n = split(s, arr, "`")
+    if (n % 2 == 0) return fmt(s)   # unbalanced backticks: format literally
+    out = ""
+    for (i = 1; i <= n; i++) {
+      if (i % 2 == 1) out = out fmt(arr[i])
+      else out = out "<code>" arr[i] "</code>"
+    }
+    return out
+  }
+
+  function flushquote(   tag) {
+    if (!inquote) return
+    if (length(qbuf) > 300) tag = "<blockquote expandable>"
+    else tag = "<blockquote>"
+    print tag qbuf "</blockquote>"
+    inquote = 0; qbuf = ""
+  }
+
+  {
+    line = $0
+    if (incode) {
+      if (line ~ /^[ \t]*```/) { print copen cbuf codeclose; incode = 0 }
+      else cbuf = (cbuf == "" ? esc(line) : cbuf "\n" esc(line))
+      next
+    }
+    if (line ~ /^[ \t]*```/) {
+      flushquote()
+      lang = line
+      sub(/^[ \t]*```[ \t]*/, "", lang)
+      gsub(/[^A-Za-z0-9+_-]/, "", lang)
+      if (lang != "") { copen = "<pre><code class=\"language-" lang "\">"; codeclose = "</code></pre>" }
+      else { copen = "<pre>"; codeclose = "</pre>" }
+      cbuf = ""
+      incode = 1
+      next
+    }
+    if (line ~ /^[ \t]*>/) {
+      q = line
+      sub(/^[ \t]*> ?/, "", q)
+      q = inl(esc(q))
+      if (inquote) qbuf = qbuf "\n" q
+      else { qbuf = q; inquote = 1 }
+      next
+    }
+    flushquote()
+    if (line ~ /^[ \t]*#+[ \t]+/) {
+      h = line
+      sub(/^[ \t]*#+[ \t]+/, "", h)
+      sub(/[ \t]+#*[ \t]*$/, "", h)
+      print "<b><u>" inl(esc(h)) "</u></b>"
+      next
+    }
+    print inl(esc(line))
+  }
+
+  END {
+    flushquote()
+    if (incode) print copen cbuf codeclose   # unterminated fence at EOF
+  }
+  '
+}
+
+# Low-level sendMessage attempt. $2 is an optional parse_mode. Returns non-zero
+# on any API failure so the caller can fall back to a plainer attempt.
+send_message_api() {
   local text="$1"
+  local mode="${2:-}"
   local response ok description
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
@@ -168,18 +295,33 @@ send_message() {
     return 1
   fi
 
+  # Simulate Telegram rejecting malformed entities, to exercise the fallback.
+  if [ "$mode" = "HTML" ] && [ -n "${TELEGRAM_TEST_HTML_FAIL:-}" ]; then
+    echo "telegram: mock HTML parse failure" >&2
+    return 1
+  fi
+
   if [ -n "${TELEGRAM_TEST_SEND_LOG:-}" ]; then
     {
       printf '%s\n' "---"
+      [ -n "$mode" ] && printf 'parse_mode=%s\n' "$mode"
       printf '%s\n' "$text"
     } >> "$TELEGRAM_TEST_SEND_LOG"
     return 0
   fi
 
-  response="$(curl -fsS -X POST \
-    --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
-    --data-urlencode "text=$text" \
-    "$(telegram_api sendMessage)")" || return 1
+  if [ -n "$mode" ]; then
+    response="$(curl -fsS -X POST \
+      --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+      --data-urlencode "parse_mode=$mode" \
+      --data-urlencode "text=$text" \
+      "$(telegram_api sendMessage)")" || return 1
+  else
+    response="$(curl -fsS -X POST \
+      --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+      --data-urlencode "text=$text" \
+      "$(telegram_api sendMessage)")" || return 1
+  fi
 
   ok="$(printf '%s\n' "$response" | jq -r '.ok')"
   if [ "$ok" != "true" ]; then
@@ -189,9 +331,26 @@ send_message() {
   fi
 }
 
-send_photo() {
+send_message() {
+  local text="$1"
+  local html
+
+  html="$(printf '%s' "$text" | markdown_to_telegram_html)"
+  if send_message_api "$html" "HTML"; then
+    return 0
+  fi
+
+  # The HTML render was rejected (or send failed); retry as plain text so a
+  # formatting slip never costs the user the reply itself.
+  echo "telegram: retrying message as plain text" >&2
+  send_message_api "$text" ""
+}
+
+# Low-level sendPhoto attempt with an optional caption parse_mode.
+send_photo_api() {
   local photo="$1"
-  local caption="${2:-}"
+  local caption="$2"
+  local mode="${3:-}"
   local response ok description
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
@@ -199,10 +358,16 @@ send_photo() {
     return 1
   fi
 
+  if [ "$mode" = "HTML" ] && [ -n "${TELEGRAM_TEST_HTML_FAIL:-}" ]; then
+    echo "telegram: mock HTML parse failure" >&2
+    return 1
+  fi
+
   if [ -n "${TELEGRAM_TEST_SEND_LOG:-}" ]; then
     {
       printf '%s\n' "---"
       printf 'photo=%s\n' "$photo"
+      [ -n "$mode" ] && printf 'parse_mode=%s\n' "$mode"
       [ -n "$caption" ] && printf 'caption=%s\n' "$caption"
     } >> "$TELEGRAM_TEST_SEND_LOG"
     return 0
@@ -215,6 +380,7 @@ send_photo() {
       response="$(curl -fsS -X POST \
         --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
         --data-urlencode "photo=$photo" \
+        ${mode:+--data-urlencode "parse_mode=$mode"} \
         --data-urlencode "caption=$caption" \
         "$(telegram_api sendPhoto)")" || return 1
       ;;
@@ -225,6 +391,7 @@ send_photo() {
       fi
       response="$(curl -fsS -X POST \
         -F "chat_id=$TELEGRAM_CHAT_ID" \
+        ${mode:+-F "parse_mode=$mode"} \
         -F "caption=$caption" \
         -F "photo=@$photo" \
         "$(telegram_api sendPhoto)")" || return 1
@@ -237,6 +404,37 @@ send_photo() {
     echo "telegram: sendPhoto failed: $description" >&2
     return 1
   fi
+}
+
+send_photo() {
+  local photo="$1"
+  local caption="${2:-}"
+  local html_caption
+
+  # A missing local file is a caller error, not a formatting problem: fail fast
+  # rather than burning the HTML attempt and a plain retry on it.
+  case "$photo" in
+    http://* | https://*) ;;
+    *)
+      if [ ! -f "$photo" ]; then
+        echo "telegram: photo not found: $photo" >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  if [ -z "$caption" ]; then
+    send_photo_api "$photo" "" ""
+    return
+  fi
+
+  html_caption="$(printf '%s' "$caption" | markdown_to_telegram_html)"
+  if send_photo_api "$photo" "$html_caption" "HTML"; then
+    return 0
+  fi
+
+  echo "telegram: retrying photo caption as plain text" >&2
+  send_photo_api "$photo" "$caption" ""
 }
 
 send_chat_action() {
