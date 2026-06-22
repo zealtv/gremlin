@@ -173,11 +173,14 @@ trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$timeout_flag" "$PIDFILE"'
       if [ "$recalled" -ge 5 ]; then break; fi
     done < <(printf '%s' "$body" | "$GREMLIN_DIR/.glean/glean.sh" recall 2>/dev/null)
   fi
+  # The current turn is already the tail of the transcript (appended at claim
+  # time above), so dumping the transcript presents it exactly once — headed and
+  # last, which is the active message to answer. No separate trailing echo: a
+  # bare restatement here would duplicate the turn and risk double-counting.
   if [ -s "$TRANSCRIPT" ]; then
     cat "$TRANSCRIPT"
     echo
   fi
-  printf '%s\n' "$body"
 } > "$prompt_file"
 
 # Per-item model override: if the claimed directory contains a .model
