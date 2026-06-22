@@ -113,27 +113,38 @@ After creating, revising, or dropping findings, refresh the index:
 
 ## Promotion
 
-Most findings should stay in Glean and be fetched on demand. A small subset
-should affect every future prompt — these belong in `context/` as
-always-loaded material.
+A finding reaches a prompt three ways: durable in Glean (searchable), recallable
+by trigger (auto-loaded when its `## Triggers` fire on the message), or
+always-loaded via `context/`. Trigger recall covers most needs, so **do not
+routinely suggest promotion.** A finding with good triggers is already there
+when it matters.
 
-Suggest promotion (do not perform it) when a created or revised finding has
-all of these traits:
+First gate: **are triggers sufficient?** If well-chosen triggers will recall the
+finding whenever it is relevant, stop — do nothing about promotion. Strengthen
+the triggers instead if they look weak.
+
+Promote only when *all* of these hold AND you can state why triggers are not
+enough:
 
 - describes the **user** or the **project** itself, not your tools or skills;
-- the user would reasonably expect future sessions to act on it without being
-  reminded;
+- it must shape answers **even when nothing in the message would recall it** —
+  a silent global default such as location or unit system, not a topic the user
+  will mention when it is relevant;
 - it is durable — not tied to a single task or week.
 
-When suggesting, hand the user a ready-to-paste command in your reply:
+When the gate is met, **do the promotion yourself** — create the symlink, then
+refresh the index:
 
 ```sh
 ln -s ../.glean/findings/<id>.md .gremlin/context/<id>.md
+.gremlin/.glean/glean.sh index
 ```
 
-Never create the symlink yourself unless the user asked for always-loaded
-memory or the review item explicitly requires it. Promoting is cheap; undoing
-a bloated always-loaded surface is not.
+Report in your reply what you promoted and the reason triggers fell short; do
+not hand the user a command to paste. Promotion is rare by design, so when a
+finding clears this gate, act on it. Likewise, remove a stale always-loaded
+symlink yourself when trigger recall now covers its use case — that is good
+curation, not loss.
 
 ## Reply
 
@@ -145,5 +156,6 @@ Summarize the result briefly:
 - any merges or drops done in passing, with reasons;
 - any findings that look like they have grown to cover two ideas — flagged
   for the next `curate` pass, not split here;
-- any suggested promotion into `context/`, with the ready-to-paste symlink
-  command.
+- any promotion you performed (see Promotion) — the finding id and why triggers
+  were insufficient. Promote yourself rather than handing over a command, and
+  only when the gate is met; otherwise say nothing about promotion.
