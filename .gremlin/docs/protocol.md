@@ -265,3 +265,54 @@ Tend-loop dispatch by shape, checked in order (first match wins):
   `## system — 💌 message: <body>`.
 - Directory with `instructions.md`, or a file item → model-backed tend →
   `## user —` plus `## assistant —`.
+
+## Work That Outlives A Turn
+
+A single tend is short by design. Long or recurring work is expressed as *many*
+short tends, not one long-running process — turns multiply, the turn does not
+lengthen. There is one writer (the tender) and one inbound arrow
+(`tend → .nest/in/`); progress is just the reply of each step — a real turn the
+bridges already fan out, not a side-channel. Two rhythms:
+
+**Immediate continuation.** A tend does one bounded step, replies with what it
+did and what is next, then re-queues itself by writing a fresh item into its own
+`.nest/in/` via `tools/continue.sh "<next step>"`. The next tend picks it up.
+Stop by replying without re-queuing. This is self-delegation: the inbox arrow
+from `docs/composition.md`, pointed at self. See `skills/long-task.md`.
+
+**Clock-paced goals.** A goal that should wake on a schedule is a groundhog
+`every/<N>m/<slug>/` item; each firing is one bounded tend.
+
+*Quiet by default is the `run.sh` gate.* A model-backed (`instructions.md`) goal
+emits a pushed `## assistant` turn on every firing — inherently chatty. To stay
+quiet, use the executable-`run.sh` shape: the clock drives a cheap silent check
+that prints nothing on a no-change tick (→ no turn, no push, no model cost), and
+prints a line — or escalates to a model tend via `tools/continue.sh` — only on a
+real milestone. Cadence is milestones, not the clock.
+
+*Termination is the author's job.* There is no kernel guard against a runaway
+chain or an undisarmed schedule — a guard would be a framework. A goal disarms
+itself with `.groundhog/groundhog.sh drop <slug>` (or by renaming its schedule
+path to `.paused`). Back every standing `every/<N>m/<goal>` with a
+`once/<YYYY-MM-DD>/<goal>-expire/` one-shot whose `run.sh` drops the goal — a
+dead-man's switch that fires even if the goal never reaches its own done
+condition. `/stop` and `.paused` remain the human backstop.
+
+*Path resolution in a scheduled `run.sh` must be depth-independent.* Groundhog
+materialises every item to `.nest/in/<name>/` regardless of its schedule depth,
+so a `run.sh` cannot count `../` segments to find `.gremlin`. Walk up to the
+directory that contains `.nest`:
+
+```sh
+GREMLIN_DIR="$(d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; \
+  while [ "$d" != / ] && [ ! -d "$d/.nest" ]; do d="$(dirname "$d")"; done; \
+  printf %s "$d")"
+```
+
+### The binding constraint
+
+The in-flight model child must never append to `transcript.md`. The tender is
+the sole transcript writer; a scheduled `run.sh` reports by writing to *stdout*,
+which the tender turns into a `## system — ⚙️ run:` turn. This is why long work
+speaks *between* tends, where the tender is already the only writer — never from
+inside a running model call.
