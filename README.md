@@ -39,7 +39,7 @@ Run `/help` for commands.
 ## Features
 
 - **The agent is a folder.** Copy it, fork it, version it, delete it. There is no hidden state.
-- **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, transcripts, memory, and queues.
+- **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, model presets, transcripts, memory, and queues.
 - **Bring your own model.** A model preset is just `stdin → stdout`. Swap models with `/model <alias>`. Non-LLM scripts work too.
 - **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin say` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
 - **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.gremlin/.nest/in/`.

@@ -8,12 +8,13 @@ PAUSED_FILE="$GREMLIN_DIR/.paused"
 
 dry_run=0
 revert_path=""
+revert_models=0
 case "${1:-}" in
   "")
     ;;
   --dry-run)
     dry_run=1
-    [ "$#" -eq 1 ] || { echo "usage: /update [--dry-run | --revert <path>]" >&2; exit 2; }
+    [ "$#" -eq 1 ] || { echo "usage: /update [--dry-run | --revert <path> | --revert-models]" >&2; exit 2; }
     ;;
   --revert)
     [ "$#" -eq 2 ] || { echo "usage: /update --revert <path>" >&2; exit 2; }
@@ -23,8 +24,12 @@ case "${1:-}" in
       "") echo "--revert path is empty" >&2; exit 2 ;;
     esac
     ;;
+  --revert-models)
+    [ "$#" -eq 1 ] || { echo "usage: /update --revert-models" >&2; exit 2; }
+    revert_models=1
+    ;;
   *)
-    echo "usage: /update [--dry-run | --revert <path>]" >&2
+    echo "usage: /update [--dry-run | --revert <path> | --revert-models]" >&2
     exit 2
     ;;
 esac
@@ -64,12 +69,14 @@ excludes=(
   --exclude='.upstream'
   --exclude='.model'
   --exclude='.paused'
-  # User-specialisable model presets. The README invites editing these;
-  # leave them alone on update. Custom presets (models/local.sh, etc.) are
-  # already safe because rsync has no --delete. Use /update --revert
-  # models/default.sh (or memory.sh) to pull the canonical copy back.
-  --exclude='models/default.sh'
-  --exclude='models/memory.sh'
+  # Model presets are host-owned. A preset is a customisation point — the
+  # README invites editing default/memory/image and overriding them per host —
+  # so update never overlays models/*.sh. (Custom presets like models/local.sh
+  # are also safe: rsync has no --delete.) Pull canonical copies back with
+  # `/update --revert models/<x>.sh` for one, or `/update --revert-models` for
+  # all presets at once. A brand-new canonical preset won't auto-deliver;
+  # --revert it by name to adopt it.
+  --exclude='models/*.sh'
 )
 
 tmp="$(mktemp -d)"
@@ -111,6 +118,21 @@ if [ -n "$revert_path" ]; then
   mkdir -p "$(dirname "$dst_file")"
   cp -p "$src_file" "$dst_file"
   echo "↩️  reverted $revert_path to canonical"
+  exit 0
+fi
+
+if [ "$revert_models" = "1" ]; then
+  shopt -s nullglob
+  restored=0
+  for src_file in "$src"models/*.sh; do
+    name="models/$(basename "$src_file")"
+    dst_file="$GREMLIN_DIR/$name"
+    mkdir -p "$(dirname "$dst_file")"
+    cp -p "$src_file" "$dst_file"
+    echo "↩️  reverted $name to canonical"
+    restored=$((restored + 1))
+  done
+  [ "$restored" = "0" ] && echo "no models/*.sh in canonical to revert"
   exit 0
 fi
 

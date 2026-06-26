@@ -36,6 +36,10 @@ file to track a fork or a local tarball (`file:///path/to/gremlin.tar.gz`).
 
 `/update --revert <path>` fetches canonical and copies one file over the local
 copy, overriding the exclusion list. Use it to pull a clean copy of files
-`/update` normally preserves — `models/default.sh`, `models/memory.sh`,
-`gremlin.md`, `.glean/distil.md` — when a local edit went wrong. Single files
-only; directories are intentionally not supported.
+`/update` normally preserves — any `models/*.sh` preset, `gremlin.md`,
+`.glean/distil.md` — when a local edit went wrong. Single files only;
+directories are intentionally not supported.
+
+`/update --revert-models` restores every `models/*.sh` preset to canonical at
+once. Model presets are host-owned and never overlaid by a normal `/update`, so
+this is the bulk escape hatch when you want the shipped copies back.
