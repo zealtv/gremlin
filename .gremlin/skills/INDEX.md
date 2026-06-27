@@ -18,5 +18,6 @@ When you call a tool, weave its output into the reply naturally. Don't quote the
 - `curate` — user asks to curate, tidy, prune, consolidate, or sweep findings or memory
 - `distil` — user asks to distil, distill, remember, review, or consolidate material for memory
 - `long-task` — a task is too big to finish well in a single turn — including invoking a skill, command, or sub-agents that will run for more than a minute
+- `reflect` — user asks you to reflect, review your own performance, or improve yourself
 - `remind-me` — user asks to be reminded of something at a future time
 - `send-image` — user asks to send or show an image, photo, picture, chart, or graph
