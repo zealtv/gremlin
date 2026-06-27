@@ -121,7 +121,18 @@ per-message bookkeeping.
   pointed at it first, with the original available on demand; without a resizer
   the original is used directly. The tender appends the attachment's absolute
   path so the model can open it.
-- Other non-text updates (stickers, voice, video, …) are still ignored.
+- Voice notes (`.message.voice`, OGG/Opus) are transcribed at ingest: the bridge
+  downloads the audio into a nest item directory as `source.ogg`, runs the
+  `voice` model preset (`models/voice.sh`) to transcribe it, and writes the
+  transcript into `instructions.md` as the turn body — so the user's words become
+  the `## user —` turn and the gremlin's normal reply follows (no `.model`
+  override; speech is text). The `voice` preset defaults to asking the gremlin's
+  own active model to hear the audio (no API key); override `models/voice.sh` with
+  a local engine such as whisper.cpp to save tokens. If transcription fails
+  — including a model that cannot hear audio — the bridge tells the user and
+  keeps the note; it never drops it silently. A `typing` action is sent while the
+  transcription runs.
+- Other non-text updates (stickers, video, …) are still ignored.
 - On first launch, a missing `.cursor` initializes to the current end of
   `transcript.md`; old transcript history is not pushed to Telegram.
 - Every new assistant or system turn is pushed to the configured chat.

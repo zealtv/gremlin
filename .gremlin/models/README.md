@@ -53,6 +53,13 @@ label. Three presets ship as starting points:
   invocation — for claude, include `Read` in `--allowedTools` so it can open the
   image file; codex/gpt-5.x reads images natively. Delegates to `default.sh`
   until specialized.
+- `voice.sh` — speech-to-text preset for inbound voice notes. Unlike the others,
+  its **stdin is the absolute path to one audio file** and its stdout is the
+  verbatim transcript (text only). The Telegram bridge runs it when a voice note
+  arrives; the transcript becomes a normal `## user —` turn, so the gremlin's
+  normal reply follows. It defaults to asking the gremlin's active model to hear
+  the file (no API key) — override it with a local engine (e.g. whisper.cpp) to
+  stop spending tokens on STT, exactly like any preset.
 - `echo.sh` — script-only example that echoes the incoming item
   back, useful as a starting point for routers, fixed-response
   bots, lookup tables, or local rule engines that need a

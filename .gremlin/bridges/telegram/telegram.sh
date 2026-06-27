@@ -645,9 +645,67 @@ ingest_photo() {
   echo "ingested telegram photo as $name"
 }
 
+# ingest_voice <file_id> <ext> <caption>: download an audio note and transcribe
+# it via the `voice` model preset (models/voice.sh), then ingest the resulting
+# TEXT as a normal item — so the transcript becomes the `## user —` turn and the
+# gremlin's normal reply follows. Speech is text, so it belongs in the transcript
+# body, mirroring how the bridge already transforms inbound media (image_resize).
+# The source audio stays in the item dir for provenance. STT failure is surfaced
+# to the user, never dropped.
+ingest_voice() {
+  local file_id="$1"
+  local ext="$2"
+  local caption="$3"
+  local itemdir src text name suffix rc detail errf
+
+  # Presence: the user is now waiting through download + STT + the model turn.
+  # The pulser only sees items already in the nest, so cover the STT gap here.
+  send_chat_action typing || true
+
+  itemdir="$(mktemp -d "$BRIDGE_DIR/telegram-voice.XXXXXX")"
+  src="$itemdir/source.$ext"
+
+  if ! download_file "$file_id" "$src"; then
+    rm -rf "$itemdir"
+    echo "telegram: failed to download voice $file_id" >&2
+    send_message "🎙️ I couldn't fetch that voice note from Telegram." || true
+    return 1
+  fi
+
+  # STT stderr goes to a temp file outside the item dir so it is never ingested
+  # as an attachment.
+  errf="$(mktemp)"
+  rc=0
+  text="$(printf '%s' "$src" | "$GREMLIN_DIR/models/voice.sh" 2>"$errf")" || rc=$?
+  if [ "$rc" -ne 0 ] || [ -z "${text//[[:space:]]/}" ]; then
+    detail="$(tail -n 1 "$errf" 2>/dev/null)"
+    rm -f "$errf"
+    echo "telegram: transcription failed for $file_id: ${detail:-no transcript}" >&2
+    send_message "🎙️ I couldn't transcribe that voice note: ${detail:-no transcript produced}" || true
+    rm -rf "$itemdir"
+    return 1
+  fi
+  rm -f "$errf"
+
+  {
+    printf 'The user sent a voice note via Telegram (transcribed below).\n\n'
+    [ -n "$caption" ] && printf 'Caption: %s\n\n' "$caption"
+    printf '🎙️ (voice) %s\n' "$text"
+  } > "$itemdir/instructions.md"
+  # No .model override: this is a normal text turn for the default preset.
+
+  suffix="$(basename "$itemdir")"
+  suffix="${suffix#telegram-voice.}"
+  name="$(date -u +%Y%m%dT%H%M%SZ)-telegram-voice-$suffix"
+  "$NESTLING" ingest "$itemdir" "$name" >/dev/null
+  rm -rf "$itemdir"
+  echo "ingested telegram voice as $name"
+}
+
 handle_update() {
   local update="$1"
   local update_id chat_id text caption photo_id doc_mime doc_id ext next_offset
+  local voice_id
 
   update_id="$(printf '%s\n' "$update" | jq -r '.update_id')"
   next_offset=$((update_id + 1))
@@ -693,6 +751,17 @@ handle_update() {
       return 0
       ;;
   esac
+
+  # Voice notes arrive as `.message.voice` (OGG/Opus). Transcribed to text at
+  # ingest, so they flow on as a normal text turn.
+  voice_id="$(printf '%s\n' "$update" | jq -r '.message.voice.file_id? // empty')"
+  if [ -n "$voice_id" ]; then
+    if ! ingest_voice "$voice_id" "ogg" "$caption"; then
+      echo "telegram: voice ingest failed for update $update_id" >&2
+    fi
+    write_update_offset "$next_offset"
+    return 0
+  fi
 
   if [ -z "$text" ]; then
     echo "ignored telegram update: non-text message"
