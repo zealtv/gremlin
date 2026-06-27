@@ -46,7 +46,7 @@ The tender builds each prompt from:
 gremlin-managed part of that surface: entries are symlinks by convention, and
 the tender reads only symlinked `.md` entries there, so real files such as
 `context/system/README.md` are ignored. `gremlin doctor` creates or restores the
-managed symlinks for skills, tools, and memory.
+managed symlinks for skills, tools, memory, and turn-taking.
 
 Docs are not loaded automatically. Read this file, `README.md`, or
 `docs/composition.md` only when the task calls for protocol detail.
@@ -213,6 +213,14 @@ Initial sub-categories:
 The tender writes the appropriate turn for the item it tended:
 `## user —` plus `## assistant —` for model-backed tends, `## system —`
 for non-model tends (scheduled `message.md`, `run.sh`).
+
+A model-backed tend can decline to write a turn at all: a reply of exactly
+`<silent>` is a **stated sentinel** meaning *the gremlin chose not to speak*.
+The tender completes the item into `.nest/out/` but writes no `## assistant —`
+turn. This is the deliberate opposite of the loud `⚠️ error: empty model reply`
+above: silence is stated, an empty reply is an accident, and the two stay
+distinct so empties still surface preset/auth failures. The gremlin learns the
+sentinel from `context/system/turntaking.md`.
 
 Outside-the-tender callers write `## system —` directly: slash commands
 like `/stop` (`⚙️ run: item aborted`), future bridges with their own

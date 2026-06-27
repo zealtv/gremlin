@@ -56,6 +56,7 @@ done
 repair_link "skills.md" "../../skills/INDEX.md"
 repair_link "tools.md" "../../tools/README.md"
 repair_link "memory.md" "../../.glean/findings/INDEX.md"
+repair_link "turntaking.md" "../../docs/turntaking.md"
 
 check_preset() {
   local alias="$1"

@@ -275,11 +275,17 @@ iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Transcript format: `## <role> — <iso>` header, body, single blank line.
 # One `>>` per turn so concurrent appends with `say` don't interleave.
 #
+# A reply of exactly `<silent>` is a stated sentinel: the gremlin chose not
+# to speak. Complete the item but write no turn. Checked before the empty
+# branch so a genuine empty reply stays a loud error, not silence.
+#
 # Empty reply on a clean exit: the preset returned no stdout (a harness
 # refusal, an auth/rate condition that leaked to stderr, etc). Surface it
 # as a loud system error rather than a silent empty `## assistant —`,
 # which bridges correctly decline to push.
-if [ -z "${reply//[[:space:]]/}" ]; then
+if [ "${reply//[[:space:]]/}" = "<silent>" ]; then
+  : # silence: stated sentinel, no transcript turn
+elif [ -z "${reply//[[:space:]]/}" ]; then
   printf '## system — %s\n⚠️ error: empty model reply\n\n' "$iso" >> "$TRANSCRIPT"
 else
   printf '## assistant — %s\n%s\n\n' "$iso" "$reply" >> "$TRANSCRIPT"
