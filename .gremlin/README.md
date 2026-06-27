@@ -66,6 +66,7 @@ More detail: `bridges/telegram/README.md`.
 - `gremlin.md`: identity, personality, purpose, voice.
 - `context/`: the always-loaded broadcast surface; `context/system/` is gremlin-managed.
 - `.glean/`: memory workbench for distilled findings; see `.glean/README.md`.
+- `.loom/`: durable goals that outlive a turn and human-gated self-edit proposals; see `.loom/README.md`.
 - `skills/*.md`: procedures the gremlin can follow.
 - `tools/*.sh`: bash tools the gremlin can run.
 - `models/*.sh`: model runner presets.
@@ -113,8 +114,11 @@ Keep personal state out of this repo.
 - Promote personal-copy ideas back by rewriting generic versions in canonical.
 - Use `.gremlin/.nest/README.md` and `.gremlin/.groundhog/README.md` to
   understand the nested protocols.
-- Plan work in a local [loom](https://github.com/zealtv/loom) (`.loom/`); it is
-  development state, kept out of this repo via `.gitignore`.
+- Plan maintainer work in the repo-root [loom](https://github.com/zealtv/loom)
+  (`/.loom/`); it is development state, kept out of this repo via `.gitignore`.
+  This is distinct from the gremlin's own shipped loom (`.gremlin/.loom/`, a
+  deployed gremlin's durable goals) — the two never collide: the `.gitignore`
+  pattern is anchored to the root loom only.
 
 Before pushing:
 
@@ -122,6 +126,8 @@ Before pushing:
 - `.gremlin/transcript.md` is empty.
 - `.gremlin/.nest/in/`, `.gremlin/.groundhog/out/`, and `.gremlin/.groundhog/fired/` contain only
   placeholder files.
+- `.gremlin/.loom/threads/`, `.gremlin/.loom/tied/`, and `.gremlin/.loom/dropped/` contain
+  only placeholder files.
 - `.gremlin/context/` contains no personal facts.
 - `.gremlin/gremlin.md` is generic.
 - No `.env`, API keys, bridge configs, or personal metadata are tracked.
@@ -137,3 +143,4 @@ Before pushing:
 - `.nest/README.md`: the nestling inbox/claim/complete protocol.
 - `.groundhog/README.md`: the schedule/tick protocol.
 - `.glean/README.md`: the gleam memory protocol.
+- `.loom/README.md`: the loom protocol for goals that outlive a turn.

@@ -59,6 +59,21 @@ repair_link "memory.md" "../../.glean/findings/INDEX.md"
 repair_link "turntaking.md" "../../docs/turntaking.md"
 repair_link "media-embeds.md" "../../docs/media-embeds.md"
 
+# The gremlin's own loom: ensure its trays exist. loom.sh + README ride
+# /update, but the runtime trays are excluded from the overlay, so a fresh
+# install (or a deleted tray) needs them seeded. loom.sh init is idempotent.
+LOOM_DIR="$GREMLIN_DIR/.loom"
+if [ -x "$LOOM_DIR/loom.sh" ]; then
+  if [ -d "$LOOM_DIR/threads" ] && [ -d "$LOOM_DIR/tied" ] && [ -d "$LOOM_DIR/dropped" ]; then
+    echo "ok .loom trays"
+  else
+    "$LOOM_DIR/loom.sh" init >/dev/null
+    echo "initialized .loom trays"
+  fi
+else
+  echo "‼️  .loom/loom.sh MISSING — run /update to restore the loom tool"
+fi
+
 check_preset() {
   local alias="$1"
   local path="$GREMLIN_DIR/models/$alias.sh"

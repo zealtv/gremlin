@@ -7,5 +7,7 @@
 .gremlin/bridges/*/.update-offset
  
 .claude/
-.loom/
+# maintainer's dev loom only — anchored so it does NOT catch the shipped
+# .gremlin/.loom/ (a deployed gremlin's own loom, which is tracked canonical).
+/.loom/
 council/

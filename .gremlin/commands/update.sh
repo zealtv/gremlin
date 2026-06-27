@@ -64,6 +64,11 @@ excludes=(
   --exclude='.glean/out/'
   --exclude='.glean/dropped/'
   --exclude='.glean/distil.md'
+  # The gremlin's own loom: trays are runtime work (goals, ties, drops,
+  # human-gated self-edit proposals). loom.sh + README ride the overlay.
+  --exclude='.loom/threads/'
+  --exclude='.loom/tied/'
+  --exclude='.loom/dropped/'
   --exclude='context/'
   --exclude='gremlin.md'
   --exclude='.upstream'
