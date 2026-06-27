@@ -650,8 +650,10 @@ ingest_photo() {
 # TEXT as a normal item — so the transcript becomes the `## user —` turn and the
 # gremlin's normal reply follows. Speech is text, so it belongs in the transcript
 # body, mirroring how the bridge already transforms inbound media (image_resize).
-# The source audio stays in the item dir for provenance. STT failure is surfaced
-# to the user, never dropped.
+# The source audio is kept in the item dir for provenance as a dotfile
+# (.source.<ext>) so the tender's `*` glob does not re-attach it to the reply turn
+# — the transcript is already the record. STT failure is surfaced to the user,
+# never dropped.
 ingest_voice() {
   local file_id="$1"
   local ext="$2"
@@ -663,7 +665,9 @@ ingest_voice() {
   send_chat_action typing || true
 
   itemdir="$(mktemp -d "$BRIDGE_DIR/telegram-voice.XXXXXX")"
-  src="$itemdir/source.$ext"
+  # Dotfile: kept for provenance but skipped by the tender's `*` attachment glob,
+  # so the audio is transcribed once and not re-fed to the reply model.
+  src="$itemdir/.source.$ext"
 
   if ! download_file "$file_id" "$src"; then
     rm -rf "$itemdir"

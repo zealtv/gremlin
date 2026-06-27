@@ -122,8 +122,10 @@ per-message bookkeeping.
   the original is used directly. The tender appends the attachment's absolute
   path so the model can open it.
 - Voice notes (`.message.voice`, OGG/Opus) are transcribed at ingest: the bridge
-  downloads the audio into a nest item directory as `source.ogg`, runs the
-  `voice` model preset (`models/voice.sh`) to transcribe it, and writes the
+  downloads the audio into a nest item directory as `.source.ogg` (a dotfile, so
+  it is kept for provenance — it rides to `.nest/out/` — but the tender does not
+  re-attach it to the reply turn), runs the `voice` model preset
+  (`models/voice.sh`) to transcribe it, and writes the
   transcript into `instructions.md` as the turn body — so the user's words become
   the `## user —` turn and the gremlin's normal reply follows (no `.model`
   override; speech is text). The `voice` preset defaults to asking the gremlin's
