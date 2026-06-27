@@ -146,6 +146,15 @@ per-message bookkeeping.
   `path` resolves against the host folder (the gremlin's working directory); an
   absolute path or an `http(s)://` URL is used as-is. A missing local file logs
   an error and fails the push rather than sending a broken turn.
+- Voice: a turn may embed `🔊 [text-to-speak](tts:)`. The text is synthesized to
+  an OGG/Opus file by the `tts` model preset (`models/tts.sh`) and sent as a
+  voice message (`sendVoice`); the rest of the turn, with the markup stripped, is
+  sent as a normal message. The audio is generated at send time and never stored —
+  the transcript keeps the `(tts:)` markup as the source of truth. The default
+  preset needs a TTS engine on the host (`espeak-ng`/`espeak` + `ffmpeg`); a
+  missing engine or a failed render logs an error and fails the push rather than
+  silently dropping the spoken turn (same as a missing image file). Override
+  `models/tts.sh` to use a nicer voice.
 - `/start` is not special-cased; Telegram's setup message reaches the gremlin as
   ordinary text.
 

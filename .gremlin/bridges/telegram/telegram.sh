@@ -146,6 +146,21 @@ image_resize() {
   fi
 }
 
+# render_tts <text> <dest>: synthesize <text> to an OGG/Opus voice file at <dest>
+# via the `tts` model preset (models/tts.sh) — the audio analogue of how
+# ingest_voice runs the `voice` preset for STT. In tests, TELEGRAM_TEST_TTS_SRC
+# short-circuits synthesis by copying a local fixture, mirroring download_file.
+render_tts() {
+  local text="$1" dest="$2"
+
+  if [ -n "${TELEGRAM_TEST_TTS_SRC:-}" ]; then
+    cp "$TELEGRAM_TEST_TTS_SRC" "$dest"
+    return
+  fi
+
+  printf '%s' "$text" | "$GREMLIN_DIR/models/tts.sh" > "$dest"
+}
+
 get_updates() {
   local offset="$1"
   if [ -n "${TELEGRAM_TEST_UPDATES_FILE:-}" ]; then
@@ -437,6 +452,46 @@ send_photo() {
   send_photo_api "$photo" "$caption" ""
 }
 
+# send_voice <file>: upload a local OGG/Opus file as a Telegram voice message.
+# There is no caption/HTML path (the spoken text is the audio; any accompanying
+# text is sent separately by push_turn), so unlike send_photo this is a single
+# layer. A missing/failed render is a caller error: fail loudly, do not drop the
+# turn (mirrors the image-missing-file behavior).
+send_voice() {
+  local voice="$1"
+  local response ok description
+
+  if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
+    echo "telegram: mock voice failure" >&2
+    return 1
+  fi
+
+  if [ -n "${TELEGRAM_TEST_SEND_LOG:-}" ]; then
+    {
+      printf '%s\n' "---"
+      printf 'voice=%s\n' "$voice"
+    } >> "$TELEGRAM_TEST_SEND_LOG"
+    return 0
+  fi
+
+  if [ ! -f "$voice" ]; then
+    echo "telegram: voice not found: $voice" >&2
+    return 1
+  fi
+
+  response="$(curl -fsS -X POST \
+    -F "chat_id=$TELEGRAM_CHAT_ID" \
+    -F "voice=@$voice;type=audio/ogg" \
+    "$(telegram_api sendVoice)")" || return 1
+
+  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
+  if [ "$ok" != "true" ]; then
+    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
+    echo "telegram: sendVoice failed: $description" >&2
+    return 1
+  fi
+}
+
 send_chat_action() {
   local action="$1"
   local response ok description
@@ -524,35 +579,60 @@ extract_pushable_turns() {
   '
 }
 
-# A pushable turn may embed images as markdown: ![caption](path-or-url).
-# Each reference becomes a sendPhoto (caption from the alt text); the remaining
-# text, with the image markdown stripped, is sent as a normal message. Local
-# paths are resolved against the host folder so the gremlin can reference files
-# it created with a relative path.
+# A pushable turn may embed media in its body:
+#   - images as markdown: ![caption](path-or-url) -> sendPhoto (alt text caption)
+#   - speech as a labelled link: 🔊 [text-to-speak](tts:) -> sendVoice
+# Each reference is sent as its own message; the remaining text, with the media
+# markup stripped, is sent as a normal message. Image paths resolve against the
+# host folder so the gremlin can reference files it created with a relative path.
+# Voice audio is synthesized at send time (models/tts.sh) and never stored — the
+# transcript stays text, with the `(tts:)` markup as the source of truth.
 push_turn() {
   local turn="$1"
-  local images text line photo caption
+  local images voices text line photo caption speak audio
 
+  voices="$(printf '%s\n' "$turn" | grep -oE '🔊 \[[^]]*\]\(tts:[^)]*\)' || true)"
   images="$(printf '%s\n' "$turn" | grep -oE '!\[[^]]*\]\([^)]+\)' || true)"
-  text="$(printf '%s\n' "$turn" | sed -E 's/!\[[^]]*\]\([^)]+\)//g')"
+  text="$(printf '%s\n' "$turn" | sed -E 's/!\[[^]]*\]\([^)]+\)//g; s/🔊 \[[^]]*\]\(tts:[^)]*\)//g')"
 
   if [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
     send_message "$text" || return 1
   fi
 
-  [ -n "$images" ] || return 0
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    caption="$(printf '%s' "$line" | sed -E 's/^!\[([^]]*)\].*/\1/')"
-    photo="$(printf '%s' "$line" | sed -E 's/^!\[[^]]*\]\(([^)]+)\)$/\1/')"
-    case "$photo" in
-      http://* | https://* | /*) : ;;
-      *) photo="$HOST_DIR/$photo" ;;
-    esac
-    send_photo "$photo" "$caption" || return 1
-  done <<EOF_IMAGES
+  if [ -n "$images" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      caption="$(printf '%s' "$line" | sed -E 's/^!\[([^]]*)\].*/\1/')"
+      photo="$(printf '%s' "$line" | sed -E 's/^!\[[^]]*\]\(([^)]+)\)$/\1/')"
+      case "$photo" in
+        http://* | https://* | /*) : ;;
+        *) photo="$HOST_DIR/$photo" ;;
+      esac
+      send_photo "$photo" "$caption" || return 1
+    done <<EOF_IMAGES
 $images
 EOF_IMAGES
+  fi
+
+  [ -n "$voices" ] || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    speak="$(printf '%s' "$line" | sed -E 's/^🔊 \[([^]]*)\]\(tts:[^)]*\)$/\1/')"
+    [ -n "$(printf '%s' "$speak" | tr -d '[:space:]')" ] || continue
+    audio="$(mktemp "$BRIDGE_DIR/telegram-tts.XXXXXX")"
+    if ! render_tts "$speak" "$audio"; then
+      rm -f "$audio"
+      echo "telegram: TTS render failed for: $speak" >&2
+      return 1
+    fi
+    if ! send_voice "$audio"; then
+      rm -f "$audio"
+      return 1
+    fi
+    rm -f "$audio"
+  done <<EOF_VOICES
+$voices
+EOF_VOICES
 }
 
 push_transcript_once() {

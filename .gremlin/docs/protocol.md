@@ -235,6 +235,16 @@ Bridges may style `system` turns by emoji prefix (e.g. dimmed, framed,
 icon-prefixed). They must not eat or rewrite the body — the emoji+label
 is part of the message.
 
+A turn body may also carry **media embeds** a media-capable bridge renders into
+native attachments, stripping the markup from the surrounding text:
+
+- `![caption](path-or-url)` — an image, sent as a photo.
+- `🔊 [text-to-speak](tts:)` — speech, synthesized at send time and sent as a
+  voice message. The transcript stays text: the `(tts:)` markup is the source of
+  truth, audio is generated on the way out and not stored, so the one-writer and
+  git-diffable transcript stay intact. A bridge that cannot render an embed
+  leaves the markup as plain text.
+
 ## Data Flow
 
 Every inbound item flows through `.nest/in/`; the tender is the only writer

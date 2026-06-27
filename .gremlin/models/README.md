@@ -60,6 +60,13 @@ label. Three presets ship as starting points:
   normal reply follows. It defaults to asking the gremlin's active model to hear
   the file (no API key) — override it with a local engine (e.g. whisper.cpp) to
   stop spending tokens on STT, exactly like any preset.
+- `tts.sh` — text-to-speech preset for outbound voice, the inverse of `voice.sh`:
+  its **stdin is text** and its **stdout is OGG/Opus audio bytes**. The Telegram
+  bridge runs it when an assistant turn embeds `🔊 [text](tts:)`, then sends the
+  audio as a voice message. Unlike `voice.sh`, there is no no-API-key way to make
+  the chat model speak, so it needs a real engine: the default uses
+  `espeak-ng`/`espeak` + `ffmpeg` and fails loudly if they are absent. Override it
+  with a nicer engine (e.g. Piper) for a better voice.
 - `echo.sh` — script-only example that echoes the incoming item
   back, useful as a starting point for routers, fixed-response
   bots, lookup tables, or local rule engines that need a
