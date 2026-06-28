@@ -134,18 +134,32 @@ per-message bookkeeping.
   — including a model that cannot hear audio — the bridge tells the user and
   keeps the note; it never drops it silently. A `typing` action is sent while the
   transcription runs.
-- Other non-text updates (stickers, video, …) are still ignored.
+- Documents of any other type (zip, pdf, txt, csv, json, …) are captured: the
+  bridge downloads the file into a nest item directory under its real (sanitized)
+  filename and writes an `instructions.md` framing the turn (filename, mime,
+  caption). No `.model` override — the default preset (Bash + Read) opens it, and
+  the tender appends the attachment's absolute path. A failed download (including
+  Telegram's 20 MB `getFile` cap) tells the user and ingests nothing.
+- Other non-text updates the bridge can't handle yet (stickers, video, audio,
+  polls, locations, …) are skipped with a short message back to the user naming
+  what was skipped — never dropped silently. The no-chat / wrong-chat guards stay
+  silent (replying there would talk to the wrong chat).
 - On first launch, a missing `.cursor` initializes to the current end of
   `transcript.md`; old transcript history is not pushed to Telegram.
 - Every new assistant or system turn is pushed to the configured chat.
   System turns (`⚙️ run:`, `⚠️ error:`, `💌 message:`, …) go through with their
   emoji+label intact — the body is sent verbatim.
-- Images: a turn may embed `![caption](path-or-url)`. Each reference is sent as
-  a photo (`sendPhoto`) with the alt text as the caption; the rest of the turn,
-  with the image markdown stripped, is sent as a normal message. A relative
-  `path` resolves against the host folder (the gremlin's working directory); an
-  absolute path or an `http(s)://` URL is used as-is. A missing local file logs
-  an error and fails the push rather than sending a broken turn.
+- Images: a turn may embed `🖼️ [caption](path-or-url)` (the markdown form
+  `![caption](path-or-url)` is accepted as a silent back-compat alias). Each
+  reference is sent as a photo (`sendPhoto`) with the caption; the rest of the
+  turn, with the markup stripped, is sent as a normal message. A relative `path`
+  resolves against the host folder (the gremlin's working directory); an absolute
+  path or an `http(s)://` URL is used as-is. A missing local file logs an error
+  and fails the push rather than sending a broken turn.
+- Files: a turn may embed `📎 [caption](path-or-url)`. Each reference is sent as a
+  native document (`sendDocument`) with the caption; the rest of the turn, with
+  the markup stripped, is sent as a normal message. Path resolution and the
+  missing-file behavior match images.
 - Voice: a turn may embed `🔊 [text-to-speak](tts:)`. The text is synthesized to
   an OGG/Opus file by the `tts` model preset (`models/tts.sh`) and sent as a
   voice message (`sendVoice`); the rest of the turn, with the markup stripped, is

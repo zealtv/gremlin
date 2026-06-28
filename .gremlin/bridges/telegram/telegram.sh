@@ -114,8 +114,10 @@ download_file() {
   local response ok file_path
 
   if [ -n "${TELEGRAM_TEST_FILE_SRC:-}" ]; then
+    # Propagate the copy's exit status so a missing fixture exercises the
+    # download-failure path, just as a failing curl would in production.
     cp "$TELEGRAM_TEST_FILE_SRC" "$dest"
-    return 0
+    return
   fi
 
   response="$(curl -fsS --get \
@@ -452,6 +454,99 @@ send_photo() {
   send_photo_api "$photo" "$caption" ""
 }
 
+# Low-level sendDocument attempt with an optional caption parse_mode.
+send_document_api() {
+  local document="$1"
+  local caption="$2"
+  local mode="${3:-}"
+  local response ok description
+
+  if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
+    echo "telegram: mock document failure" >&2
+    return 1
+  fi
+
+  if [ "$mode" = "HTML" ] && [ -n "${TELEGRAM_TEST_HTML_FAIL:-}" ]; then
+    echo "telegram: mock HTML parse failure" >&2
+    return 1
+  fi
+
+  if [ -n "${TELEGRAM_TEST_SEND_LOG:-}" ]; then
+    {
+      printf '%s\n' "---"
+      printf 'document=%s\n' "$document"
+      [ -n "$mode" ] && printf 'parse_mode=%s\n' "$mode"
+      [ -n "$caption" ] && printf 'caption=%s\n' "$caption"
+    } >> "$TELEGRAM_TEST_SEND_LOG"
+    return 0
+  fi
+
+  # http(s) targets are handed to Telegram as a URL; everything else is a local
+  # file uploaded with multipart form data.
+  case "$document" in
+    http://* | https://*)
+      response="$(curl -fsS -X POST \
+        --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+        --data-urlencode "document=$document" \
+        ${mode:+--data-urlencode "parse_mode=$mode"} \
+        --data-urlencode "caption=$caption" \
+        "$(telegram_api sendDocument)")" || return 1
+      ;;
+    *)
+      if [ ! -f "$document" ]; then
+        echo "telegram: document not found: $document" >&2
+        return 1
+      fi
+      response="$(curl -fsS -X POST \
+        -F "chat_id=$TELEGRAM_CHAT_ID" \
+        ${mode:+-F "parse_mode=$mode"} \
+        -F "caption=$caption" \
+        -F "document=@$document" \
+        "$(telegram_api sendDocument)")" || return 1
+      ;;
+  esac
+
+  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
+  if [ "$ok" != "true" ]; then
+    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
+    echo "telegram: sendDocument failed: $description" >&2
+    return 1
+  fi
+}
+
+# send_document <path-or-url> [caption]: upload a generic file as a native
+# Telegram document (the outbound side of recv-files). Caption gets the same
+# HTML→plain fallback as send_photo. A missing local file is a caller error:
+# fail fast rather than burning the HTML attempt and a plain retry on it.
+send_document() {
+  local document="$1"
+  local caption="${2:-}"
+  local html_caption
+
+  case "$document" in
+    http://* | https://*) ;;
+    *)
+      if [ ! -f "$document" ]; then
+        echo "telegram: document not found: $document" >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  if [ -z "$caption" ]; then
+    send_document_api "$document" "" ""
+    return
+  fi
+
+  html_caption="$(printf '%s' "$caption" | markdown_to_telegram_html)"
+  if send_document_api "$document" "$html_caption" "HTML"; then
+    return 0
+  fi
+
+  echo "telegram: retrying document caption as plain text" >&2
+  send_document_api "$document" "$caption" ""
+}
+
 # send_voice <file>: upload a local OGG/Opus file as a Telegram voice message.
 # There is no caption/HTML path (the spoken text is the audio; any accompanying
 # text is sent separately by push_turn), so unlike send_photo this is a single
@@ -579,21 +674,33 @@ extract_pushable_turns() {
   '
 }
 
-# A pushable turn may embed media in its body:
-#   - images as markdown: ![caption](path-or-url) -> sendPhoto (alt text caption)
+# A pushable turn may embed media in its body, with one emoji-prefixed verb per
+# media type:
 #   - speech as a labelled link: 🔊 [text-to-speak](tts:) -> sendVoice
+#   - a file attachment:         📎 [caption](path-or-url) -> sendDocument
+#   - an image:                  🖼️ [caption](path-or-url) -> sendPhoto
+# The markdown form ![caption](path-or-url) is also accepted for images as a
+# silent back-compat alias (vision models emit it, and old transcripts contain
+# it) — it routes to sendPhoto too but is undocumented going forward.
 # Each reference is sent as its own message; the remaining text, with the media
-# markup stripped, is sent as a normal message. Image paths resolve against the
-# host folder so the gremlin can reference files it created with a relative path.
-# Voice audio is synthesized at send time (models/tts.sh) and never stored — the
-# transcript stays text, with the `(tts:)` markup as the source of truth.
+# markup stripped, is sent as a normal message. File/image paths resolve against
+# the host folder so the gremlin can reference files it created with a relative
+# path. Voice audio is synthesized at send time (models/tts.sh) and never stored
+# — the transcript stays text, with the `(tts:)` markup as the source of truth.
 push_turn() {
   local turn="$1"
-  local images voices text line photo caption speak audio
+  local images voices docs imgemoji text line photo caption speak audio doc
 
   voices="$(printf '%s\n' "$turn" | grep -oE '🔊 \[[^]]*\]\(tts:[^)]*\)' || true)"
+  docs="$(printf '%s\n' "$turn" | grep -oE '📎 \[[^]]*\]\([^)]+\)' || true)"
   images="$(printf '%s\n' "$turn" | grep -oE '!\[[^]]*\]\([^)]+\)' || true)"
-  text="$(printf '%s\n' "$turn" | sed -E 's/!\[[^]]*\]\([^)]+\)//g; s/🔊 \[[^]]*\]\(tts:[^)]*\)//g')"
+  # Normalize the 🖼️ verb to the markdown shape so a single loop sends both forms.
+  imgemoji="$(printf '%s\n' "$turn" | grep -oE '🖼️ \[[^]]*\]\([^)]+\)' \
+    | sed -E 's/^🖼️ \[([^]]*)\]\(([^)]+)\)$/![\1](\2)/' || true)"
+  if [ -n "$imgemoji" ]; then
+    images="${images:+$images$'\n'}$imgemoji"
+  fi
+  text="$(printf '%s\n' "$turn" | sed -E 's/📎 \[[^]]*\]\([^)]+\)//g; s/🖼️ \[[^]]*\]\([^)]+\)//g; s/!\[[^]]*\]\([^)]+\)//g; s/🔊 \[[^]]*\]\(tts:[^)]*\)//g')"
 
   if [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
     send_message "$text" || return 1
@@ -612,6 +719,21 @@ push_turn() {
     done <<EOF_IMAGES
 $images
 EOF_IMAGES
+  fi
+
+  if [ -n "$docs" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      caption="$(printf '%s' "$line" | sed -E 's/^📎 \[([^]]*)\].*/\1/')"
+      doc="$(printf '%s' "$line" | sed -E 's/^📎 \[[^]]*\]\(([^)]+)\)$/\1/')"
+      case "$doc" in
+        http://* | https://* | /*) : ;;
+        *) doc="$HOST_DIR/$doc" ;;
+      esac
+      send_document "$doc" "$caption" || return 1
+    done <<EOF_DOCS
+$docs
+EOF_DOCS
   fi
 
   [ -n "$voices" ] || return 0
@@ -786,10 +908,64 @@ ingest_voice() {
   echo "ingested telegram voice as $name"
 }
 
+# ingest_document <file_id> <file_name> <mime> <caption>: download an arbitrary
+# file (zip/txt/pdf/csv/json/…) into a nest item dir under its real filename and
+# ingest it. Unlike images/voice it gets no transformation, no preview and no
+# .model — a generic file rides the mechanisms that already exist: the default
+# preset (Bash + Read) can open it, and the tender surfaces it under
+# `## attachments` as an absolute path. Download failure (including the 20 MB
+# getFile cap) is surfaced to the user, never dropped silently.
+ingest_document() {
+  local file_id="$1"
+  local file_name="$2"
+  local mime="$3"
+  local caption="$4"
+  local itemdir name suffix safe_name dest ext
+
+  itemdir="$(mktemp -d "$BRIDGE_DIR/telegram-doc.XXXXXX")"
+
+  # Reduce the declared filename to a single, safe path component so a hostile or
+  # empty name can't escape the item dir or clobber a control file. Fall back to
+  # file.<ext-from-mime> when nothing usable remains.
+  safe_name="${file_name##*/}"
+  safe_name="${safe_name//[^A-Za-z0-9._-]/_}"
+  case "$safe_name" in
+    "" | "." | ".." | instructions.md | .model)
+      ext="${mime##*/}"
+      ext="${ext//[^A-Za-z0-9]/}"
+      safe_name="file${ext:+.$ext}"
+      ;;
+  esac
+  dest="$itemdir/$safe_name"
+
+  if ! download_file "$file_id" "$dest"; then
+    rm -rf "$itemdir"
+    echo "telegram: failed to download document $file_id" >&2
+    send_message "📎 I couldn't fetch that file from Telegram (it may be over the 20 MB limit)." || true
+    return 1
+  fi
+
+  {
+    printf 'The user sent a file via Telegram.\n\n'
+    printf 'Filename: %s\n' "$safe_name"
+    [ -n "$mime" ] && printf 'Type: %s\n' "$mime"
+    [ -n "$caption" ] && printf 'Caption: %s\n' "$caption"
+    printf '\nThe file is at `%s`. Open it and respond to the user about it.\n' "$safe_name"
+  } > "$itemdir/instructions.md"
+  # No .model override: the default preset (Bash + Read) handles text/zip/csv/etc.
+
+  suffix="$(basename "$itemdir")"
+  suffix="${suffix#telegram-doc.}"
+  name="$(date -u +%Y%m%dT%H%M%SZ)-telegram-doc-$suffix"
+  "$NESTLING" ingest "$itemdir" "$name" >/dev/null
+  rm -rf "$itemdir"
+  echo "ingested telegram document as $name"
+}
+
 handle_update() {
   local update="$1"
-  local update_id chat_id text caption photo_id doc_mime doc_id ext next_offset
-  local voice_id
+  local update_id chat_id text caption photo_id doc_mime doc_id doc_name ext next_offset
+  local voice_id kind
 
   update_id="$(printf '%s\n' "$update" | jq -r '.update_id')"
   next_offset=$((update_id + 1))
@@ -836,6 +1012,18 @@ handle_update() {
       ;;
   esac
 
+  # Any other document (zip, pdf, txt, csv, json, …) → ingest generically so the
+  # gremlin can open it. The image/* case above has already claimed images.
+  doc_id="$(printf '%s\n' "$update" | jq -r '.message.document.file_id? // empty')"
+  if [ -n "$doc_id" ]; then
+    doc_name="$(printf '%s\n' "$update" | jq -r '.message.document.file_name? // empty')"
+    if ! ingest_document "$doc_id" "$doc_name" "$doc_mime" "$caption"; then
+      echo "telegram: document ingest failed for update $update_id" >&2
+    fi
+    write_update_offset "$next_offset"
+    return 0
+  fi
+
   # Voice notes arrive as `.message.voice` (OGG/Opus). Transcribed to text at
   # ingest, so they flow on as a normal text turn.
   voice_id="$(printf '%s\n' "$update" | jq -r '.message.voice.file_id? // empty')"
@@ -848,7 +1036,24 @@ handle_update() {
   fi
 
   if [ -z "$text" ]; then
-    echo "ignored telegram update: non-text message"
+    # Reached only for the configured chat (the two guards above already returned
+    # silently for no-chat / wrong-chat). recv-files claimed documents, so what
+    # falls through here is a kind we don't yet handle — stickers, video, audio,
+    # polls, locations, … Tell the user instead of dropping it silently.
+    kind="$(printf '%s\n' "$update" | jq -r '
+      .message | if .sticker then "a sticker"
+      elif .animation then "a GIF/animation"
+      elif .video then "a video"
+      elif .video_note then "a video note"
+      elif .audio then "an audio/music file"
+      elif .poll then "a poll"
+      elif .location then "a location"
+      elif .venue then "a venue"
+      elif .contact then "a contact"
+      elif .dice then "a dice roll"
+      else "that kind of message" end')"
+    echo "ignored telegram update: unsupported message ($kind)"
+    send_message "📎 I can't handle $kind yet, so I've skipped it." || true
     write_update_offset "$next_offset"
     return 0
   fi

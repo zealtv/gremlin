@@ -21,4 +21,5 @@ When you call a tool, weave its output into the reply naturally. Don't quote the
 - `loom` — a goal or intention needs to outlive the current turn — something to pursue across many tends, not finish now
 - `reflect` — user asks you to reflect, review your own performance, or improve yourself
 - `remind-me` — user asks to be reminded of something at a future time
+- `send-file` — user asks to send a file, document, zip, log, csv, pdf, export, or attachment
 - `send-image` — user asks to send or show an image, photo, picture, chart, or graph

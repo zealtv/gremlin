@@ -238,7 +238,9 @@ is part of the message.
 A turn body may also carry **media embeds** a media-capable bridge renders into
 native attachments, stripping the markup from the surrounding text:
 
-- `![caption](path-or-url)` — an image, sent as a photo.
+- `🖼️ [caption](path-or-url)` — an image, sent as a photo. (`![caption](path-or-url)`
+  is accepted as a silent back-compat alias.)
+- `📎 [caption](path-or-url)` — a file, sent as a native document.
 - `🔊 [text-to-speak](tts:)` — speech, synthesized at send time and sent as a
   voice message. The transcript stays text: the `(tts:)` markup is the source of
   truth, audio is generated on the way out and not stored, so the one-writer and
