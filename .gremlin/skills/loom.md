@@ -10,7 +10,7 @@ triggers:
 
 Your loom (`.gremlin/.loom/`) holds work that has **shape and outlives a turn**:
 durable goals you pursue across many tends, and human-gated proposals waiting to
-be applied. It is your own loom — distinct from the maintainer's dev loom.
+be applied. It is your own loom.
 
 ## Where each thing belongs
 

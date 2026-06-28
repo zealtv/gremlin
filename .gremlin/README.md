@@ -114,11 +114,6 @@ Keep personal state out of this repo.
 - Promote personal-copy ideas back by rewriting generic versions in canonical.
 - Use `.gremlin/.nest/README.md` and `.gremlin/.groundhog/README.md` to
   understand the nested protocols.
-- Plan maintainer work in the repo-root [loom](https://github.com/zealtv/loom)
-  (`/.loom/`); it is development state, kept out of this repo via `.gitignore`.
-  This is distinct from the gremlin's own shipped loom (`.gremlin/.loom/`, a
-  deployed gremlin's durable goals) — the two never collide: the `.gitignore`
-  pattern is anchored to the root loom only.
 
 Before pushing:
 
