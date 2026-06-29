@@ -94,7 +94,13 @@
     } else {
       var bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.textContent = turn.body; // M0 renders text; markdown lands in M2
+      // Render embeds + a small markdown subset (render.js); the transcript
+      // markup stays the source of truth — unrenderable embeds degrade to text.
+      if (window.GremlinRender) {
+        bubble.innerHTML = window.GremlinRender.renderBodyHTML(turn.body);
+      } else {
+        bubble.textContent = turn.body;
+      }
       el.appendChild(bubble);
       if (turn.ts) {
         var meta = document.createElement("div");

@@ -11,6 +11,13 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > a bare `.md` item via `nestling.sh ingest`, with an honest pending echo cleared
 > when the real `## user —` / `## assistant —` turns arrive. The bridge writes the
 > inbound item only — never a transcript turn, never a model call.
+> **M2** — the mobile-first shell: 4-tab thumb-bar (Chat live; the rest inert
+> until their milestones), media-embed rendering (`🖼️` inline image, `📎`
+> download chip; `🔊 (tts:)` left as text for now) and a small safe markdown
+> subset via `render.js` (escape-first; control-scheme URLs refused). The
+> transcript markup stays the source of truth — unrenderable embeds degrade to
+> text, never a rewrite. System turns render as full-width dimmed notices,
+> bodies verbatim.
 
 ## Run
 

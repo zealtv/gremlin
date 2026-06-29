@@ -16,11 +16,20 @@
 
   <main id="log" class="log" aria-live="polite"></main>
 
-  <form id="composer" class="composer" autocomplete="off">
-    <textarea id="input" rows="1" placeholder="Message…" aria-label="Message"></textarea>
-    <button id="send" type="submit" aria-label="Send">⮕</button>
-  </form>
+  <footer class="dock">
+    <form id="composer" class="composer" autocomplete="off">
+      <textarea id="input" rows="1" placeholder="Message…" aria-label="Message"></textarea>
+      <button id="send" type="submit" aria-label="Send">⮕</button>
+    </form>
+    <nav class="tabbar" aria-label="Sections">
+      <button class="tab active" aria-current="page">💬<span>Chat</span></button>
+      <button class="tab" disabled title="coming soon">📜<span>Transcript</span></button>
+      <button class="tab" disabled title="coming soon">🔎<span>Inspect</span></button>
+      <button class="tab" disabled title="coming soon">⋯<span>More</span></button>
+    </nav>
+  </footer>
 
+  <script src="/render.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

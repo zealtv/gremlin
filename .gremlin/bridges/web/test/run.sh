@@ -95,6 +95,9 @@ Host pwd: /home/bob/repos
 
 ## system — 2026-06-29T10:00:09Z
 ⚠️ error: empty model reply
+
+## assistant — 2026-06-29T10:00:12Z
+Here is the chart: 🖼️ [the chart](https://example.test/chart.png)
 EOF
 
 export WEB_GREMLIN_DIR="$FIXTURE"
@@ -157,6 +160,21 @@ if printf '%s' "$poll_json" | grep -q '⚠️ error: empty model reply' \
   ok "<silent> renders nothing, error renders loudly (invariant 12)"
 else
   bad "<silent> renders nothing, error renders loudly (invariant 12)"
+fi
+
+# M2: the bridge serves embed markup VERBATIM (rendering is client-side; the
+# transcript markup stays the source of truth — never rewritten).
+if printf '%s' "$poll_json" | grep -q '🖼️ \[the chart\](https://example.test/chart.png)'; then
+  ok "embed markup served verbatim, not rewritten (M2)"
+else
+  bad "embed markup served verbatim, not rewritten (M2)"
+fi
+
+# M2: the renderer asset is served.
+if curl -fsS -o /dev/null -w '%{http_code}' "$URL/render.js" | grep -q 200; then
+  ok "GET /render.js → 200"
+else
+  bad "GET /render.js → 200"
 fi
 
 # Append a system line by hand → it appears within a tick.
@@ -295,6 +313,19 @@ else
 fi
 
 "$WEB_SH" stop >/dev/null 2>&1 || true
+
+# ============================================================================
+echo "== M2 renderer (render.js, pure) =="
+
+if command -v node >/dev/null 2>&1; then
+  if node "$BRIDGE_DIR/test/render.test.js"; then
+    ok "render.js unit tests pass"
+  else
+    bad "render.js unit tests pass"
+  fi
+else
+  echo "  skip render.js unit tests (no node)"
+fi
 
 # ============================================================================
 echo
