@@ -507,7 +507,7 @@
     { id: "groundhog", emoji: "🦫", label: "Groundhog", api: "/api/groundhog", render: renderGroundhog },
     { id: "loom", emoji: "🪡", label: "Loom", api: "/api/loom", render: renderLoom },
     { id: "glean", emoji: "🔮", label: "Glean", api: "/api/glean", render: renderGlean },
-    { id: "lore", emoji: "📜", label: "Lore", api: "/api/lore", render: renderLore },
+    { id: "lore", emoji: "🐉", label: "Lore", api: "/api/lore", render: renderLore },
   ];
   var SOON = [];
 
