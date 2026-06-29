@@ -414,12 +414,38 @@
     });
   }
 
+  // --- Loom: preserve the thread/stitch model; reuse loom.sh (never flatten) -
+  function renderLoom(env) {
+    var loose = env.items.filter(function (i) { return i.state === "loose-end"; });
+    var next = section("Next to tend");
+    next.appendChild(pathChip(".loom/threads/"));
+    if (loose.length) {
+      loose.forEach(function (i) {
+        var row = el("div", "ctx-row");
+        row.appendChild(el("div", "ctx-name", i.name));
+        row.appendChild(el("div", "path-chip mono", i.path));
+        next.appendChild(row);
+      });
+    } else {
+      next.appendChild(el("div", "sub", "nothing ready to tend"));
+    }
+    inspect.appendChild(next);
+
+    if (env.raw && env.raw.trim()) {
+      var t = section("Threads (loom.sh status)");
+      t.appendChild(el("pre", "code", env.raw.replace(/\n+$/, "")));
+      inspect.appendChild(t);
+    }
+  }
+
   // --- Inspect hub: index-first inspectors, one screen each (spec §5) -------
+  // Emojis match each primitive's own README title.
   var INSPECTORS = [
-    { id: "groundhog", emoji: "🐹", label: "Groundhog", api: "/api/groundhog", render: renderGroundhog },
+    { id: "groundhog", emoji: "🦫", label: "Groundhog", api: "/api/groundhog", render: renderGroundhog },
+    { id: "loom", emoji: "🪡", label: "Loom", api: "/api/loom", render: renderLoom },
     { id: "glean", emoji: "🔮", label: "Glean", api: "/api/glean", render: renderGlean },
   ];
-  var SOON = ["📜 Loom", "📚 Lore"];
+  var SOON = ["📜 Lore"];
 
   function backHeader() {
     var b = el("button", "back", "‹ Inspect");

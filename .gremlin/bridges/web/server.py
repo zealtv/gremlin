@@ -394,6 +394,43 @@ def build_groundhog():
                     source="groundhog.sh list + due", raw=raw)
 
 
+# --- Loom inspector (preserve the thread/stitch tree; reuse loom.sh) ---------
+
+def build_loom():
+    """Reuse loom.sh for every derived fact — the loose-end test (a plain leaf
+    with no child dirs, .waiting excluded) is subtle, so never re-derive it. The
+    verbatim `status` tree is shown; NEXT TO TEND = loose-ends; counts parsed
+    only from the script's own summary line."""
+    loom = os.path.join(GREMLIN_DIR, ".loom", "loom.sh")
+    root = os.path.join(GREMLIN_DIR, ".loom")
+    items = []
+
+    raw, rc = run_readonly([loom, "status"])
+    if rc != 0 and not raw:
+        return envelope("loom", os.path.realpath(root), [], source="loom.sh status",
+                        raw="(no loom here)")
+
+    for verb, state in (("loose-ends", "loose-end"), ("waiting", "waiting")):
+        out, _ = run_readonly([loom, verb])
+        for line in out.splitlines():
+            line = line.strip()
+            if line and not line.startswith("("):  # skip "(none)"
+                items.append({"path": line, "name": os.path.basename(line.rstrip("/")),
+                              "state": state, "fields": {}})
+
+    tied = dropped = 0
+    mt = re.search(r"tied:\s*(\d+)", raw)
+    md = re.search(r"dropped:\s*(\d+)", raw)
+    if mt:
+        tied = int(mt.group(1))
+    if md:
+        dropped = int(md.group(1))
+    items.append({"path": "", "name": "counts", "state": "",
+                  "fields": {"tied": tied, "dropped": dropped}})
+
+    return envelope("loom", os.path.realpath(root), items, source="loom.sh status", raw=raw)
+
+
 # --- Glean inspector (index-first: INDEX.md only; bodies on demand) ----------
 
 GLEAN_DIR = os.path.join(GREMLIN_DIR, ".glean")
@@ -576,6 +613,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(build_status())
         elif path == "/api/groundhog":
             self._send_json(build_groundhog())
+        elif path == "/api/loom":
+            self._send_json(build_loom())
         elif path == "/api/glean":
             self._send_json(build_glean())
         elif path.startswith("/api/glean/finding/"):

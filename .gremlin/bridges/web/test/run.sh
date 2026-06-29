@@ -549,6 +549,58 @@ fi
 hcleanup
 
 # ============================================================================
+echo "== M6 inspector: loom (reuse loom.sh, preserve tree) =="
+
+LMFIX="$(mktemp -d)"
+LMG="$LMFIX/.gremlin"
+cp -a /home/bob/repos/gremlin/.gremlin "$LMG"
+: > "$LMG/transcript.md"
+rm -f "$LMG/bridges/web/.cursor" "$LMG/bridges/web/web.pid" "$LMG/bridges/web/web.log"
+rm -rf "$LMG/bridges/web/__pycache__" "$LMG/bridges/web/.cache"
+# seed the gremlin's own loom: one ready loose end + one waiting leaf
+LOOM="$LMG/.loom/loom.sh"
+"$LOOM" new ship-thing >/dev/null 2>&1 || true
+"$LOOM" new parked-thing >/dev/null 2>&1 || true
+"$LOOM" wait parked-thing >/dev/null 2>&1 || true
+
+LMPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+LMURL="http://127.0.0.1:$LMPORT"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$LMG" WEB_TRANSCRIPT="$LMG/transcript.md" WEB_PORT="$LMPORT" WEB_BIND="127.0.0.1"
+unset WEB_REMOTE_TOKEN
+
+lmcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$LMFIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$LMURL/"; then
+  ok "loom daemon boots against fixture"
+else
+  bad "loom daemon boots against fixture"
+fi
+
+lm="$(curl -fsS "$LMURL/api/loom")"
+# A plain leaf is a ready loose end; the .waiting leaf is excluded from it.
+if printf '%s' "$lm" | python3 -c 'import sys,json
+items=json.load(sys.stdin)["items"]
+loose=[i["name"] for i in items if i["state"]=="loose-end"]
+waiting=[i["name"] for i in items if i["state"]=="waiting"]
+sys.exit(0 if "ship-thing" in loose and not any("parked" in x for x in loose) and any("parked" in x for x in waiting) else 1)'; then
+  ok "ready loose end listed; .waiting leaf excluded from NEXT"
+else
+  bad "ready loose end listed; .waiting leaf excluded from NEXT"
+fi
+
+# The thread tree is shelled out verbatim (not flattened) and source is loom.sh.
+if printf '%s' "$lm" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+sys.exit(0 if d["source"]=="loom.sh status" and "ship-thing" in d["raw"] else 1)'; then
+  ok "thread tree served verbatim via loom.sh status"
+else
+  bad "thread tree served verbatim via loom.sh status"
+fi
+
+lmcleanup
+
+# ============================================================================
 echo "== 95 remote bind (token-gated, off by default) =="
 
 RFIX="$(mktemp -d)"

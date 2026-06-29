@@ -37,6 +37,11 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > due-ness, never re-parsing the path grammar), and reads `out/` / `fired/<today>`
 > inertly → due-now / fired-today / awaiting-pickup. Inspect is now a hub
 > (Groundhog · Glean, with Loom/Lore to come).
+> **M6** — the Loom inspector. `GET /api/loom` reuses `loom.sh` for every derived
+> fact (the loose-end leaf test is subtle, so never re-derived): the verbatim
+> `status` tree in `raw`, NEXT TO TEND = `loose-ends`, `waiting` excluded, counts
+> from the script's own summary. Inspect hub emojis match each primitive's README
+> (the beaver Groundhog, needle Loom, crystal-ball Glean, scroll Lore); Transcript is the memo tab.
 
 ## Run
 
