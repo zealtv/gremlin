@@ -490,6 +490,89 @@ done
 gcleanup
 
 # ============================================================================
+echo "== 95 remote bind (token-gated, off by default) =="
+
+RFIX="$(mktemp -d)"
+RG="$RFIX/.gremlin"
+mkdir -p "$RG"
+: > "$RG/transcript.md"
+printf '## system — 2026-06-29T10:00:00Z\n⚙️ run: hi\n' > "$RG/transcript.md"
+RPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.2",0)); print(s.getsockname()[1]); s.close()')"
+# 127.0.0.2 is loopback-range but != 127.0.0.1, so the bridge treats it as remote.
+RBIND="127.0.0.2"
+RURL="http://$RBIND:$RPORT"
+TOKEN="s3cr3t-$$"
+
+rcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$RFIX"; }
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$RG"
+export WEB_TRANSCRIPT="$RG/transcript.md"
+export WEB_PORT="$RPORT"
+export WEB_BIND="$RBIND"
+
+# Non-loopback bind WITHOUT a token → refuses to start, loud.
+unset WEB_REMOTE_TOKEN
+if "$WEB_SH" start >/dev/null 2>&1; then
+  bad "non-loopback bind without token refuses to start"
+  "$WEB_SH" stop >/dev/null 2>&1 || true
+else
+  ok "non-loopback bind without token refuses to start"
+fi
+
+# With a token → serves, and every request must present it.
+export WEB_REMOTE_TOKEN="$TOKEN"
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$RURL/?t=$TOKEN"; then
+  ok "remote bind with token serves"
+else
+  bad "remote bind with token serves"
+  cat "$BRIDGE_DIR/web.log" 2>/dev/null | sed 's/^/  /'
+fi
+
+# No token → 401.
+code="$(curl -s -o /dev/null -w '%{http_code}' "$RURL/")"
+[ "$code" = "401" ] && ok "request without token → 401" || bad "request without token → 401 (got $code)"
+
+# Wrong token → 401.
+code="$(curl -s -o /dev/null -w '%{http_code}' "$RURL/?t=wrong")"
+[ "$code" = "401" ] && ok "wrong token → 401" || bad "wrong token → 401 (got $code)"
+
+# Query token → 200 and sets a cookie.
+hdrs="$(curl -s -D - -o /dev/null "$RURL/?t=$TOKEN")"
+if printf '%s' "$hdrs" | grep -qi '^HTTP/.* 200' && printf '%s' "$hdrs" | grep -qi 'Set-Cookie: web_token='; then
+  ok "valid query token → 200 + bootstraps cookie"
+else
+  bad "valid query token → 200 + cookie"
+fi
+
+# Cookie alone → 200 (the bootstrapped session).
+code="$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: web_token=$TOKEN" "$RURL/poll?cursor=0")"
+[ "$code" = "200" ] && ok "cookie token → 200 on a sub-request" || bad "cookie token → 200 (got $code)"
+
+# Header token → 200.
+code="$(curl -s -o /dev/null -w '%{http_code}' -H "X-Web-Token: $TOKEN" "$RURL/api/status")"
+[ "$code" = "200" ] && ok "X-Web-Token header → 200" || bad "X-Web-Token header → 200 (got $code)"
+
+# Disallowed Host still refused even with a valid token (anti-rebind holds).
+code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' "$RURL/?t=$TOKEN")"
+[ "$code" = "403" ] && ok "disallowed Host → 403 even with token" || bad "disallowed Host → 403 with token (got $code)"
+
+rcleanup
+
+# Loopback default is unaffected: no token required.
+LFIX="$(mktemp -d)"; : > "$LFIX/transcript.md"
+LPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+unset WEB_REMOTE_TOKEN
+export WEB_GREMLIN_DIR="$LFIX" WEB_TRANSCRIPT="$LFIX/transcript.md" WEB_PORT="$LPORT" WEB_BIND="127.0.0.1"
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "http://127.0.0.1:$LPORT/"; then
+  ok "loopback default unaffected (no token needed)"
+else
+  bad "loopback default unaffected (no token needed)"
+fi
+"$WEB_SH" stop >/dev/null 2>&1 || true
+rm -rf "$LFIX"
+
+# ============================================================================
 echo
 echo "passed: $pass   failed: $fail"
 [ "$fail" -eq 0 ]

@@ -10,9 +10,17 @@ WEB_BIND=127.0.0.1
 # Port to listen on. If it is already in use the bridge fails loud — no auto-bump.
 WEB_PORT=8787
 
-# Reserved for remote binding (a later stitch): a non-loopback WEB_BIND will
-# require this token or refuse to start.
+# Remote access (off by default). A non-loopback WEB_BIND (e.g. a tailnet IP)
+# REQUIRES a token or the bridge refuses to start. Every request must then
+# present it — open the page once as /?t=<token> (it sets a session cookie) or
+# send an X-Web-Token header. Traffic is cleartext unless tunneled; an SSH
+# tunnel / WireGuard / Tailscale is the safer path. Generate a token with e.g.
+#   python3 -c 'import secrets;print(secrets.token_urlsafe(18))'
 # WEB_REMOTE_TOKEN=
+#
+# Optional: extra Host header(s) to accept when bound remotely (comma-separated),
+# e.g. a MagicDNS name. The bind address itself is always accepted.
+# WEB_REMOTE_HOST=
 
 # Reserved for attachments (a later stitch): per-file/per-body upload cap.
 # WEB_MAX_UPLOAD=26214400

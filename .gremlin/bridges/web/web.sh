@@ -78,6 +78,21 @@ load_config() {
   set +a
 }
 
+is_loopback_bind() {
+  case "$WEB_BIND" in
+    127.0.0.1 | ::1 | localhost | "") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Off-by-default remote binding: a non-loopback bind without a token is refused
+# loudly, before spawning the daemon (spec §17).
+require_remote_safety() {
+  if ! is_loopback_bind && [ -z "${WEB_REMOTE_TOKEN:-}" ]; then
+    die "refusing to bind non-loopback $WEB_BIND without WEB_REMOTE_TOKEN; set it in $CONFIG (an SSH tunnel / WireGuard is the safer path — see README)."
+  fi
+}
+
 require_runtime() {
   command -v python3 >/dev/null 2>&1 || die "python3 is required for the web bridge"
   python3 - <<'PY' || die "python3 >= 3.8 is required for the web bridge"
@@ -110,7 +125,8 @@ running_pid() {
 cmd_run() {
   load_config
   require_runtime
-  export WEB_BIND WEB_PORT
+  require_remote_safety
+  export WEB_BIND WEB_PORT WEB_REMOTE_TOKEN WEB_REMOTE_HOST
   export WEB_GREMLIN_DIR="$GREMLIN_DIR"
   export WEB_HOST_DIR="$HOST_DIR"
   export WEB_TRANSCRIPT="$TRANSCRIPT"
@@ -132,7 +148,14 @@ cmd_start() {
     exit 1
   fi
 
+  load_config
   require_runtime
+  require_remote_safety
+  if ! is_loopback_bind; then
+    echo "⚠️  binding non-loopback $WEB_BIND:$WEB_PORT — the gremlin's chat + files"
+    echo "    will be reachable (with the token) by anyone who can route to that"
+    echo "    address. Traffic is cleartext unless tunneled."
+  fi
 
   if command -v setsid >/dev/null 2>&1; then
     nohup setsid "$0" run >> "$LOG" 2>&1 < /dev/null &
@@ -181,6 +204,7 @@ cmd_stop() {
 cmd_status() {
   local pid configured="unconfigured"
   [ -f "$CONFIG" ] && configured="configured"
+  load_config
   pid="$(running_pid || true)"
   if [ -n "$pid" ]; then
     echo "web bridge running: $pid ($configured, http://$WEB_BIND:$WEB_PORT)"

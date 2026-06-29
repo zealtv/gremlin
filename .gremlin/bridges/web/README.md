@@ -78,8 +78,35 @@ bridge reconstructs its view from `.gremlin/` files alone.
 - **No generic file-serving path parameter yet** — uploads (`/media`) and the
   §17 path resolver arrive with their own milestones.
 
-Remote binding, uploads, and the file-serving inspectors are later stitches with
-their own mitigations (see the design spec §17).
+Uploads and the file-serving inspectors are later stitches with their own
+mitigations (see the design spec §17).
+
+## Remote access (off by default)
+
+The default bind is loopback. To reach the bridge from another device, the
+**preferred path is a tunnel** (SSH local-forward, WireGuard, or Tailscale),
+which keeps the server loopback-only:
+
+```sh
+# on the remote device:
+ssh -L 8787:127.0.0.1:8787 <host>   # then browse http://localhost:8787
+```
+
+If you genuinely want to bind a non-loopback address (e.g. a tailnet IP), it is
+**token-gated and loud**. In `config`:
+
+```sh
+WEB_BIND=100.x.y.z
+WEB_REMOTE_TOKEN=$(python3 -c 'import secrets;print(secrets.token_urlsafe(18))')
+```
+
+A non-loopback `WEB_BIND` without a token **refuses to start**. With one, startup
+prints an exposure warning and **every request must present the token** — open
+the page once as `/?t=<token>` (it sets an HttpOnly session cookie that carries
+onward) or send an `X-Web-Token` header. The Host-allowlist widens to exactly the
+configured bind (add a MagicDNS name via `WEB_REMOTE_HOST`); Origin/CSRF still
+applies. Traffic is **cleartext** unless tunneled — Tailscale/WireGuard encrypt
+at the network layer, plain LAN does not.
 
 ## Stack
 

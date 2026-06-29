@@ -12,6 +12,8 @@
 # exported from web.sh (WEB_BIND, WEB_PORT, WEB_TRANSCRIPT, WEB_CURSOR,
 # WEB_PUBLIC_DIR), so tests can point it at a throwaway fixture.
 
+import hmac
+import http.cookies
 import json
 import os
 import queue
@@ -47,12 +49,21 @@ MAX_SEND_BYTES = int(os.environ.get("WEB_MAX_SEND", str(1 << 20)))
 # is a real em-dash (U+2014) flanked by spaces.
 TURN_HEADER = re.compile(r"^## (user|assistant|system) — (.+?)\s*$", re.MULTILINE)
 
-# Only loopback Host headers are honored; a non-loopback Host (DNS rebinding
-# keeps the attacker's Host) is refused even though we already bind 127.0.0.1.
+# Loopback Host headers are always honored; a non-loopback Host (DNS rebinding
+# keeps the attacker's Host) is refused. When bound remotely the allowlist
+# widens to exactly the configured host(s) — never wide open (spec §17).
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1", ""}
-# Same-origin gate for the one mutating route: an Origin/Referer must be a
-# loopback host on our own port (a different port is a different origin).
-ORIGIN_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+# Remote binding (off by default): a non-loopback WEB_BIND requires a token, or
+# the bridge refuses to start. Every request must then present the token; the
+# Host/Origin allowlist widens to the configured host; Origin/CSRF still applies.
+REMOTE_TOKEN = os.environ.get("WEB_REMOTE_TOKEN", "")
+IS_REMOTE = BIND not in {"127.0.0.1", "localhost", "::1", ""}
+EXTRA_HOSTS = set(h.strip() for h in os.environ.get("WEB_REMOTE_HOST", "").split(",") if h.strip())
+ALLOWED_HOSTS = set(LOOPBACK_HOSTS)
+if IS_REMOTE:
+    ALLOWED_HOSTS.add(BIND)
+    ALLOWED_HOSTS |= EXTRA_HOSTS
 
 # The only static assets M0 serves, by exact name — no path parameter, so no
 # traversal surface exists yet (the §17 path resolver arrives with /media).
@@ -430,7 +441,50 @@ class Handler(BaseHTTPRequestHandler):
     def _host_ok(self):
         host = self.headers.get("Host", "")
         hostname = host.rsplit(":", 1)[0] if ":" in host and not host.endswith("]") else host
-        return hostname in LOOPBACK_HOSTS
+        return hostname in ALLOWED_HOSTS
+
+    def _supplied_token(self):
+        q = parse_qs(urlparse(self.path).query).get("t")
+        if q:
+            return q[0]
+        header = self.headers.get("X-Web-Token")
+        if header:
+            return header
+        raw = self.headers.get("Cookie")
+        if raw:
+            jar = http.cookies.SimpleCookie()
+            try:
+                jar.load(raw)
+            except http.cookies.CookieError:
+                return None
+            if "web_token" in jar:
+                return jar["web_token"].value
+        return None
+
+    def _authed(self):
+        # Loopback default: no token. Remote: a token must be presented on every
+        # request (query, header, or the cookie bootstrapped from the first load).
+        if not IS_REMOTE:
+            return True
+        supplied = self._supplied_token()
+        return bool(supplied) and hmac.compare_digest(supplied, REMOTE_TOKEN)
+
+    def _gate(self):
+        """Shared front door for every request: Host allowlist then token. Returns
+        True if the request was rejected (and a response already sent)."""
+        if not self._host_ok():
+            self._send(403, "forbidden: disallowed Host\n")
+            return True
+        if not self._authed():
+            self._send(401, "token required: open this page as /?t=<token>\n")
+            return True
+        # Bootstrap a cookie when a valid token arrives in the query, so the app
+        # shell's sub-requests (assets, /events, /poll, /api/*) carry it onward.
+        if IS_REMOTE:
+            q = parse_qs(urlparse(self.path).query).get("t")
+            if q and hmac.compare_digest(q[0], REMOTE_TOKEN):
+                self._cookie = "web_token=%s; Path=/; HttpOnly; SameSite=Strict" % REMOTE_TOKEN
+        return False
 
     def _send(self, code, body, ctype="text/plain; charset=utf-8", extra=None):
         if isinstance(body, str):
@@ -438,6 +492,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        if getattr(self, "_cookie", None):
+            self.send_header("Set-Cookie", self._cookie)
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -445,8 +501,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def do_GET(self):
-        if not self._host_ok():
-            self._send(403, "forbidden: non-loopback Host\n")
+        self._cookie = None
+        if self._gate():
             return
         parsed = urlparse(self.path)
         path = parsed.path
@@ -486,8 +542,8 @@ class Handler(BaseHTTPRequestHandler):
         # The single mutating route. It writes only an inbound .nest/in/ item via
         # the nestling — never a transcript turn — and only for a same-origin
         # caller on a loopback Host.
-        if not self._host_ok():
-            self._send(403, "forbidden: non-loopback Host\n")
+        self._cookie = None
+        if self._gate():
             return
         if urlparse(self.path).path != "/send":
             self._send(404, "not found\n")
@@ -521,7 +577,7 @@ class Handler(BaseHTTPRequestHandler):
         p = urlparse(origin)
         if p.scheme not in ("http", "https"):
             return False
-        if (p.hostname or "") not in ORIGIN_HOSTS:
+        if (p.hostname or "") not in ALLOWED_HOSTS:
             return False
         port = p.port if p.port is not None else (443 if p.scheme == "https" else 80)
         return port == PORT
@@ -633,6 +689,17 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    # Remote binding is token-gated and off by default (spec §17).
+    if IS_REMOTE and not REMOTE_TOKEN:
+        log("refusing to bind non-loopback %s without WEB_REMOTE_TOKEN — set it "
+            "in config (an SSH tunnel / WireGuard is the safer path)." % BIND)
+        sys.exit(2)
+    if IS_REMOTE:
+        log("WARNING: serving the gremlin's files and chat to the network on "
+            "%s:%d — anyone who can reach this port and present the token can read "
+            "the transcript and send messages the gremlin acts on. Traffic is "
+            "cleartext unless tunneled." % (BIND, PORT))
+
     threading.Thread(target=TAIL.watch, daemon=True).start()
     try:
         httpd = ThreadingHTTPServer((BIND, PORT), Handler)
