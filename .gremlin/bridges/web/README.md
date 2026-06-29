@@ -5,9 +5,12 @@ A localhost web lens over Gremlin's files — the third bridge, sibling of
 only truth. The bridge never writes a `## user —` / `## assistant —` turn, never
 calls a model, and serves nothing but its own `public/` assets (M0).
 
-> **Milestone M0** ships here: a read-only transcript window that boots, tails
-> `transcript.md`, and renders turns in a browser over SSE. No send, no
-> inspectors, no uploads, no model.
+> **M0** — a read-only transcript window that boots, tails `transcript.md`, and
+> renders turns in a browser over SSE.
+> **M1** — the chat round-trip: a composer + same-origin `POST /send` that writes
+> a bare `.md` item via `nestling.sh ingest`, with an honest pending echo cleared
+> when the real `## user —` / `## assistant —` turns arrive. The bridge writes the
+> inbound item only — never a transcript turn, never a model call.
 
 ## Run
 
@@ -18,8 +21,10 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 ./.gremlin/gremlin web run       # run in the foreground (no daemon)
 ```
 
-Then open <http://127.0.0.1:8787/>. Append a `## system —` line to
-`transcript.md` by hand and it appears in the browser within a tick.
+Then open <http://127.0.0.1:8787/>. Type a message and send it: it appears as a
+muted pending echo, the bridge drops a `.nest/in/` item, and when the tender
+replies the real turns arrive over the tail and the echo clears. Appending a
+`## system —` line to `transcript.md` by hand also appears within a tick.
 
 ## Verify
 
@@ -47,9 +52,11 @@ bridge reconstructs its view from `.gremlin/` files alone.
 
 - **Loopback only.** Binds `127.0.0.1` by default; a LAN connection is refused at
   the socket. A non-loopback `Host` header is also rejected (anti-DNS-rebinding).
-- **No GET side effects.** Every M0 route is a read. There is no send, no upload,
-  and no generic file-serving path parameter yet — those arrive with their own
-  milestones and the §17 path resolver.
+- **One mutating route, same-origin only.** `POST /send` is the sole write; it
+  requires a loopback `Origin`/`Referer` on the server's own port (anti-CSRF) and
+  writes nothing but a guarded `.nest/in/` item. No GET has a side effect.
+- **No generic file-serving path parameter yet** — uploads (`/media`) and the
+  §17 path resolver arrive with their own milestones.
 
 Remote binding, uploads, and the file-serving inspectors are later stitches with
 their own mitigations (see the design spec §17).

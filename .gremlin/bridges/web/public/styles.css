@@ -79,7 +79,7 @@ html, body {
 .log {
   max-width: 66ch;
   margin: 0 auto;
-  padding: 16px 24px 64px;
+  padding: 16px 24px 96px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -111,6 +111,14 @@ html, body {
   color: var(--muted);
   margin: 4px 6px 0;
 }
+.meta.error { color: var(--error); }
+
+/* pending echo: honest local render of what you typed, until the real turn lands */
+.turn.user.pending .bubble { opacity: 0.55; }
+.turn.user.errored .bubble {
+  opacity: 1;
+  background: color-mix(in srgb, var(--error) 22%, var(--accent));
+}
 
 /* system turn: full-width, dimmed, centered notice — never a bubble */
 .turn.system { align-items: stretch; }
@@ -128,3 +136,50 @@ html, body {
   color: var(--error);
   border-top-color: color-mix(in srgb, var(--error) 50%, transparent);
 }
+
+/* composer: sticky bottom bar, thumb-sized send, safe-area aware */
+.composer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 66ch;
+  margin: 0 auto;
+  padding: 10px 24px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line);
+}
+.composer textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.4;
+  background: var(--paper);
+  color: var(--ink);
+  max-height: 160px;
+}
+.composer textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.composer button {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+.composer button:active { transform: scale(0.94); }

@@ -104,7 +104,8 @@ export WEB_BIND="127.0.0.1"
 
 cleanup() {
   "$WEB_SH" stop >/dev/null 2>&1 || true
-  rm -rf "$FIXTURE"
+  rm -rf "$FIXTURE" "${M1FIX:-}"
+  rm -rf "$BRIDGE_DIR/.cache"
   rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
 }
 trap cleanup EXIT
@@ -209,6 +210,91 @@ if poll_until 5 bash -c "! curl -fsS -o /dev/null '$URL/' 2>/dev/null"; then
 else
   bad "gremlin web stop → port freed"
 fi
+
+# ============================================================================
+echo "== M1 send (the chat round-trip) =="
+
+# A full fixture: a self-contained copy of this .gremlin so the real tender can
+# run against it with the deterministic `echo` preset, touching no real state.
+GREMLIN_REAL="$(cd "$BRIDGE_DIR/../.." && pwd)"
+M1FIX="$(mktemp -d)"
+cp -a "$GREMLIN_REAL" "$M1FIX/.gremlin"
+M1GREM="$M1FIX/.gremlin"
+printf 'echo\n' > "$M1GREM/.model"          # deterministic, no network
+: > "$M1GREM/transcript.md"                   # start clean
+find "$M1GREM/.nest/in" -mindepth 1 -delete 2>/dev/null || true
+rm -f "$M1GREM/.tending.pid"
+
+M1PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+M1URL="http://127.0.0.1:$M1PORT"
+ORIGIN="Origin: http://127.0.0.1:$M1PORT"
+
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$M1GREM"
+export WEB_TRANSCRIPT="$M1GREM/transcript.md"
+export WEB_NESTLING="$M1GREM/.nest/nestling.sh"
+export WEB_PORT="$M1PORT"
+
+web_items() { find "$M1GREM/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M1URL/"; then
+  ok "M1 daemon boots against fixture"
+else
+  bad "M1 daemon boots against fixture"
+  cat "$BRIDGE_DIR/web.log" 2>/dev/null | sed 's/^/  /'
+fi
+
+# Empty / whitespace body → 400, nothing written.
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$ORIGIN" \
+  -H 'Content-Type: application/json' --data '{"text":"   "}' "$M1URL/send")"
+if [ "$code" = "400" ] && [ "$(web_items)" = "0" ]; then
+  ok "empty body → 400, no item written"
+else
+  bad "empty body → 400, no item written (code $code, items $(web_items))"
+fi
+
+# Cross-origin POST → 403 (anti-CSRF), nothing written.
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: http://evil.example:9999' \
+  -H 'Content-Type: application/json' --data '{"text":"ping"}' "$M1URL/send")"
+if [ "$code" = "403" ] && [ "$(web_items)" = "0" ]; then
+  ok "cross-origin POST → 403, no item written"
+else
+  bad "cross-origin POST → 403, no item written (code $code, items $(web_items))"
+fi
+
+# The round-trip: send "ping" → item lands → tender runs → both turns render.
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$ORIGIN" \
+  -H 'Content-Type: application/json' --data '{"text":"ping"}' "$M1URL/send")"
+if [ "$code" = "200" ] && [ "$(web_items)" = "1" ]; then
+  ok "POST /send ping → bare .md item in .nest/in/"
+else
+  bad "POST /send ping → bare .md item in .nest/in/ (code $code, items $(web_items))"
+fi
+
+# Drive the tender once synchronously (no background-loop race), with the echo
+# preset, so the user + assistant turns land deterministically. The acceptance
+# is that BOTH turns render — the reply's exact body is the preset's business
+# (the shipped echo preset re-emits a prompt tail, not a clean "echo: ping").
+"$M1GREM/bin/tend-loop.sh" >/dev/null 2>&1 || true
+if poll_until 8 bash -c "curl -fsS '$M1URL/poll?cursor=0' | grep -q '\"role\": \"assistant\"'"; then
+  if curl -fsS "$M1URL/poll?cursor=0" | python3 -c 'import sys,json; t=json.load(sys.stdin)["turns"]; sys.exit(0 if any(x["role"]=="user" and x["body"]=="ping" for x in t) and any(x["role"]=="assistant" for x in t) else 1)'; then
+    ok "tender round-trip → ## user — ping + new ## assistant — render"
+  else
+    bad "tender round-trip → both turns render (user 'ping' + assistant)"
+  fi
+else
+  bad "tender round-trip → an assistant turn appears within bound"
+fi
+
+# The bridge wrote the inbound item but NOT the transcript turns: the tender is
+# the sole transcript writer (invariant 1, behaviorally).
+if [ "$(grep -c '^## ' "$M1GREM/transcript.md")" -ge 2 ]; then
+  ok "transcript turns authored by the tender, not the bridge (invariant 1)"
+else
+  bad "transcript turns present after tend (invariant 1)"
+fi
+
+"$WEB_SH" stop >/dev/null 2>&1 || true
 
 # ============================================================================
 echo

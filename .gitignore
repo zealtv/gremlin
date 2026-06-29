@@ -6,6 +6,7 @@
 .gremlin/bridges/*/.cursor
 .gremlin/bridges/*/.cache/
 .gremlin/bridges/*/.update-offset
+__pycache__/
  
 .claude/
 # maintainer's dev loom only — anchored so it does NOT catch the shipped

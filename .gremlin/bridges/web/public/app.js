@@ -20,11 +20,64 @@
     return window.innerHeight + window.scrollY >= document.body.offsetHeight - 80;
   }
 
+  // --- pending echoes ---------------------------------------------------
+  // What you typed appears immediately in a muted "pending" style — an honest
+  // echo of your own words, not a model turn. It clears when the real
+  // `## user —` turn arrives in the tail. No spinner theater.
+  var pendings = []; // { text, el, timer }
+
+  function pendingEl(text) {
+    var el = document.createElement("div");
+    el.className = "turn user pending";
+    var bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = text;
+    el.appendChild(bubble);
+    return el;
+  }
+
+  function addPending(text) {
+    var entry = { text: text, el: pendingEl(text), timer: null };
+    // Auto-expire to a loud notice if no turn lands within a generous bound
+    // (the tender can be slow). Mirrors `⚠️ error: empty model reply`.
+    entry.timer = setTimeout(function () {
+      entry.el.classList.add("errored");
+      var note = document.createElement("div");
+      note.className = "meta error";
+      note.textContent = "not delivered — is the gremlin running?";
+      entry.el.appendChild(note);
+    }, 180000);
+    pendings.push(entry);
+    log.appendChild(entry.el);
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  function clearMatchingPending(body) {
+    for (var i = 0; i < pendings.length; i++) {
+      if (pendings[i].text.trim() === (body || "").trim()) {
+        clearTimeout(pendings[i].timer);
+        if (pendings[i].el.parentNode) pendings[i].el.parentNode.removeChild(pendings[i].el);
+        pendings.splice(i, 1);
+        return;
+      }
+    }
+  }
+
+  // Keep pending echoes anchored at the bottom (appendChild moves an existing
+  // node), so they stay below the file-derived turns after any render.
+  function floatPendings() {
+    pendings.forEach(function (p) { log.appendChild(p.el); });
+  }
+
   function clear() {
     log.textContent = "";
+    // Pending echoes are client-only (not in the file), so survive a reset/
+    // reconnect: re-append them after the file-derived turns are cleared.
+    floatPendings();
   }
 
   function renderTurn(turn) {
+    if (turn.role === "user") clearMatchingPending(turn.body);
     var stick = atBottom();
     var el = document.createElement("div");
     el.className = "turn " + turn.role;
@@ -52,6 +105,7 @@
     }
 
     log.appendChild(el);
+    floatPendings();
     if (stick) window.scrollTo(0, document.body.scrollHeight);
   }
 
@@ -100,6 +154,53 @@
     chip.addEventListener("click", function () {
       if (navigator.clipboard) {
         navigator.clipboard.writeText("transcript.md").catch(function () {});
+      }
+    });
+  }
+
+  // --- composer (POST /send) -------------------------------------------
+  var form = document.getElementById("composer");
+  var input = document.getElementById("input");
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+  }
+
+  function send() {
+    var text = input.value;
+    if (!text.trim()) return;
+    input.value = "";
+    autosize();
+    addPending(text);
+    fetch("/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text }),
+    }).then(function (r) {
+      if (!r.ok) {
+        // The write was refused; surface it on the pending echo rather than
+        // pretending it landed.
+        clearMatchingPending(text);
+        renderTurn({ role: "system", body: "⚠️ error: message not sent (" + r.status + ")" });
+      }
+    }).catch(function () {
+      clearMatchingPending(text);
+      renderTurn({ role: "system", body: "⚠️ error: message not sent (offline)" });
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      send();
+    });
+    input.addEventListener("input", autosize);
+    // Enter sends; Shift+Enter inserts a newline.
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
       }
     });
   }

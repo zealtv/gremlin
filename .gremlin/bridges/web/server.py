@@ -16,7 +16,10 @@ import json
 import os
 import queue
 import re
+import secrets
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -27,8 +30,15 @@ PORT = int(os.environ.get("WEB_PORT", "8787"))
 TRANSCRIPT = os.environ["WEB_TRANSCRIPT"]
 CURSOR_FILE = os.environ["WEB_CURSOR"]
 PUBLIC_DIR = os.environ["WEB_PUBLIC_DIR"]
+NESTLING = os.environ.get("WEB_NESTLING", "")
+CACHE_DIR = os.environ.get(
+    "WEB_CACHE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache"),
+)
 POLL_INTERVAL = float(os.environ.get("WEB_TAIL_INTERVAL", "1.0"))
 SSE_PING_INTERVAL = float(os.environ.get("WEB_SSE_PING_INTERVAL", "15.0"))
+# Text-only cap for M1's POST /send; real uploads (and WEB_MAX_UPLOAD) are M8.
+MAX_SEND_BYTES = int(os.environ.get("WEB_MAX_SEND", str(1 << 20)))
 
 # The transcript turn grammar (docs/protocol.md, spec §16): a header line of
 # `## <role> — <ISO8601Z>`, body is everything to the next header. The separator
@@ -38,6 +48,9 @@ TURN_HEADER = re.compile(r"^## (user|assistant|system) — (.+?)\s*$", re.MULTIL
 # Only loopback Host headers are honored; a non-loopback Host (DNS rebinding
 # keeps the attacker's Host) is refused even though we already bind 127.0.0.1.
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1", ""}
+# Same-origin gate for the one mutating route: an Origin/Referer must be a
+# loopback host on our own port (a different port is a different origin).
+ORIGIN_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 # The only static assets M0 serves, by exact name — no path parameter, so no
 # traversal surface exists yet (the §17 path resolver arrives with /media).
@@ -201,6 +214,102 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, "not found\n")
 
     do_HEAD = do_GET
+
+    def do_POST(self):
+        # The single mutating route. It writes only an inbound .nest/in/ item via
+        # the nestling — never a transcript turn — and only for a same-origin
+        # caller on a loopback Host.
+        if not self._host_ok():
+            self._send(403, "forbidden: non-loopback Host\n")
+            return
+        if urlparse(self.path).path != "/send":
+            self._send(404, "not found\n")
+            return
+        if not self._origin_ok():
+            self._send(403, "forbidden: cross-origin\n")
+            return
+
+        text = self._read_send_text()
+        if text is None:
+            self._send(400, "bad request\n")
+            return
+        if not text.strip():  # empty / whitespace-only writes nothing (400)
+            self._send(400, "empty message\n")
+            return
+
+        item = self._ingest_text(text)
+        if item is None:
+            self._send(500, "ingest failed\n")
+            return
+        self._send(
+            200,
+            json.dumps({"ok": True, "item": item}, ensure_ascii=False),
+            "application/json; charset=utf-8",
+        )
+
+    def _origin_ok(self):
+        origin = self.headers.get("Origin") or self.headers.get("Referer")
+        if not origin:  # browsers send Origin on same-origin POST; require it
+            return False
+        p = urlparse(origin)
+        if p.scheme not in ("http", "https"):
+            return False
+        if (p.hostname or "") not in ORIGIN_HOSTS:
+            return False
+        port = p.port if p.port is not None else (443 if p.scheme == "https" else 80)
+        return port == PORT
+
+    def _read_send_text(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+        except ValueError:
+            return None
+        if length <= 0 or length > MAX_SEND_BYTES:
+            return None
+        raw = self.rfile.read(length)
+        ctype = self.headers.get("Content-Type", "")
+        try:
+            if "application/json" in ctype:
+                value = json.loads(raw.decode("utf-8")).get("text", "")
+                return value if isinstance(value, str) else None
+            return (parse_qs(raw.decode("utf-8")).get("text") or [""])[0]
+        except (ValueError, UnicodeDecodeError):
+            return None
+
+    def _ingest_text(self, text):
+        """Stage the text to a temp file and hand it to `nestling.sh ingest` as
+        a bare .md item — the same atomic landing/rename tui.sh / telegram.sh use.
+        The `-web-` infix lets filters tell web-origin items apart (spec §11)."""
+        if not NESTLING:
+            log("no nestling configured; refusing /send")
+            return None
+        name = "%s-web-%s.md" % (
+            time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
+            secrets.token_hex(3),
+        )
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(prefix="web-send-", dir=CACHE_DIR)
+        except OSError as exc:
+            log("send stage failed: %r" % exc)
+            return None
+        try:
+            with os.fdopen(fd, "w") as fh:
+                fh.write(text.rstrip("\n") + "\n")  # one trailing newline, like tui
+            result = subprocess.run(
+                [NESTLING, "ingest", tmp, name],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if result.returncode != 0:
+                log("nestling ingest failed (rc=%d)" % result.returncode)
+                return None
+            return name
+        finally:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
     def _serve_static(self, path):
         name, ctype = STATIC[path]
