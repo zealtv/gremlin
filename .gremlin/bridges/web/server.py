@@ -30,6 +30,8 @@ PORT = int(os.environ.get("WEB_PORT", "8787"))
 TRANSCRIPT = os.environ["WEB_TRANSCRIPT"]
 CURSOR_FILE = os.environ["WEB_CURSOR"]
 PUBLIC_DIR = os.environ["WEB_PUBLIC_DIR"]
+GREMLIN_DIR = os.environ.get("WEB_GREMLIN_DIR") or os.path.dirname(os.path.abspath(TRANSCRIPT))
+HOST_DIR = os.environ.get("WEB_HOST_DIR") or os.path.dirname(GREMLIN_DIR)
 NESTLING = os.environ.get("WEB_NESTLING", "")
 CACHE_DIR = os.environ.get(
     "WEB_CACHE_DIR",
@@ -174,6 +176,152 @@ class TranscriptTail:
 TAIL = TranscriptTail(TRANSCRIPT, CURSOR_FILE, POLL_INTERVAL)
 
 
+# --- inspector reads (M3: the route→read→render pattern every inspector copies)
+
+def envelope(protocol, root, items, source="fs", raw=""):
+    """The uniform inspector shape (spec §9): path + source + raw, so the UI can
+    show how a fact was derived and fall back to verbatim output if a parse lags."""
+    return {
+        "protocol": protocol,
+        "root": root,
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": source,
+        "items": items,
+        "raw": raw,
+    }
+
+
+def within_host(path):
+    """Canonicalize and assert the result stays under HOST_DIR — the §17 symlink
+    rule (follow, then revalidate the resolved target). Returns the real path, or
+    None if it escapes. M8 generalizes this into the path-param resolver."""
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        return None
+    base = os.path.realpath(HOST_DIR)
+    return real if real == base or real.startswith(base + os.sep) else None
+
+
+def read_text(path, limit=256 * 1024):
+    real = within_host(path)
+    if not real or not os.path.isfile(real):
+        return None
+    try:
+        with open(real, "rb") as fh:
+            return fh.read(limit).decode("utf-8", "replace")
+    except OSError:
+        return None
+
+
+def pid_alive(pid):
+    # The stale-pid rule: a pidfile is not proof of life — `kill -0` is.
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def rel_to_gremlin(path):
+    try:
+        return os.path.relpath(path, GREMLIN_DIR)
+    except ValueError:
+        return path
+
+
+def build_context():
+    """gremlin.md + the context the tender loads (context/system/*.md then
+    context/*.md, symlinks resolved for display) + the active model + the
+    skills/tools surface. Read-only; bodies served only for paths under HOST_DIR."""
+    items = []
+
+    body = read_text(os.path.join(GREMLIN_DIR, "gremlin.md"))
+    if body is not None:
+        items.append({"path": "gremlin.md", "name": "gremlin.md",
+                      "state": "identity", "fields": {"body": body}})
+
+    model = read_text(os.path.join(GREMLIN_DIR, ".model"))
+    items.append({"path": ".model", "name": "model", "state": "context",
+                  "fields": {"value": (model.strip() if model else "default")}})
+
+    seen = set()
+    for sub in ("context/system", "context"):
+        d = os.path.join(GREMLIN_DIR, sub)
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if not name.endswith(".md"):
+                continue
+            full = os.path.join(d, name)
+            rp = os.path.realpath(full)
+            if rp in seen:
+                continue
+            seen.add(rp)
+            is_link = os.path.islink(full)
+            inside = within_host(full)
+            fields = {
+                "symlink": is_link,
+                "target": rel_to_gremlin(rp) if is_link else None,
+                "body": read_text(full) if inside else None,
+                "escaped": inside is None,
+            }
+            items.append({"path": rel_to_gremlin(full), "name": name,
+                          "state": "context", "fields": fields})
+
+    for kind in ("skills", "tools"):
+        d = os.path.join(GREMLIN_DIR, kind)
+        if os.path.isdir(d):
+            names = sorted(n for n in os.listdir(d) if n.endswith((".md", ".sh")))
+            items.append({"path": kind + "/", "name": kind, "state": "context",
+                          "fields": {"names": names}})
+
+    return envelope("context", os.path.realpath(GREMLIN_DIR), items)
+
+
+def build_status():
+    """Runner status derived from the filesystem: .paused presence, .tending.pid
+    liveness (stale ⇒ idle), in-flight nest claims, and a run.log tail."""
+    items = []
+
+    paused = os.path.exists(os.path.join(GREMLIN_DIR, ".paused"))
+    items.append({"path": ".paused", "name": "runner",
+                  "state": "paused" if paused else "active",
+                  "fields": {"paused": paused}})
+
+    pidfile = os.path.join(GREMLIN_DIR, ".tending.pid")
+    present = os.path.isfile(pidfile) and os.path.getsize(pidfile) > 0
+    alive = False
+    if present:
+        try:
+            with open(pidfile) as fh:
+                alive = pid_alive(int(fh.readline().strip()))
+        except (OSError, ValueError):
+            present = False
+    tending_state = "thinking" if alive else ("stale" if present else "idle")
+    items.append({"path": ".tending.pid", "name": "tending", "state": tending_state,
+                  "fields": {"present": present, "alive": alive,
+                             "stale": present and not alive}})
+
+    in_dir = os.path.join(GREMLIN_DIR, ".nest", "in")
+    claimed = 0
+    if os.path.isdir(in_dir):
+        claimed = sum(1 for n in os.listdir(in_dir) if n.endswith(".tending"))
+    items.append({"path": ".nest/in", "name": "in-progress", "state": "",
+                  "fields": {"tending": claimed}})
+
+    log_text = read_text(os.path.join(GREMLIN_DIR, "run.log"))
+    tail = log_text.splitlines()[-20:] if log_text else []
+    items.append({"path": "run.log", "name": "run.log", "state": "",
+                  "fields": {"tail": tail}})
+
+    return envelope("status", os.path.realpath(GREMLIN_DIR), items)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "gremlin-web/0"
     protocol_version = "HTTP/1.1"
@@ -211,8 +359,19 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_events()
         elif path == "/poll":
             self._serve_poll(parse_qs(parsed.query))
+        elif path == "/api/context":
+            self._send_json(build_context())
+        elif path == "/api/status":
+            self._send_json(build_status())
         else:
             self._send(404, "not found\n")
+
+    def _send_json(self, obj):
+        self._send(
+            200,
+            json.dumps(obj, ensure_ascii=False),
+            "application/json; charset=utf-8",
+        )
 
     do_HEAD = do_GET
 

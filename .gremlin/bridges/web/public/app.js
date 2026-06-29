@@ -211,6 +211,144 @@
     });
   }
 
+  // --- More panel: the read-only inspector pattern (route→read→render→poll) -
+  var panel = document.getElementById("panel");
+  var composer = document.getElementById("composer");
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab[data-view]"));
+  var statusTimer = null;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function pathChip(p) {
+    return el("div", "chip path-chip", "◷ " + p);
+  }
+
+  function section(title) {
+    var s = el("section", "card");
+    s.appendChild(el("h2", "card-title", title));
+    return s;
+  }
+
+  function field(items, name) {
+    for (var i = 0; i < items.length; i++) if (items[i].name === name) return items[i];
+    return null;
+  }
+
+  function renderStatus(env) {
+    var s = section("Status");
+    s.appendChild(pathChip(env.protocol === "status" ? ".gremlin/" : ""));
+    var runner = field(env.items, "runner") || { state: "?", fields: {} };
+    var tend = field(env.items, "tending") || { state: "?", fields: {} };
+    var prog = field(env.items, "in-progress");
+    var logItem = field(env.items, "run.log");
+
+    var row = el("div", "status-row");
+    row.appendChild(el("span", "pill " + (runner.fields.paused ? "warn" : "good"),
+      runner.fields.paused ? "paused" : "active"));
+    var tstate = tend.state === "thinking" ? "thinking"
+      : tend.state === "stale" ? "idle, stale pid" : "idle";
+    row.appendChild(el("span", "pill " + (tend.state === "stale" ? "warn" : "muted"), tstate));
+    if (prog && prog.fields.tending) {
+      row.appendChild(el("span", "pill muted", prog.fields.tending + " in progress"));
+    }
+    s.appendChild(row);
+
+    if (logItem && logItem.fields.tail && logItem.fields.tail.length) {
+      s.appendChild(el("div", "sub", "run.log"));
+      s.appendChild(el("pre", "code", logItem.fields.tail.join("\n")));
+    }
+    return s;
+  }
+
+  function renderContext(env) {
+    var frag = document.createDocumentFragment();
+
+    var ident = section("Identity");
+    ident.appendChild(pathChip("gremlin.md"));
+    var g = field(env.items, "gremlin.md");
+    if (g && g.fields.body && window.GremlinRender) {
+      var b = el("div", "prose");
+      b.innerHTML = window.GremlinRender.renderBodyHTML(g.fields.body);
+      ident.appendChild(b);
+    }
+    var model = field(env.items, "model");
+    if (model) ident.appendChild(el("div", "sub", "model: " + model.fields.value));
+    frag.appendChild(ident);
+
+    var ctx = section("Context");
+    ctx.appendChild(pathChip("context/"));
+    env.items.forEach(function (it) {
+      if (it.state !== "context" || it.name === "model") return;
+      var row = el("div", "ctx-row");
+      var head = el("div", "ctx-head");
+      head.appendChild(el("span", "ctx-name", it.name));
+      if (it.fields.symlink && it.fields.target) {
+        head.appendChild(el("span", "ctx-target", "→ " + it.fields.target));
+      }
+      if (it.fields.names) {
+        head.appendChild(el("span", "ctx-target", it.fields.names.join(" · ")));
+      }
+      row.appendChild(head);
+      row.appendChild(el("div", "path-chip mono", it.path));
+      if (it.fields.body) {
+        var body = el("pre", "code ctx-body");
+        body.hidden = true;
+        body.textContent = it.fields.body;
+        head.style.cursor = "pointer";
+        head.addEventListener("click", function () { body.hidden = !body.hidden; });
+        row.appendChild(body);
+      } else if (it.fields.escaped) {
+        row.appendChild(el("div", "sub warn", "target outside host — not shown"));
+      }
+      ctx.appendChild(row);
+    });
+    frag.appendChild(ctx);
+    return frag;
+  }
+
+  function loadPanel() {
+    Promise.all([
+      fetch("/api/status").then(function (r) { return r.json(); }),
+      fetch("/api/context").then(function (r) { return r.json(); }),
+    ]).then(function (res) {
+      panel.textContent = "";
+      panel.appendChild(renderStatus(res[0]));
+      panel.appendChild(renderContext(res[1]));
+    }).catch(function () {
+      panel.textContent = "";
+      panel.appendChild(el("div", "sub warn", "could not load panel"));
+    });
+  }
+
+  function showView(name) {
+    var more = name === "more";
+    log.hidden = more;
+    panel.hidden = !more;
+    composer.style.display = more ? "none" : "";
+    tabs.forEach(function (t) {
+      var active = t.getAttribute("data-view") === name;
+      t.classList.toggle("active", active);
+      if (active) t.setAttribute("aria-current", "page");
+      else t.removeAttribute("aria-current");
+    });
+    if (more) {
+      loadPanel();
+      statusTimer = setInterval(loadPanel, 4000); // poll: the inspector shape
+    } else if (statusTimer) {
+      clearInterval(statusTimer);
+      statusTimer = null;
+    }
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () { showView(t.getAttribute("data-view")); });
+  });
+
   if (typeof window.EventSource !== "undefined") {
     startSSE();
   } else {

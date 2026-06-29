@@ -111,6 +111,8 @@ cmd_run() {
   load_config
   require_runtime
   export WEB_BIND WEB_PORT
+  export WEB_GREMLIN_DIR="$GREMLIN_DIR"
+  export WEB_HOST_DIR="$HOST_DIR"
   export WEB_TRANSCRIPT="$TRANSCRIPT"
   export WEB_CURSOR="$CURSOR"
   export WEB_PUBLIC_DIR="$PUBLIC_DIR"

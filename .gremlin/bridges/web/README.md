@@ -18,6 +18,13 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > transcript markup stays the source of truth — unrenderable embeds degrade to
 > text, never a rewrite. System turns render as full-width dimmed notices,
 > bodies verbatim.
+> **M3** — the first read-only inspector and the reusable
+> route→read→render→poll shape: a **More** panel showing Identity (`gremlin.md`),
+> Context (`context/system/*.md` + `context/*.md`, symlinks resolved, targets
+> revalidated under the host folder), the active model, and runner Status derived
+> from `.paused` + `.tending.pid` (a dead pid reads *idle, stale* via `kill -0`,
+> never ghost-busy). `GET /api/context` + `GET /api/status` return the uniform
+> `path` + `source` + `raw` envelope.
 
 ## Run
 

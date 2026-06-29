@@ -15,6 +15,7 @@
   </header>
 
   <main id="log" class="log" aria-live="polite"></main>
+  <main id="panel" class="panel" hidden></main>
 
   <footer class="dock">
     <form id="composer" class="composer" autocomplete="off">
@@ -22,10 +23,10 @@
       <button id="send" type="submit" aria-label="Send">⮕</button>
     </form>
     <nav class="tabbar" aria-label="Sections">
-      <button class="tab active" aria-current="page">💬<span>Chat</span></button>
+      <button class="tab active" data-view="chat" aria-current="page">💬<span>Chat</span></button>
       <button class="tab" disabled title="coming soon">📜<span>Transcript</span></button>
       <button class="tab" disabled title="coming soon">🔎<span>Inspect</span></button>
-      <button class="tab" disabled title="coming soon">⋯<span>More</span></button>
+      <button class="tab" data-view="more">⋯<span>More</span></button>
     </nav>
   </footer>
 

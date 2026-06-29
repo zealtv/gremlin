@@ -328,6 +328,75 @@ else
 fi
 
 # ============================================================================
+echo "== M3 inspector: context / status =="
+
+M3FIX="$(mktemp -d)"
+mkdir -p "$M3FIX/.gremlin/context/system" "$M3FIX/.gremlin/skills"
+: > "$M3FIX/.gremlin/transcript.md"
+printf '# gremlin\nidentity body here\n' > "$M3FIX/.gremlin/gremlin.md"
+printf 'echo\n' > "$M3FIX/.gremlin/.model"
+printf '# a context note\nhello from context\n' > "$M3FIX/.gremlin/context/system/note.md"
+M3PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+M3URL="http://127.0.0.1:$M3PORT"
+
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$M3FIX/.gremlin"
+export WEB_TRANSCRIPT="$M3FIX/.gremlin/transcript.md"
+export WEB_PORT="$M3PORT"
+
+m3cleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$M3FIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M3URL/"; then
+  ok "M3 daemon boots against fixture"
+else
+  bad "M3 daemon boots against fixture"
+fi
+
+# Context envelope carries path + source, and a context file renders.
+ctx="$(curl -fsS "$M3URL/api/context")"
+if printf '%s' "$ctx" | grep -q '"source": "fs"' \
+  && printf '%s' "$ctx" | grep -q '"path": "gremlin.md"' \
+  && printf '%s' "$ctx" | grep -q 'hello from context'; then
+  ok "context envelope: path + source + a context file renders"
+else
+  bad "context envelope: path + source + a context file renders"
+fi
+
+# touch .paused → paused.
+touch "$M3FIX/.gremlin/.paused"
+if curl -fsS "$M3URL/api/status" | python3 -c 'import sys,json
+i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="runner"][0]
+sys.exit(0 if i["state"]=="paused" and i["fields"]["paused"] else 1)'; then
+  ok "touch .paused → status shows paused"
+else
+  bad "touch .paused → status shows paused"
+fi
+rm -f "$M3FIX/.gremlin/.paused"
+
+# A dead pid → idle, stale (not a ghost-busy state) — the kill -0 rule.
+echo 999999 > "$M3FIX/.gremlin/.tending.pid"
+if curl -fsS "$M3URL/api/status" | python3 -c 'import sys,json
+i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="tending"][0]
+sys.exit(0 if i["state"]=="stale" and i["fields"]["stale"] and not i["fields"]["alive"] else 1)'; then
+  ok "dead pid → idle, stale pid (kill -0 rule)"
+else
+  bad "dead pid → idle, stale pid (kill -0 rule)"
+fi
+
+# A live pid (this shell) → thinking.
+echo "$$" > "$M3FIX/.gremlin/.tending.pid"
+if curl -fsS "$M3URL/api/status" | python3 -c 'import sys,json
+i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="tending"][0]
+sys.exit(0 if i["state"]=="thinking" and i["fields"]["alive"] else 1)'; then
+  ok "live pid → thinking (alive)"
+else
+  bad "live pid → thinking (alive)"
+fi
+rm -f "$M3FIX/.gremlin/.tending.pid"
+
+m3cleanup
+
+# ============================================================================
 echo
 echo "passed: $pass   failed: $fail"
 [ "$fail" -eq 0 ]
