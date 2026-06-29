@@ -588,6 +588,19 @@
     if (a) { e.preventDefault(); openFinding(a.getAttribute("data-id")); }
   });
 
+  // Header title = the gremlin's identifier (its host directory name).
+  var hostEl = document.getElementById("host");
+  if (hostEl) {
+    fetch("/api/identity").then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.host) {
+          hostEl.textContent = d.host;
+          hostEl.title = d.path || "";
+          document.title = d.host;
+        }
+      }).catch(function () {});
+  }
+
   if (typeof window.EventSource !== "undefined") {
     startSSE();
   } else {

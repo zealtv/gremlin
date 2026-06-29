@@ -394,6 +394,11 @@ else
 fi
 rm -f "$M3FIX/.gremlin/.tending.pid"
 
+# The header identifier is the gremlin's host directory name.
+exp="$(basename "$M3FIX")"
+got="$(curl -fsS "$M3URL/api/identity" | python3 -c 'import sys,json;print(json.load(sys.stdin)["host"])')"
+[ "$got" = "$exp" ] && ok "/api/identity → host directory name" || bad "/api/identity host ($got != $exp)"
+
 m3cleanup
 
 # ============================================================================

@@ -674,6 +674,10 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_events()
         elif path == "/poll":
             self._serve_poll(parse_qs(parsed.query))
+        elif path == "/api/identity":
+            # The gremlin's identifier is its host directory's name.
+            self._send_json({"host": os.path.basename(os.path.realpath(HOST_DIR)),
+                             "path": os.path.realpath(HOST_DIR)})
         elif path == "/api/context":
             self._send_json(build_context())
         elif path == "/api/status":
