@@ -673,6 +673,55 @@ fi
 lrcleanup
 
 # ============================================================================
+echo "== M-: transcript browser (live + archive, read-only) =="
+
+TBFIX="$(mktemp -d)"
+TBG="$TBFIX/.gremlin"
+mkdir -p "$TBG/transcript-archive"
+printf '## user — 2026-06-29T10:00:00Z\nlive question\n\n## assistant — 2026-06-29T10:00:02Z\nlive answer\n' > "$TBG/transcript.md"
+printf '## user — 2026-06-26T08:00:00Z\nold question\n\n## assistant — 2026-06-26T08:00:03Z\narchived answer\n' > "$TBG/transcript-archive/2026-06-26.md"
+
+TBPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+TBURL="http://127.0.0.1:$TBPORT"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$TBG" WEB_TRANSCRIPT="$TBG/transcript.md" WEB_PORT="$TBPORT" WEB_BIND="127.0.0.1"
+unset WEB_REMOTE_TOKEN
+
+tbcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$TBFIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$TBURL/"; then
+  ok "transcript daemon boots against fixture"
+else
+  bad "transcript daemon boots against fixture"
+fi
+
+# Live view: turns from transcript.md, archive date listed.
+if curl -fsS "$TBURL/api/transcript" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+sys.exit(0 if d["file"]=="transcript.md" and any(t["body"]=="live answer" for t in d["turns"]) and "2026-06-26" in d["archives"] else 1)'; then
+  ok "live transcript turns + archive date listed"
+else
+  bad "live transcript turns + archive date listed"
+fi
+
+# Archive view: that file renders as a document.
+if curl -fsS "$TBURL/api/transcript?archive=2026-06-26" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+sys.exit(0 if d["archive"]=="2026-06-26" and any(t["body"]=="archived answer" for t in d["turns"]) else 1)'; then
+  ok "archive date → that file renders as a document"
+else
+  bad "archive date → that file renders as a document"
+fi
+
+# Bad archive date → 404; the underlying files are never modified.
+before="$(cat "$TBG/transcript.md")"
+code="$(curl -s -o /dev/null -w '%{http_code}' "$TBURL/api/transcript?archive=../../etc/passwd")"
+[ "$code" = "404" ] && [ "$(cat "$TBG/transcript.md")" = "$before" ] \
+  && ok "bad archive arg → 404, file unmodified" || bad "bad archive arg → 404, file unmodified (got $code)"
+
+tbcleanup
+
+# ============================================================================
 echo "== 95 remote bind (token-gated, off by default) =="
 
 RFIX="$(mktemp -d)"

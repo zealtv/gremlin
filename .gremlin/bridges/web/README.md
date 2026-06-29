@@ -47,6 +47,11 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > recall, no promotion, cf. Glean); `GET /api/lore/item/:id` returns `item.md` +
 > the `content/` file listing; `GET /api/lore/content/:id/*path` serves a content
 > byte (jailed under the item; binary → download, text → inline).
+> **Transcript browser** — the **📝 Transcript** tab: a read-only document view of
+> `transcript.md` + `transcript-archive/*.md`. `GET /api/transcript[?archive=DATE]`
+> returns parsed turns (live or a dated archive, date-validated + jailed) plus the
+> archive list; the frontend adds a date switcher, in-document search, and
+> jump-to-bottom. The file is never modified.
 
 ## Run
 

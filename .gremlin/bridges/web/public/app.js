@@ -217,10 +217,11 @@
   // --- inspector views: the read-only route→read→render(→poll) pattern -------
   var panel = document.getElementById("panel");
   var inspect = document.getElementById("inspect");
+  var transcriptView = document.getElementById("transcript");
   var composer = document.getElementById("composer");
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab[data-view]"));
   var statusTimer = null;
-  var VIEWS = { chat: log, inspect: inspect, more: panel };
+  var VIEWS = { chat: log, transcript: transcriptView, inspect: inspect, more: panel };
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -575,7 +576,88 @@
       statusTimer = setInterval(loadPanel, 4000); // poll: the inspector shape
     } else if (name === "inspect") {
       renderInspectHub();
+    } else if (name === "transcript") {
+      loadTranscript(null);
     }
+  }
+
+  // --- Transcript browser: read-only document view + archive switch + search -
+  function renderTranscriptTurn(t) {
+    var el2 = el("div", "turn " + t.role);
+    if (t.role === "system") {
+      var n = el("div", "notice");
+      if (/^\s*⚠️/.test(t.body)) n.classList.add("error");
+      n.textContent = t.body;
+      el2.appendChild(n);
+    } else {
+      var b = el("div", "bubble");
+      b.innerHTML = window.GremlinRender ? window.GremlinRender.renderBodyHTML(t.body) : t.body;
+      el2.appendChild(b);
+      if (t.ts) el2.appendChild(el("div", "meta", t.ts));
+    }
+    return el2;
+  }
+
+  function renderTranscript(env) {
+    transcriptView.textContent = "";
+    var controls = el("div", "tcontrols");
+    var sel = document.createElement("select");
+    sel.className = "tselect";
+    var live = el("option", null, "live");
+    live.value = "";
+    sel.appendChild(live);
+    env.archives.forEach(function (d) {
+      var o = el("option", null, d);
+      o.value = d;
+      sel.appendChild(o);
+    });
+    sel.value = env.archive || "";
+    sel.addEventListener("change", function () { loadTranscript(sel.value || null); });
+    controls.appendChild(sel);
+
+    var search = document.createElement("input");
+    search.type = "search";
+    search.className = "tsearch";
+    search.placeholder = "Search…";
+    controls.appendChild(search);
+
+    var jump = el("button", "tjump", "↓");
+    jump.title = "Jump to bottom";
+    jump.addEventListener("click", function () { transcriptView.scrollTop = transcriptView.scrollHeight; });
+    controls.appendChild(jump);
+    transcriptView.appendChild(controls);
+    transcriptView.appendChild(pathChip(env.file));
+
+    var doc = el("div", "tdoc");
+    transcriptView.appendChild(doc);
+
+    function paint(filter) {
+      doc.textContent = "";
+      var f = (filter || "").toLowerCase();
+      var lastDate = "";
+      env.turns.forEach(function (t) {
+        if (f && (t.body || "").toLowerCase().indexOf(f) < 0) return;
+        var date = (t.ts || "").slice(0, 10);
+        if (date && date !== lastDate) {
+          lastDate = date;
+          doc.appendChild(el("div", "tdate", date));
+        }
+        doc.appendChild(renderTranscriptTurn(t));
+      });
+      if (!doc.children.length) doc.appendChild(el("div", "sub", "no matching turns"));
+    }
+    paint("");
+    search.addEventListener("input", function () { paint(search.value); });
+  }
+
+  function loadTranscript(archive) {
+    fetch("/api/transcript" + (archive ? "?archive=" + encodeURIComponent(archive) : ""))
+      .then(function (r) { return r.json(); })
+      .then(renderTranscript)
+      .catch(function () {
+        transcriptView.textContent = "";
+        transcriptView.appendChild(el("div", "sub warn", "could not load transcript"));
+      });
   }
 
   tabs.forEach(function (t) {

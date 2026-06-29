@@ -338,6 +338,36 @@ def build_status():
     return envelope("status", os.path.realpath(GREMLIN_DIR), items)
 
 
+# --- Transcript browser (read-only document view of transcript.md + archive) -
+
+ARCHIVE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def build_transcript(archive=None):
+    """Parsed turns from the live transcript or a dated archive, plus the list of
+    available archive dates. Read-only; the file is never modified."""
+    arch_dir = os.path.join(GREMLIN_DIR, "transcript-archive")
+    archives = []
+    if os.path.isdir(arch_dir):
+        for name in os.listdir(arch_dir):
+            if name.endswith(".md") and ARCHIVE_DATE.match(name[:-3]):
+                archives.append(name[:-3])
+    archives.sort(reverse=True)
+
+    if archive:
+        if not ARCHIVE_DATE.match(archive):
+            return None
+        real = under(arch_dir, os.path.join(arch_dir, archive + ".md"))
+        if not real or not os.path.isfile(real):
+            return None
+        rel, text = "transcript-archive/%s.md" % archive, read_text(real) or ""
+    else:
+        rel, text = "transcript.md", read_text(TRANSCRIPT) or ""
+
+    return {"protocol": "transcript", "file": rel, "archive": archive,
+            "archives": archives, "turns": parse_turns(text)}
+
+
 # --- Groundhog inspector (the path IS the schedule; shell out, never re-parse)
 
 def run_readonly(args, timeout=5):
@@ -682,6 +712,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(build_context())
         elif path == "/api/status":
             self._send_json(build_status())
+        elif path == "/api/transcript":
+            archive = parse_qs(parsed.query).get("archive", [None])[0]
+            env = build_transcript(archive)
+            self._send(404, "no such archive\n") if env is None else self._send_json(env)
         elif path == "/api/groundhog":
             self._send_json(build_groundhog())
         elif path == "/api/loom":
