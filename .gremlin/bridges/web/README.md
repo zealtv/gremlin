@@ -25,6 +25,12 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > from `.paused` + `.tending.pid` (a dead pid reads *idle, stale* via `kill -0`,
 > never ghost-busy). `GET /api/context` + `GET /api/status` return the uniform
 > `path` + `source` + `raw` envelope.
+> **M5** — the Glean memory inspector (the **Inspect** tab), index-first by law:
+> `GET /api/glean` parses `findings/INDEX.md` only (no eager body reads); a body
+> loads on demand via `GET /api/glean/finding/:id` (id validated + jailed under
+> `findings/`). Findings promoted (symlinked) into `context/` wear a 📡 pill;
+> `[[wikilinks]]` navigate between findings; workbench tray counts shown.
+> This completes the judgment's MVP screen set (Chat + Inspect→Glean).
 
 ## Run
 

@@ -15,6 +15,7 @@
   </header>
 
   <main id="log" class="log" aria-live="polite"></main>
+  <main id="inspect" class="panel" hidden></main>
   <main id="panel" class="panel" hidden></main>
 
   <footer class="dock">
@@ -25,7 +26,7 @@
     <nav class="tabbar" aria-label="Sections">
       <button class="tab active" data-view="chat" aria-current="page">💬<span>Chat</span></button>
       <button class="tab" disabled title="coming soon">📜<span>Transcript</span></button>
-      <button class="tab" disabled title="coming soon">🔎<span>Inspect</span></button>
+      <button class="tab" data-view="inspect">🔎<span>Inspect</span></button>
       <button class="tab" data-view="more">⋯<span>More</span></button>
     </nav>
   </footer>

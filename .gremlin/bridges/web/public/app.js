@@ -211,11 +211,13 @@
     });
   }
 
-  // --- More panel: the read-only inspector pattern (route→read→render→poll) -
+  // --- inspector views: the read-only route→read→render(→poll) pattern -------
   var panel = document.getElementById("panel");
+  var inspect = document.getElementById("inspect");
   var composer = document.getElementById("composer");
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab[data-view]"));
   var statusTimer = null;
+  var VIEWS = { chat: log, inspect: inspect, more: panel };
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -311,6 +313,83 @@
     return frag;
   }
 
+  // --- Glean: index-first list, body fetched on demand --------------------
+  var gleanRows = {}; // id → { row, bodyEl, loaded }
+
+  function renderFindingBody(bodyEl, env) {
+    var it = env.items[0];
+    var html = window.GremlinRender
+      ? window.GremlinRender.renderBodyHTML(it.fields.body)
+      : it.fields.body;
+    // [[id]] wikilinks → in-app navigation between findings.
+    html = html.replace(/\[\[([A-Za-z0-9._-]+)\]\]/g,
+      "<a class=\"wiki\" data-id=\"$1\">$1</a>");
+    bodyEl.innerHTML = html;
+  }
+
+  function openFinding(id) {
+    var entry = gleanRows[id];
+    if (!entry) return;
+    if (entry.loaded) {
+      entry.bodyEl.hidden = !entry.bodyEl.hidden;
+      return;
+    }
+    entry.bodyEl.textContent = "loading…";
+    entry.bodyEl.hidden = false;
+    fetch("/api/glean/finding/" + encodeURIComponent(id))
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (env) { renderFindingBody(entry.bodyEl, env); entry.loaded = true; })
+      .catch(function () { entry.bodyEl.textContent = "could not load finding"; });
+  }
+
+  function fieldByName(items, name) {
+    for (var i = 0; i < items.length; i++) if (items[i].name === name) return items[i];
+    return null;
+  }
+
+  function renderGlean(env) {
+    inspect.textContent = "";
+    gleanRows = {};
+    var head = section("Glean — memory");
+    head.appendChild(pathChip(".glean/findings/INDEX.md"));
+
+    env.items.forEach(function (it) {
+      if (it.name === "workbench") return;
+      var row = el("div", "ctx-row");
+      var h = el("div", "ctx-head");
+      h.style.cursor = "pointer";
+      var titleEl = el("span", "ctx-name", it.fields.title || it.name);
+      h.appendChild(titleEl);
+      if (it.fields.promoted) h.appendChild(el("span", "pill broadcast", "📡 promoted"));
+      row.appendChild(h);
+      row.appendChild(el("div", "sub", it.fields.desc || ""));
+      var body = el("div", "finding-body prose");
+      body.hidden = true;
+      row.appendChild(body);
+      gleanRows[it.name] = { row: row, bodyEl: body, loaded: false };
+      h.addEventListener("click", function () { openFinding(it.name); });
+      head.appendChild(row);
+    });
+    inspect.appendChild(head);
+
+    var wb = fieldByName(env.items, "workbench");
+    if (wb) {
+      var w = section("Workbench");
+      w.appendChild(el("div", "sub",
+        "in " + wb.fields.in + " · out " + wb.fields.out + " · dropped " + wb.fields.dropped));
+      inspect.appendChild(w);
+    }
+  }
+
+  function loadGlean() {
+    fetch("/api/glean").then(function (r) { return r.json(); })
+      .then(renderGlean)
+      .catch(function () {
+        inspect.textContent = "";
+        inspect.appendChild(el("div", "sub warn", "could not load Glean"));
+      });
+  }
+
   function loadPanel() {
     Promise.all([
       fetch("/api/status").then(function (r) { return r.json(); }),
@@ -326,27 +405,31 @@
   }
 
   function showView(name) {
-    var more = name === "more";
-    log.hidden = more;
-    panel.hidden = !more;
-    composer.style.display = more ? "none" : "";
+    Object.keys(VIEWS).forEach(function (k) { VIEWS[k].hidden = k !== name; });
+    composer.style.display = name === "chat" ? "" : "none";
     tabs.forEach(function (t) {
       var active = t.getAttribute("data-view") === name;
       t.classList.toggle("active", active);
       if (active) t.setAttribute("aria-current", "page");
       else t.removeAttribute("aria-current");
     });
-    if (more) {
+    if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+    if (name === "more") {
       loadPanel();
       statusTimer = setInterval(loadPanel, 4000); // poll: the inspector shape
-    } else if (statusTimer) {
-      clearInterval(statusTimer);
-      statusTimer = null;
+    } else if (name === "inspect") {
+      loadGlean();
     }
   }
 
   tabs.forEach(function (t) {
     t.addEventListener("click", function () { showView(t.getAttribute("data-view")); });
+  });
+
+  // wikilink delegation (registered once): tap [[id]] → open that finding.
+  inspect.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a.wiki");
+    if (a) { e.preventDefault(); openFinding(a.getAttribute("data-id")); }
   });
 
   if (typeof window.EventSource !== "undefined") {

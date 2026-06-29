@@ -397,6 +397,99 @@ rm -f "$M3FIX/.gremlin/.tending.pid"
 m3cleanup
 
 # ============================================================================
+echo "== M5 inspector: glean (index-first) =="
+
+GFIX="$(mktemp -d)"
+GG="$GFIX/.gremlin"
+mkdir -p "$GG/.glean/findings" "$GG/.glean/in" "$GG/.glean/out" "$GG/.glean/dropped" "$GG/context"
+: > "$GG/transcript.md"
+cat > "$GG/.glean/findings/commit-style.md" <<'EOF'
+# Commit message convention
+Emoji only in the first -m subject; prose body in a second -m.
+
+## Triggers
+- commit
+## Associations
+- [[loom-tracker]]
+EOF
+cat > "$GG/.glean/findings/loom-tracker.md" <<'EOF'
+# Loom action tracker
+Uses .loom/ for durable intentions.
+EOF
+printf -- '- [[commit-style]] — Commit message convention — Emoji only in the first -m subject; prose body in a second -m.\n- [[loom-tracker]] — Loom action tracker — Uses .loom/ for durable intentions.\n' > "$GG/.glean/findings/INDEX.md"
+ln -s ../.glean/findings/commit-style.md "$GG/context/commit-style.md"  # promote
+echo "raw" > "$GG/.glean/in/note-1.md"
+
+GPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+GURL="http://127.0.0.1:$GPORT"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$GG"
+export WEB_TRANSCRIPT="$GG/transcript.md"
+export WEB_PORT="$GPORT"
+
+gcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$GFIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$GURL/"; then
+  ok "glean daemon boots against fixture"
+else
+  bad "glean daemon boots against fixture"
+fi
+
+gi="$(curl -fsS "$GURL/api/glean")"
+# Index lists exactly the INDEX.md entries (2 findings), with titles from INDEX.
+if printf '%s' "$gi" | python3 -c 'import sys,json
+items=[x for x in json.load(sys.stdin)["items"] if x["name"]!="workbench"]
+ids=sorted(x["name"] for x in items)
+sys.exit(0 if ids==["commit-style","loom-tracker"] else 1)'; then
+  ok "index lists exactly the INDEX.md entries"
+else
+  bad "index lists exactly the INDEX.md entries"
+fi
+
+# Invariant 11: NO finding body is served by the index endpoint.
+if printf '%s' "$gi" | grep -q '"body"'; then
+  bad "index must NOT eagerly serve finding bodies (invariant 11)"
+else
+  ok "index serves no finding bodies — index-first (invariant 11)"
+fi
+
+# A promoted finding shows the pill (state/flag).
+if printf '%s' "$gi" | python3 -c 'import sys,json
+it=[x for x in json.load(sys.stdin)["items"] if x["name"]=="commit-style"][0]
+sys.exit(0 if it["fields"]["promoted"] and it["state"]=="promoted" else 1)'; then
+  ok "promoted finding (symlinked into context/) flagged"
+else
+  bad "promoted finding flagged"
+fi
+
+# A body loads only when opened (on demand), with its sections intact.
+if curl -fsS "$GURL/api/glean/finding/commit-style" | python3 -c 'import sys,json
+it=json.load(sys.stdin)["items"][0]
+sys.exit(0 if "## Triggers" in it["fields"]["body"] and it["fields"]["promoted"] else 1)'; then
+  ok "finding body loads on demand (with sections)"
+else
+  bad "finding body loads on demand"
+fi
+
+# Workbench tray counts.
+if printf '%s' "$gi" | python3 -c 'import sys,json
+wb=[x for x in json.load(sys.stdin)["items"] if x["name"]=="workbench"][0]
+sys.exit(0 if wb["fields"]["in"]==1 and wb["fields"]["out"]==0 else 1)'; then
+  ok "workbench tray counts (in/out/dropped)"
+else
+  bad "workbench tray counts"
+fi
+
+# Path-param safety: traversal + a bad id are refused; a missing id 404s.
+for bad_path in "..%2f..%2f..%2fetc%2fpasswd" "../../../etc/passwd" "nope"; do
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$GURL/api/glean/finding/$bad_path")"
+  [ "$code" = "404" ] || { bad "glean finding bad id refused ($bad_path → $code)"; FAILED_BADID=1; }
+done
+[ -z "${FAILED_BADID:-}" ] && ok "traversal / bad / missing finding id → 404"
+
+gcleanup
+
+# ============================================================================
 echo
 echo "passed: $pass   failed: $fail"
 [ "$fail" -eq 0 ]

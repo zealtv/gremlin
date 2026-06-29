@@ -23,7 +23,7 @@ import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 BIND = os.environ.get("WEB_BIND", "127.0.0.1")
 PORT = int(os.environ.get("WEB_PORT", "8787"))
@@ -191,16 +191,20 @@ def envelope(protocol, root, items, source="fs", raw=""):
     }
 
 
-def within_host(path):
-    """Canonicalize and assert the result stays under HOST_DIR — the §17 symlink
-    rule (follow, then revalidate the resolved target). Returns the real path, or
-    None if it escapes. M8 generalizes this into the path-param resolver."""
+def under(base, path):
+    """Canonicalize `path` and assert it stays at/under `base` — the §17 rule
+    (follow symlinks, then revalidate the resolved target). Returns the real
+    path, or None if it escapes."""
     try:
         real = os.path.realpath(path)
+        base = os.path.realpath(base)
     except OSError:
         return None
-    base = os.path.realpath(HOST_DIR)
     return real if real == base or real.startswith(base + os.sep) else None
+
+
+def within_host(path):
+    return under(HOST_DIR, path)
 
 
 def read_text(path, limit=256 * 1024):
@@ -322,6 +326,100 @@ def build_status():
     return envelope("status", os.path.realpath(GREMLIN_DIR), items)
 
 
+# --- Glean inspector (index-first: INDEX.md only; bodies on demand) ----------
+
+GLEAN_DIR = os.path.join(GREMLIN_DIR, ".glean")
+FINDINGS_DIR = os.path.join(GLEAN_DIR, "findings")
+INDEX_LINE = re.compile(r"^- \[\[([^\]]+)\]\] — (.*)$")
+SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def promoted_ids():
+    """Findings symlinked into top-level context/ are 'promoted' (broadcast).
+    Detected by reading context/ listings + link targets — never finding bodies."""
+    ids = set()
+    ctx = os.path.join(GREMLIN_DIR, "context")
+    findings_real = os.path.realpath(FINDINGS_DIR)
+    try:
+        names = os.listdir(ctx)
+    except OSError:
+        return ids
+    for name in names:
+        full = os.path.join(ctx, name)
+        if not os.path.islink(full):
+            continue
+        target = os.path.realpath(full)
+        if os.path.dirname(target) == findings_real and target.endswith(".md"):
+            ids.add(os.path.basename(target)[:-3])
+    return ids
+
+
+def tray_count(name):
+    d = os.path.join(GLEAN_DIR, name)
+    try:
+        return sum(1 for n in os.listdir(d) if n != ".gitkeep")
+    except OSError:
+        return 0
+
+
+def build_glean():
+    """Index-first (invariant 11): parse findings/INDEX.md ONLY for the list;
+    bodies are fetched per-id on demand. Promotion pill + workbench tray counts."""
+    items = []
+    promoted = promoted_ids()
+    index = read_text(os.path.join(FINDINGS_DIR, "INDEX.md")) or ""
+    for line in index.splitlines():
+        m = INDEX_LINE.match(line)
+        if not m:
+            continue
+        fid = m.group(1)
+        rest = m.group(2)
+        title, _, desc = rest.partition(" — ")
+        is_promoted = fid in promoted
+        items.append({
+            "path": "findings/%s.md" % fid,
+            "name": fid,
+            "state": "promoted" if is_promoted else "finding",
+            "fields": {"title": title.strip(), "desc": desc.strip(),
+                       "promoted": is_promoted},
+        })
+
+    items.append({
+        "path": "", "name": "workbench", "state": "",
+        "fields": {"in": tray_count("in"), "out": tray_count("out"),
+                   "dropped": tray_count("dropped")},
+    })
+    return envelope("glean", os.path.realpath(GLEAN_DIR), items)
+
+
+def glean_finding(fid):
+    """A single finding body, fetched on demand. The id is validated and the
+    resolved file must live under findings/ (the §17 path-param resolver)."""
+    if not SAFE_ID.match(fid or "") or fid in (".", ".."):
+        return None
+    real = under(FINDINGS_DIR, os.path.join(FINDINGS_DIR, fid + ".md"))
+    if not real or not os.path.isfile(real):
+        return None
+    body = read_text(real)
+    if body is None:
+        return None
+    title = ""
+    desc = ""
+    for line in body.splitlines():
+        if not title and line.startswith("# "):
+            title = line[2:].strip()
+        elif title and not desc and line.strip() and not line.startswith("#"):
+            desc = line.strip()
+            break
+    is_promoted = fid in promoted_ids()
+    return envelope("glean", os.path.realpath(GLEAN_DIR), [{
+        "path": "findings/%s.md" % fid, "name": fid,
+        "state": "promoted" if is_promoted else "finding",
+        "fields": {"title": title, "desc": desc, "body": body,
+                   "promoted": is_promoted},
+    }])
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "gremlin-web/0"
     protocol_version = "HTTP/1.1"
@@ -363,6 +461,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(build_context())
         elif path == "/api/status":
             self._send_json(build_status())
+        elif path == "/api/glean":
+            self._send_json(build_glean())
+        elif path.startswith("/api/glean/finding/"):
+            fid = unquote(path[len("/api/glean/finding/"):])
+            env = glean_finding(fid)
+            if env is None:
+                self._send(404, "no such finding\n")
+            else:
+                self._send_json(env)
         else:
             self._send(404, "not found\n")
 
