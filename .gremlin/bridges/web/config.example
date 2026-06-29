@@ -1,0 +1,18 @@
+# web bridge config — copy to `config` and edit. All values are optional in M0;
+# the defaults below serve a loopback-only, read-only transcript window.
+#
+#   cp config.example config
+
+# Address to bind. Keep this on loopback. A non-loopback bind is a loud,
+# token-gated, off-by-default opt-in handled by a later stitch (spec §17).
+WEB_BIND=127.0.0.1
+
+# Port to listen on. If it is already in use the bridge fails loud — no auto-bump.
+WEB_PORT=8787
+
+# Reserved for remote binding (a later stitch): a non-loopback WEB_BIND will
+# require this token or refuse to start.
+# WEB_REMOTE_TOKEN=
+
+# Reserved for attachments (a later stitch): per-file/per-body upload cap.
+# WEB_MAX_UPLOAD=26214400

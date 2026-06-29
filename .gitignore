@@ -4,6 +4,7 @@
 .gremlin/bridges/*/*.pid
 .gremlin/bridges/*/*.log
 .gremlin/bridges/*/.cursor
+.gremlin/bridges/*/.cache/
 .gremlin/bridges/*/.update-offset
  
 .claude/
