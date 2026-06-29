@@ -638,7 +638,8 @@ class Handler(BaseHTTPRequestHandler):
         name, ctype = STATIC[path]
         try:
             with open(os.path.join(PUBLIC_DIR, name), "rb") as fh:
-                self._send(200, fh.read(), ctype)
+                # no-cache: assets are tiny and files are the truth; always fresh.
+                self._send(200, fh.read(), ctype, {"Cache-Control": "no-cache"})
         except OSError:
             self._send(404, "not found\n")
 

@@ -14,10 +14,13 @@
     liveLabel.textContent = label;
   }
 
-  // Is the viewport scrolled near the bottom? Only auto-scroll if so, so a
-  // reader scrolled up to an older turn is not yanked back down.
+  // Is the log scrolled near the bottom? Only auto-scroll if so, so a reader
+  // scrolled up to an older turn is not yanked back down.
   function atBottom() {
-    return window.innerHeight + window.scrollY >= document.body.offsetHeight - 80;
+    return log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+  }
+  function scrollToBottom() {
+    log.scrollTop = log.scrollHeight;
   }
 
   // --- pending echoes ---------------------------------------------------
@@ -49,7 +52,7 @@
     }, 180000);
     pendings.push(entry);
     log.appendChild(entry.el);
-    window.scrollTo(0, document.body.scrollHeight);
+    scrollToBottom();
   }
 
   function clearMatchingPending(body) {
@@ -112,7 +115,7 @@
 
     log.appendChild(el);
     floatPendings();
-    if (stick) window.scrollTo(0, document.body.scrollHeight);
+    if (stick) scrollToBottom();
   }
 
   // --- SSE transport (the primary path) ---------------------------------
