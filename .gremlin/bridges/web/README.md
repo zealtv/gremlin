@@ -31,6 +31,12 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > `findings/`). Findings promoted (symlinked) into `context/` wear a 📡 pill;
 > `[[wikilinks]]` navigate between findings; workbench tray counts shown.
 > This completes the judgment's MVP screen set (Chat + Inspect→Glean).
+> **M4** — the Groundhog schedule inspector, behind the **Inspect hub**.
+> `GET /api/groundhog` shells out to `groundhog.sh list` (the schedule tree,
+> verbatim in `raw`, `[paused]` already tagged) + `due` (never reimplementing
+> due-ness, never re-parsing the path grammar), and reads `out/` / `fired/<today>`
+> inertly → due-now / fired-today / awaiting-pickup. Inspect is now a hub
+> (Groundhog · Glean, with Loom/Lore to come).
 
 ## Run
 

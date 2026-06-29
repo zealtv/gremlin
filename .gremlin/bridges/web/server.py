@@ -337,6 +337,63 @@ def build_status():
     return envelope("status", os.path.realpath(GREMLIN_DIR), items)
 
 
+# --- Groundhog inspector (the path IS the schedule; shell out, never re-parse)
+
+def run_readonly(args, timeout=5):
+    """Shell out to a family script's READ-ONLY verb and capture stdout. Used for
+    rule-derived facts (due-ness, the schedule tree) so we never reimplement them."""
+    try:
+        r = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           timeout=timeout)
+        return r.stdout.decode("utf-8", "replace"), r.returncode
+    except (OSError, subprocess.SubprocessError):
+        return "", 1
+
+
+def list_tray(path):
+    try:
+        return sorted(n for n in os.listdir(path) if n != ".gitkeep")
+    except OSError:
+        return []
+
+
+def build_groundhog():
+    gh = os.path.join(GREMLIN_DIR, ".groundhog", "groundhog.sh")
+    root = os.path.join(GREMLIN_DIR, ".groundhog")
+    items = []
+
+    # The schedule tree, verbatim from `list` ([paused] already tagged) — the
+    # authoritative rendering. The frontend shows it; we never re-parse the path.
+    raw, _ = run_readonly([gh, "list"])
+
+    # Due now: shell out to `due` (honors paused, HH/HH-MM, once back-dating, DST).
+    due_out, _ = run_readonly([gh, "due"])
+    for line in due_out.splitlines():
+        line = line.strip()
+        if line:
+            items.append({"path": line, "name": os.path.basename(line.rstrip("/")),
+                          "state": "due", "fields": {}})
+
+    # Fired, awaiting pickup (inert read of out/).
+    for name in list_tray(os.path.join(root, "out")):
+        items.append({"path": "out/%s" % name, "name": name,
+                      "state": "awaiting-pickup", "fields": {}})
+
+    # Fired today (inert read of fired/<today>/ leaves).
+    today = time.strftime("%Y-%m-%d")
+    fired_today = os.path.join(root, "fired", today)
+    if os.path.isdir(fired_today):
+        for dirpath, dirnames, _files in os.walk(fired_today):
+            if not dirnames:  # a leaf marker
+                rel = os.path.relpath(dirpath, fired_today)
+                items.append({"path": "fired/%s/%s" % (today, rel),
+                              "name": os.path.basename(dirpath),
+                              "state": "fired-today", "fields": {}})
+
+    return envelope("groundhog", os.path.realpath(root), items,
+                    source="groundhog.sh list + due", raw=raw)
+
+
 # --- Glean inspector (index-first: INDEX.md only; bodies on demand) ----------
 
 GLEAN_DIR = os.path.join(GREMLIN_DIR, ".glean")
@@ -517,6 +574,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(build_context())
         elif path == "/api/status":
             self._send_json(build_status())
+        elif path == "/api/groundhog":
+            self._send_json(build_groundhog())
         elif path == "/api/glean":
             self._send_json(build_glean())
         elif path.startswith("/api/glean/finding/"):

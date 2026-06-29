@@ -351,7 +351,6 @@
   }
 
   function renderGlean(env) {
-    inspect.textContent = "";
     gleanRows = {};
     var head = section("Glean — memory");
     head.appendChild(pathChip(".glean/findings/INDEX.md"));
@@ -384,13 +383,78 @@
     }
   }
 
-  function loadGlean() {
-    fetch("/api/glean").then(function (r) { return r.json(); })
-      .then(renderGlean)
-      .catch(function () {
-        inspect.textContent = "";
-        inspect.appendChild(el("div", "sub warn", "could not load Glean"));
+  // --- Groundhog: schedule tree (verbatim from `list`) + derived state ------
+  function renderGroundhog(env) {
+    var s = section("Groundhog");
+    s.appendChild(pathChip(".groundhog/schedule/"));
+    if (env.raw && env.raw.trim()) {
+      s.appendChild(el("div", "sub", "schedule (groundhog.sh list)"));
+      s.appendChild(el("pre", "code", env.raw.replace(/\n+$/, "")));
+    } else {
+      s.appendChild(el("div", "sub", "nothing scheduled"));
+    }
+    inspect.appendChild(s);
+
+    var groups = [
+      ["due", "Due now"],
+      ["fired-today", "Fired today"],
+      ["awaiting-pickup", "Awaiting pickup (out/)"],
+    ];
+    groups.forEach(function (g) {
+      var rows = env.items.filter(function (i) { return i.state === g[0]; });
+      if (!rows.length) return;
+      var c = section(g[1]);
+      rows.forEach(function (i) {
+        var row = el("div", "ctx-row");
+        row.appendChild(el("div", "ctx-name", i.name));
+        row.appendChild(el("div", "path-chip mono", i.path));
+        c.appendChild(row);
       });
+      inspect.appendChild(c);
+    });
+  }
+
+  // --- Inspect hub: index-first inspectors, one screen each (spec §5) -------
+  var INSPECTORS = [
+    { id: "groundhog", emoji: "🐹", label: "Groundhog", api: "/api/groundhog", render: renderGroundhog },
+    { id: "glean", emoji: "🔮", label: "Glean", api: "/api/glean", render: renderGlean },
+  ];
+  var SOON = ["📜 Loom", "📚 Lore"];
+
+  function backHeader() {
+    var b = el("button", "back", "‹ Inspect");
+    b.addEventListener("click", renderInspectHub);
+    return b;
+  }
+
+  function renderInspectHub() {
+    inspect.textContent = "";
+    var s = section("Inspect");
+    INSPECTORS.forEach(function (insp) {
+      var row = el("div", "hub-row");
+      row.appendChild(el("span", "hub-emoji", insp.emoji));
+      row.appendChild(el("span", "hub-label", insp.label));
+      row.style.cursor = "pointer";
+      row.addEventListener("click", function () { openInspector(insp); });
+      s.appendChild(row);
+    });
+    SOON.forEach(function (label) {
+      var row = el("div", "hub-row soon");
+      row.appendChild(el("span", "hub-label", label));
+      row.appendChild(el("span", "ctx-target", "coming soon"));
+      s.appendChild(row);
+    });
+    inspect.appendChild(s);
+  }
+
+  function openInspector(insp) {
+    inspect.textContent = "";
+    inspect.appendChild(backHeader());
+    var loading = el("div", "sub", "loading…");
+    inspect.appendChild(loading);
+    fetch(insp.api).then(function (r) { return r.json(); })
+      .then(function (env) { loading.remove(); insp.render(env); })
+      .catch(function () { loading.textContent = "could not load " + insp.label; loading.className = "sub warn"; });
   }
 
   function loadPanel() {
@@ -421,7 +485,7 @@
       loadPanel();
       statusTimer = setInterval(loadPanel, 4000); // poll: the inspector shape
     } else if (name === "inspect") {
-      loadGlean();
+      renderInspectHub();
     }
   }
 

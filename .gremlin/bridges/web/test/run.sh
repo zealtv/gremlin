@@ -490,6 +490,65 @@ done
 gcleanup
 
 # ============================================================================
+echo "== M4 inspector: groundhog (shell out to list/due) =="
+
+HFIX="$(mktemp -d)"
+HG="$HFIX/.gremlin"
+# A self-contained gremlin so groundhog.sh resolves its own root.
+cp -a /home/bob/repos/gremlin/.gremlin "$HG"
+: > "$HG/transcript.md"
+rm -f "$HG/bridges/web/.cursor" "$HG/bridges/web/web.pid" "$HG/bridges/web/web.log"
+rm -rf "$HG/bridges/web/__pycache__" "$HG/bridges/web/.cache"
+# seed schedule: a paused weekly entry + a fired-today marker + an out/ entry
+mkdir -p "$HG/.groundhog/schedule/weekly/sun/09-00/standup.paused"
+mkdir -p "$HG/.groundhog/fired/$(date +%Y-%m-%d)/weekly/sun/09-00/standup"
+mkdir -p "$HG/.groundhog/out/standup-$(date +%Y-%m-%d)"
+
+HPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+HURL="http://127.0.0.1:$HPORT"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$HG" WEB_TRANSCRIPT="$HG/transcript.md" WEB_PORT="$HPORT" WEB_BIND="127.0.0.1"
+unset WEB_REMOTE_TOKEN
+
+hcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$HFIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$HURL/"; then
+  ok "groundhog daemon boots against fixture"
+else
+  bad "groundhog daemon boots against fixture"
+fi
+
+gh="$(curl -fsS "$HURL/api/groundhog")"
+# raw is the verbatim `list` tree, with the paused entry tagged by the script.
+if printf '%s' "$gh" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+sys.exit(0 if d["source"].startswith("groundhog.sh") and "standup" in d["raw"] and "[paused]" in d["raw"] else 1)'; then
+  ok "schedule tree shelled out verbatim, paused entry tagged"
+else
+  bad "schedule tree shelled out verbatim, paused entry tagged"
+fi
+
+# fired-today marker surfaces.
+if printf '%s' "$gh" | python3 -c 'import sys,json
+items=json.load(sys.stdin)["items"]
+sys.exit(0 if any(i["state"]=="fired-today" for i in items) else 1)'; then
+  ok "fired/<today> marker → fired-today"
+else
+  bad "fired/<today> marker → fired-today"
+fi
+
+# out/ residue surfaces as awaiting-pickup.
+if printf '%s' "$gh" | python3 -c 'import sys,json
+items=json.load(sys.stdin)["items"]
+sys.exit(0 if any(i["state"]=="awaiting-pickup" for i in items) else 1)'; then
+  ok "out/ entry → awaiting-pickup"
+else
+  bad "out/ entry → awaiting-pickup"
+fi
+
+hcleanup
+
+# ============================================================================
 echo "== 95 remote bind (token-gated, off by default) =="
 
 RFIX="$(mktemp -d)"
