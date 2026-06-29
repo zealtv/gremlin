@@ -438,14 +438,77 @@
     }
   }
 
+  // --- Lore: durable, dated reference; dark by default (cf. Glean) ----------
+  var loreRows = {};
+
+  function loreContentLink(id, c) {
+    var a = el("a", "embed embed-file");
+    a.href = "/api/lore/content/" + encodeURIComponent(id) + "/" +
+      c.name.split("/").map(encodeURIComponent).join("/");
+    if (c.binary) a.setAttribute("download", ""); else a.target = "_blank";
+    a.appendChild(el("span", "embed-icon", c.binary ? "📦" : "📄"));
+    a.appendChild(el("span", "embed-label", c.name + " · " + c.size + " B"));
+    return a;
+  }
+
+  function openLore(id) {
+    var entry = loreRows[id];
+    if (!entry) return;
+    if (entry.loaded) { entry.bodyEl.hidden = !entry.bodyEl.hidden; return; }
+    entry.bodyEl.textContent = "loading…";
+    entry.bodyEl.hidden = false;
+    fetch("/api/lore/item/" + encodeURIComponent(id))
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (env) {
+        var f = env.items[0].fields;
+        entry.bodyEl.innerHTML = window.GremlinRender
+          ? window.GremlinRender.renderBodyHTML(f.body) : f.body;
+        if (f.content && f.content.length) {
+          entry.bodyEl.appendChild(el("div", "sub", "content/"));
+          f.content.forEach(function (c) { entry.bodyEl.appendChild(loreContentLink(id, c)); });
+        }
+        entry.loaded = true;
+      })
+      .catch(function () { entry.bodyEl.textContent = "could not load item"; });
+  }
+
+  function renderLore(env) {
+    loreRows = {};
+    var head = section("Lore — reference");
+    head.appendChild(pathChip(".lore/INDEX.md"));
+    head.appendChild(el("div", "sub", "durable, dated record — not recalled"));
+    if (!env.items.length) {
+      head.appendChild(el("div", "sub", "no lore here"));
+      inspect.appendChild(head);
+      return;
+    }
+    env.items.forEach(function (it) {
+      var row = el("div", "ctx-row");
+      var h = el("div", "ctx-head");
+      h.style.cursor = "pointer";
+      h.appendChild(el("span", "ctx-name", it.fields.title || it.name));
+      if (it.fields.date) h.appendChild(el("span", "ctx-target", it.fields.date));
+      row.appendChild(h);
+      row.appendChild(el("div", "sub", it.fields.desc || ""));
+      var body = el("div", "finding-body prose");
+      body.hidden = true;
+      row.appendChild(body);
+      loreRows[it.name] = { bodyEl: body, loaded: false };
+      h.addEventListener("click", function () { openLore(it.name); });
+      head.appendChild(row);
+    });
+    inspect.appendChild(head);
+  }
+
   // --- Inspect hub: index-first inspectors, one screen each (spec §5) -------
   // Emojis match each primitive's own README title.
   var INSPECTORS = [
     { id: "groundhog", emoji: "🦫", label: "Groundhog", api: "/api/groundhog", render: renderGroundhog },
     { id: "loom", emoji: "🪡", label: "Loom", api: "/api/loom", render: renderLoom },
     { id: "glean", emoji: "🔮", label: "Glean", api: "/api/glean", render: renderGlean },
+    { id: "lore", emoji: "📜", label: "Lore", api: "/api/lore", render: renderLore },
   ];
-  var SOON = ["📜 Lore"];
+  var SOON = [];
 
   function backHeader() {
     var b = el("button", "back", "‹ Inspect");

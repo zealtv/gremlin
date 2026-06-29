@@ -15,6 +15,7 @@
 import hmac
 import http.cookies
 import json
+import mimetypes
 import os
 import queue
 import re
@@ -394,6 +395,72 @@ def build_groundhog():
                     source="groundhog.sh list + due", raw=raw)
 
 
+# --- Lore inspector (durable, dated reference; dark by default) --------------
+
+LORE_DIR = os.path.join(HOST_DIR, ".lore")
+LORE_INDEX_LINE = re.compile(r"^- \[([^\]]+)\]\([^)]*\) — (.*)$")
+
+
+def looks_binary(path):
+    try:
+        with open(path, "rb") as fh:
+            return b"\x00" in fh.read(8192)
+    except OSError:
+        return True
+
+
+def build_lore():
+    """Append-and-keep cards from the host's .lore/INDEX.md. Skips gracefully if
+    there is no lore. Dark by default — no recall, no promotion (cf. Glean)."""
+    items = []
+    index = read_text(os.path.join(LORE_DIR, "INDEX.md"))
+    if index is None:
+        return envelope("lore", os.path.realpath(LORE_DIR), [], raw="(no lore here)")
+    for line in index.splitlines():
+        m = LORE_INDEX_LINE.match(line)
+        if not m:
+            continue
+        lid = m.group(1)
+        title, _, desc = m.group(2).partition(" — ")
+        date = lid[:10] if re.match(r"\d{4}-\d{2}-\d{2}", lid) else ""
+        items.append({"path": "items/%s/" % lid, "name": lid, "state": "item",
+                      "fields": {"title": title.strip(), "desc": desc.strip(), "date": date}})
+    return envelope("lore", os.path.realpath(LORE_DIR), items)
+
+
+def lore_item(lid):
+    if not SAFE_ID.match(lid or "") or lid in (".", ".."):
+        return None
+    items_dir = os.path.join(LORE_DIR, "items")
+    itemdir = under(items_dir, os.path.join(items_dir, lid))
+    if not itemdir or not os.path.isdir(itemdir):
+        return None
+    body = read_text(os.path.join(itemdir, "item.md")) or ""
+    title = desc = ""
+    for line in body.splitlines():
+        if not title and line.startswith("# "):
+            title = line[2:].strip()
+        elif title and not desc and line.strip() and not line.startswith("#"):
+            desc = line.strip()
+            break
+    content = []
+    cdir = os.path.join(itemdir, "content")
+    if os.path.isdir(cdir):
+        for dirpath, _dirs, files in os.walk(cdir):
+            for name in sorted(files):
+                full = os.path.join(dirpath, name)
+                rel = os.path.relpath(full, cdir)
+                try:
+                    size = os.path.getsize(full)
+                except OSError:
+                    size = 0
+                content.append({"name": rel, "size": size, "binary": looks_binary(full)})
+    return envelope("lore", os.path.realpath(LORE_DIR), [{
+        "path": "items/%s/" % lid, "name": lid, "state": "item",
+        "fields": {"title": title, "desc": desc, "body": body, "content": content},
+    }])
+
+
 # --- Loom inspector (preserve the thread/stitch tree; reuse loom.sh) ---------
 
 def build_loom():
@@ -615,6 +682,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(build_groundhog())
         elif path == "/api/loom":
             self._send_json(build_loom())
+        elif path == "/api/lore":
+            self._send_json(build_lore())
+        elif path.startswith("/api/lore/item/"):
+            env = lore_item(unquote(path[len("/api/lore/item/"):]))
+            self._send(404, "no such item\n") if env is None else self._send_json(env)
+        elif path.startswith("/api/lore/content/"):
+            self._serve_lore_content(unquote(path[len("/api/lore/content/"):]))
         elif path == "/api/glean":
             self._send_json(build_glean())
         elif path.startswith("/api/glean/finding/"):
@@ -731,6 +805,30 @@ class Handler(BaseHTTPRequestHandler):
                 os.remove(tmp)
             except OSError:
                 pass
+
+    def _serve_lore_content(self, rest):
+        # rest = "<id>/<subpath>"; serve a lore content byte, jailed under that
+        # item's content/ dir. Binary → download; text/markdown → inline.
+        lid, _, sub = rest.partition("/")
+        if not SAFE_ID.match(lid) or lid in (".", "..") or not sub:
+            self._send(404, "not found\n")
+            return
+        cdir = os.path.join(LORE_DIR, "items", lid, "content")
+        real = under(cdir, os.path.join(cdir, sub))
+        if not real or not os.path.isfile(real):
+            self._send(404, "not found\n")
+            return
+        ctype = mimetypes.guess_type(real)[0] or "application/octet-stream"
+        disposition = "inline" if ctype.startswith("text/") else "attachment"
+        try:
+            with open(real, "rb") as fh:
+                body = fh.read()
+        except OSError:
+            self._send(404, "not found\n")
+            return
+        self._send(200, body, ctype, {
+            "Content-Disposition": '%s; filename="%s"' % (disposition, os.path.basename(real)),
+        })
 
     def _serve_static(self, path):
         name, ctype = STATIC[path]

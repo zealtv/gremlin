@@ -601,6 +601,73 @@ fi
 lmcleanup
 
 # ============================================================================
+echo "== M7 inspector: lore (durable, dated; content download) =="
+
+LRFIX="$(mktemp -d)"
+LRH="$LRFIX/host"; LRG="$LRH/.gremlin"
+mkdir -p "$LRG" "$LRH/.lore/items/2026-06-01-demo/content"
+: > "$LRG/transcript.md"
+printf '# A demo note\nWhat the council decided.\n\n## Source\nthe session.\n' > "$LRH/.lore/items/2026-06-01-demo/item.md"
+printf 'plain text\n' > "$LRH/.lore/items/2026-06-01-demo/content/notes.txt"
+printf '\x00\x01binary\x00' > "$LRH/.lore/items/2026-06-01-demo/content/blob.bin"
+printf -- '- [2026-06-01-demo](items/2026-06-01-demo/) — A demo note — What the council decided.\n' > "$LRH/.lore/INDEX.md"
+
+LRPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+LRURL="http://127.0.0.1:$LRPORT"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$LRG" WEB_HOST_DIR="$LRH" WEB_TRANSCRIPT="$LRG/transcript.md" WEB_PORT="$LRPORT" WEB_BIND="127.0.0.1"
+unset WEB_REMOTE_TOKEN
+
+lrcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$LRFIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$LRURL/"; then
+  ok "lore daemon boots against fixture"
+else
+  bad "lore daemon boots against fixture"
+fi
+
+# Cards match INDEX.md (id, title, date).
+if curl -fsS "$LRURL/api/lore" | python3 -c 'import sys,json
+i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="2026-06-01-demo"][0]
+sys.exit(0 if i["fields"]["title"]=="A demo note" and i["fields"]["date"]=="2026-06-01" else 1)'; then
+  ok "cards match INDEX.md (title + date)"
+else
+  bad "cards match INDEX.md"
+fi
+
+# Item shows item.md body + content listing with binary flags.
+if curl -fsS "$LRURL/api/lore/item/2026-06-01-demo" | python3 -c 'import sys,json
+f=json.load(sys.stdin)["items"][0]["fields"]
+c={x["name"]:x["binary"] for x in f["content"]}
+sys.exit(0 if "## Source" in f["body"] and c.get("notes.txt")==False and c.get("blob.bin")==True else 1)'; then
+  ok "item.md body + content listing (binary detected)"
+else
+  bad "item.md body + content listing"
+fi
+
+# Binary content offers download (attachment); text is inline.
+if curl -s -D - -o /dev/null "$LRURL/api/lore/content/2026-06-01-demo/blob.bin" | grep -qi 'content-disposition: attachment' \
+  && curl -s -D - -o /dev/null "$LRURL/api/lore/content/2026-06-01-demo/notes.txt" | grep -qi 'content-disposition: inline'; then
+  ok "binary → download, text → inline"
+else
+  bad "binary → download, text → inline"
+fi
+
+# Content path traversal refused.
+code="$(curl -s -o /dev/null -w '%{http_code}' "$LRURL/api/lore/content/2026-06-01-demo/..%2f..%2fitem.md")"
+[ "$code" = "404" ] && ok "lore content traversal → 404" || bad "lore content traversal → 404 (got $code)"
+
+# Absent lore skips gracefully (empty items, no crash).
+rm -rf "$LRH/.lore"
+if curl -fsS "$LRURL/api/lore" | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["items"]==[] else 1)'; then
+  ok "absent .lore → empty, graceful"
+else
+  bad "absent .lore → empty, graceful"
+fi
+
+lrcleanup
+
+# ============================================================================
 echo "== 95 remote bind (token-gated, off by default) =="
 
 RFIX="$(mktemp -d)"

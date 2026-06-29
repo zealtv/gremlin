@@ -42,6 +42,11 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > `status` tree in `raw`, NEXT TO TEND = `loose-ends`, `waiting` excluded, counts
 > from the script's own summary. Inspect hub emojis match each primitive's README
 > (the beaver Groundhog, needle Loom, crystal-ball Glean, scroll Lore); Transcript is the memo tab.
+> **M7** — the Lore inspector (reads the host's `.lore/`, skips gracefully if
+> absent). `GET /api/lore` lists the dated `INDEX.md` cards (durable/dark — no
+> recall, no promotion, cf. Glean); `GET /api/lore/item/:id` returns `item.md` +
+> the `content/` file listing; `GET /api/lore/content/:id/*path` serves a content
+> byte (jailed under the item; binary → download, text → inline).
 
 ## Run
 
