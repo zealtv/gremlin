@@ -137,5 +137,5 @@ Before pushing:
   sandboxing, and extensions.
 - `.nest/README.md`: the nestling inbox/claim/complete protocol.
 - `.groundhog/README.md`: the schedule/tick protocol.
-- `.glean/README.md`: the gleam memory protocol.
+- `.glean/README.md`: the glean memory protocol.
 - `.loom/README.md`: the loom protocol for goals that outlive a turn.
