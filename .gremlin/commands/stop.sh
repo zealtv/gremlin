@@ -5,29 +5,21 @@ set -euo pipefail
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIDFILE="$GREMLIN_DIR/.tending.pid"
 NEST_IN="$GREMLIN_DIR/.nest/in"
-DROPPED="$GREMLIN_DIR/.nest/dropped"
+NESTLING="$GREMLIN_DIR/.nest/nestling.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 
 iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-# Drop any orphaned single .tending claim into dropped/ with a reason. The
-# tender invariant is at most one claim in flight, so we expect zero or one
-# match. Idempotent — safe to call when no orphan exists.
+# Drop any orphaned single .tending claim through canonical Nestlings. This is
+# an explicit user action, so it bypasses retry while retaining canonical
+# collision-safe dropped-history handling.
 drop_active_claim() {
   local reason="$1"
-  local claim base dropped_path reason_file
+  local claim base
   for claim in "$NEST_IN"/*.tending; do
     [ -e "$claim" ] || continue
     base="$(basename "$claim" .tending)"
-    dropped_path="$DROPPED/$base"
-    reason_file="$DROPPED/$base.reason.md"
-    [ -e "$dropped_path" ] && continue  # someone else dropped it; leave alone
-    mv -- "$claim" "$dropped_path"
-    {
-      echo "# why $base was dropped"
-      echo
-      printf '%s\n' "$reason"
-    } > "$reason_file"
+    "$NESTLING" drop "$base" "$reason" >/dev/null
   done
 }
 

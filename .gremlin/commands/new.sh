@@ -29,8 +29,8 @@ fi
 
 mkdir "$landing"
 printf 'memory\n' > "$landing/.model"
-# Scheduled, idempotent work: if a tend dies or fails on it, the nest may
-# safely re-queue it rather than drop it (see nestling.sh recovery policy).
+# Scheduled, idempotent work: canonical Nestlings may safely re-queue it after
+# Gremlin establishes that the owning tender is no longer alive.
 printf 'scheduled memory review — safe to re-run\n' > "$landing/.recoverable"
 cat > "$landing/instructions.md" <<EOF_REVIEW
 # Memory review: $archive_id

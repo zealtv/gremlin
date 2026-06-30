@@ -161,6 +161,13 @@ stop" and clean it on next inspection. The pidfile lives next to
 `.paused` and follows the same idiom: a single root-level flag observed
 by anyone who needs it.
 
+Before each pass, Gremlin asks canonical Nestlings for claims older than its
+stale threshold. This discovery is read-only. Gremlin resolves those claims
+only when the pidfile does not identify a live tender process group; Nestlings
+then retries explicitly marked directories within its attempt limit or drops
+them fail-closed. Liveness and model-failure detection remain Gremlin policy,
+while retry and drop transitions remain canonical Nestlings protocol.
+
 ### /stop
 
 `/stop` is the user-visible abort: it reads `.tending.pid`, signals the pgid

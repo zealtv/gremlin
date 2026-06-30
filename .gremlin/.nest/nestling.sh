@@ -10,8 +10,8 @@ usage:
   nestling.sh claim <name>
   nestling.sh complete <name> <result-src> [out-name]
   nestling.sh drop <name> [reason...]
+  nestling.sh stale [max-age-mins]
   nestling.sh resolve <name> [reason...]
-  nestling.sh recover [max-age-mins]
   nestling.sh sweep [days]
 
 notes:
@@ -20,12 +20,8 @@ notes:
   - items can be files or directories
   - *.landing means being written
   - *.tending means claimed
-  - resolve applies the recovery policy to one claimed item: a recoverable
-    item under its attempt limit is re-queued with a note, otherwise it is
-    dropped with a reason. recover sweeps stale *.tending claims the same way.
-  - recoverability: a claimed directory is recoverable if it holds a
-    .recoverable file or its name matches a glob in NEST_RECOVERABLE_GLOBS
-    (default: memory-review-*). attempt limit is NEST_MAX_ATTEMPTS (default 3).
+  - stale only reports old claims; it never resolves them
+  - resolve retries marked directories up to NEST_MAX_ATTEMPTS (default 3)
 USAGE
 }
 
@@ -94,143 +90,78 @@ claimed_path() {
   printf '%s/%s.tending\n' "$IN_DIR" "$name"
 }
 
-# --- recovery policy -------------------------------------------------------
-# A claimed item that never completes (tender died/hung) or whose model exited
-# non-zero must not sit as silent *.tending residue. resolve_claim either
-# re-queues a recoverable item (with a note, bounded by an attempt count) or
-# drops it with a reason. recover sweeps stale claims through the same gate.
-
-# Globs whose matching item names are treated as safe to re-run. Until item
-# producers stamp a .recoverable marker (commands/new.sh does for memory
-# reviews), this name heuristic is the fallback.
-NEST_RECOVERABLE_GLOBS="${NEST_RECOVERABLE_GLOBS:-memory-review-*}"
-# How many times an item may be re-queued before it is dropped instead, so a
-# persistently failing item cannot retry forever.
-NEST_MAX_ATTEMPTS="${NEST_MAX_ATTEMPTS:-3}"
-
-gremlin_dir() { printf '%s\n' "$(cd "$NEST_DIR/.." && pwd)"; }
-
-# Portable file mtime in epoch seconds (GNU stat, then BSD stat).
 mtime_epoch() {
   stat -c %Y -- "$1" 2>/dev/null || stat -f %m -- "$1" 2>/dev/null
 }
 
-# True while a tender process is live, so recovery never races an in-flight
-# model turn. The tender writes its pid to .tending.pid for the duration of
-# the call and removes it on exit; a stale file (hard kill) fails kill -0.
-tender_alive() {
-  local pidfile pid
-  pidfile="$(gremlin_dir)/.tending.pid"
-  [[ -f "$pidfile" ]] || return 1
-  pid="$(tr -d '[:space:]' < "$pidfile")"
-  [[ -n "$pid" ]] || return 1
-  kill -0 "$pid" 2>/dev/null
-}
-
-# A claimed directory is recoverable if it carries a .recoverable marker or its
-# stable name matches a recoverable glob. File items are never recoverable —
-# they have nowhere to carry the attempt count or note.
-is_recoverable() {
-  local claimed="$1" name="$2" glob
-  [[ -d "$claimed" ]] || return 1
-  [[ -f "$claimed/.recoverable" ]] && return 0
-  for glob in $NEST_RECOVERABLE_GLOBS; do
-    # shellcheck disable=SC2254 -- $glob is intentionally a pattern
-    case "$name" in $glob) return 0 ;; esac
-  done
-  return 1
+max_attempts() {
+  local value="${NEST_MAX_ATTEMPTS:-3}"
+  [[ "$value" =~ ^[0-9]+$ ]] || die "NEST_MAX_ATTEMPTS must be a non-negative integer"
+  printf '%d\n' "$((10#$value))"
 }
 
 item_attempts() {
-  local claimed="$1"
-  if [[ -d "$claimed" && -f "$claimed/.attempts" ]]; then
-    tr -cd '0-9' < "$claimed/.attempts"
-  else
-    printf '0'
+  local claimed="$1" value
+  if [[ ! -f "$claimed/.attempts" ]]; then
+    printf '0\n'
+    return
   fi
+
+  value="$(<"$claimed/.attempts")"
+  [[ "$value" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ ]] || die ".attempts must contain a non-negative integer: $claimed/.attempts"
+  printf '%d\n' "$((10#${BASH_REMATCH[1]}))"
 }
 
-# Move a claimed item to dropped/ with a reason. Tolerant of name collisions
-# (a same-named item dropped earlier) so recovery never wedges on a clash.
+move_no_replace() {
+  local src="$1" dst="$2"
+
+  # `-T` prevents a directory source from being nested inside a destination
+  # created after the caller's collision check; `-n` prevents replacement.
+  mv -nT -- "$src" "$dst"
+}
+
+drop_destination() {
+  local name="$1" candidate timestamp suffix=2
+  candidate="$name"
+  if [[ ! -e "$DROPPED_DIR/$candidate" && ! -e "$DROPPED_DIR/$candidate.reason.md" ]]; then
+    printf '%s\n' "$candidate"
+    return
+  fi
+
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  candidate="$name.$timestamp"
+  while [[ -e "$DROPPED_DIR/$candidate" || -e "$DROPPED_DIR/$candidate.reason.md" ]]; do
+    candidate="$name.$timestamp.$suffix"
+    suffix=$((suffix + 1))
+  done
+  printf '%s\n' "$candidate"
+}
+
 drop_claimed() {
-  local name="$1"; shift
-  local claimed dropped reason_file reason ts
+  local name="$1"
+  shift
+  local claimed dropped_name dropped reason_file reason
   claimed="$(claimed_path "$name")"
   [[ -e "$claimed" ]] || die "claimed item not found: $claimed"
 
-  dropped="$DROPPED_DIR/$name"
-  reason_file="$DROPPED_DIR/$name.reason.md"
-  if [[ -e "$dropped" || -e "$reason_file" ]]; then
-    ts="$(date -u +%Y%m%dT%H%M%SZ)"
-    dropped="$DROPPED_DIR/$name.$ts"
-    reason_file="$DROPPED_DIR/$name.$ts.reason.md"
+  if (( $# > 0 )); then
+    reason="$*"
+  else
+    reason="Add the reason here."
   fi
 
-  mv -- "$claimed" "$dropped"
-  if (( $# > 0 )); then reason="$*"; else reason="Add the reason here."; fi
+  while :; do
+    dropped_name="$(drop_destination "$name")"
+    dropped="$DROPPED_DIR/$dropped_name"
+    reason_file="$DROPPED_DIR/$dropped_name.reason.md"
+    move_no_replace "$claimed" "$dropped" 2>/dev/null && break
+  done
   {
     echo "# why $name was dropped"
     echo
     printf '%s\n' "$reason"
   } > "$reason_file"
   printf '%s\n' "$dropped"
-}
-
-# Re-queue a recoverable claim: rename it back to a ready name, bump the
-# attempt count, and (for a directory with instructions.md) prepend a note so
-# the model knows it is processing a recovered, late, possibly out-of-order
-# item. Returns the ready path.
-requeue_claim() {
-  local name="$1" reason="$2" attempts="$3"
-  local claimed dst next iso note tmp
-  claimed="$(claimed_path "$name")"
-  dst="$IN_DIR/$name"
-  [[ ! -e "$dst" ]] || die "cannot re-queue, ready path exists: $dst"
-  next=$((attempts + 1))
-  iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-  if [[ -d "$claimed" && -f "$claimed/instructions.md" ]]; then
-    note="$(cat <<EOF
-> **⚠️ Recovered item — re-queued $iso (attempt $next/$NEST_MAX_ATTEMPTS).** Reason: $reason.
-> This item was left as a stale \`.tending\` claim and is being processed late and
-> possibly out of order. Treat its context as older than it appears, and note in
-> your outcome that this was a recovered/retried item.
-
-EOF
-)"
-    tmp="$(mktemp)"
-    { printf '%s\n' "$note"; cat "$claimed/instructions.md"; } > "$tmp"
-    mv -- "$tmp" "$claimed/instructions.md"
-  fi
-
-  [[ -d "$claimed" ]] && printf '%s\n' "$next" > "$claimed/.attempts"
-  mv -- "$claimed" "$dst"
-  printf '%s\n' "$dst"
-}
-
-# The policy gate. Re-queue a recoverable item still under its attempt limit;
-# otherwise drop it with a reason. Used by both `resolve` (the tender's
-# failure path) and `recover` (the stale-claim sweep).
-resolve_claim() {
-  local name="$1" reason="$2"
-  local claimed attempts
-  claimed="$(claimed_path "$name")"
-  [[ -e "$claimed" ]] || die "claimed item not found: $claimed"
-  attempts="$(item_attempts "$claimed")"
-
-  if is_recoverable "$claimed" "$name" && (( attempts < NEST_MAX_ATTEMPTS )); then
-    requeue_claim "$name" "$reason" "$attempts" >/dev/null
-    printf 're-queued %s (attempt %d/%d)\n' "$name" "$((attempts + 1))" "$NEST_MAX_ATTEMPTS"
-  else
-    local why
-    if is_recoverable "$claimed" "$name"; then
-      why="$reason; recovery attempts exhausted ($attempts/$NEST_MAX_ATTEMPTS)"
-    else
-      why="$reason; item is not recoverable"
-    fi
-    drop_claimed "$name" "$why" >/dev/null
-    printf 'dropped %s\n' "$name"
-  fi
 }
 
 cmd_ensure() {
@@ -322,6 +253,27 @@ cmd_drop() {
   drop_claimed "$name" "$@"
 }
 
+cmd_stale() {
+  require_nest
+  ensure_dirs
+
+  local max_age_mins="${1:-10}"
+  [[ "$max_age_mins" =~ ^[0-9]+$ ]] || die "stale <max-age-mins> must be a non-negative integer"
+  (( $# <= 1 )) || die "stale accepts at most one argument"
+
+  local now cutoff path base mtime age
+  now="$(date +%s)"
+  cutoff=$((max_age_mins * 60))
+  for path in "$IN_DIR"/*.tending; do
+    [[ -e "$path" ]] || continue
+    mtime="$(mtime_epoch "$path")" || die "cannot read mtime: $path"
+    age=$((now - mtime))
+    (( age >= cutoff )) || continue
+    base="$(basename "$path")"
+    printf '%s\n' "${base%.tending}"
+  done
+}
+
 cmd_resolve() {
   require_nest
   ensure_dirs
@@ -329,37 +281,61 @@ cmd_resolve() {
   local name="${1:-}"
   shift || true
   ensure_stable_name "$name"
-  local reason="${*:-unspecified}"
 
-  resolve_claim "$name" "$reason"
-}
+  local claimed attempts limit reason next ready now why backup
+  claimed="$(claimed_path "$name")"
+  [[ -e "$claimed" ]] || die "claimed item not found: $claimed"
+  limit="$(max_attempts)"
+  reason="${*:-unspecified}"
 
-cmd_recover() {
-  require_nest
-  ensure_dirs
-
-  local max_age_mins="${1:-10}"
-  [[ "$max_age_mins" =~ ^[0-9]+$ ]] || die "recover <max-age-mins> must be a non-negative integer"
-
-  # Never recover while a tender is live — it owns the current claim and the
-  # next pass will sweep once it has exited.
-  if tender_alive; then
-    return 0
+  if [[ -d "$claimed" ]]; then
+    attempts="$(item_attempts "$claimed")"
+  else
+    attempts=0
   fi
 
-  local now cutoff path base name mtime age
-  now="$(date +%s)"
-  cutoff=$((max_age_mins * 60))
+  if [[ -d "$claimed" && -f "$claimed/.recoverable" && "$attempts" -lt "$limit" ]]; then
+    ready="$IN_DIR/$name"
+    [[ ! -e "$ready" ]] || die "cannot retry, ready path exists: $ready"
+    backup="$(mktemp -d "${TMPDIR:-/tmp}/nestlings-resolve.XXXXXX")"
+    [[ ! -e "$claimed/.attempts" ]] || cp -p -- "$claimed/.attempts" "$backup/.attempts"
+    [[ ! -e "$claimed/.recovery.md" ]] || cp -p -- "$claimed/.recovery.md" "$backup/.recovery.md"
+    next=$((attempts + 1))
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '%s\n' "$next" > "$claimed/.attempts"
+    {
+      echo "# recovery"
+      echo
+      printf -- '- time: %s\n' "$now"
+      printf -- '- attempt: %d/%d\n' "$next" "$limit"
+      printf -- '- reason: %s\n' "$reason"
+    } > "$claimed/.recovery.md"
+    if ! move_no_replace "$claimed" "$ready"; then
+      if [[ -e "$backup/.attempts" ]]; then
+        cp -p -- "$backup/.attempts" "$claimed/.attempts"
+      else
+        rm -f -- "$claimed/.attempts"
+      fi
+      if [[ -e "$backup/.recovery.md" ]]; then
+        cp -p -- "$backup/.recovery.md" "$claimed/.recovery.md"
+      else
+        rm -f -- "$claimed/.recovery.md"
+      fi
+      rm -rf -- "$backup"
+      die "cannot retry, ready path appeared concurrently: $ready"
+    fi
+    rm -rf -- "$backup"
+    printf 're-queued %s (attempt %d/%d)\n' "$name" "$next" "$limit"
+    return
+  fi
 
-  for path in "$IN_DIR"/*.tending; do
-    [[ -e "$path" ]] || continue
-    base="$(basename "$path")"
-    name="${base%.tending}"
-    mtime="$(mtime_epoch "$path")"; mtime="${mtime:-$now}"
-    age=$(( now - mtime ))
-    (( age >= cutoff )) || continue
-    resolve_claim "$name" "orphaned stale claim (tender exited without completing it)"
-  done
+  if [[ -d "$claimed" && -f "$claimed/.recoverable" ]]; then
+    why="$reason; recovery attempts exhausted ($attempts/$limit)"
+  else
+    why="$reason; item is not recoverable"
+  fi
+  drop_claimed "$name" "$why" >/dev/null
+  printf 'dropped %s\n' "$name"
 }
 
 sweep_dir() {
@@ -402,8 +378,8 @@ main() {
     claim) shift; cmd_claim "$@" ;;
     complete) shift; cmd_complete "$@" ;;
     drop) shift; cmd_drop "$@" ;;
+    stale) shift; cmd_stale "$@" ;;
     resolve) shift; cmd_resolve "$@" ;;
-    recover) shift; cmd_recover "$@" ;;
     sweep) shift; cmd_sweep "$@" ;;
     -h|--help|help|"") usage ;;
     *) die "unknown command '$cmd'" ;;

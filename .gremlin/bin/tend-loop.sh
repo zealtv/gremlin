@@ -40,11 +40,33 @@ NESTLING="$NEST/nestling.sh"
 LLM="$GREMLIN_DIR/bin/llm.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 
-# Self-heal before listing: re-queue or drop any claim a previous tender left
-# as stale *.tending (crash, hang, hard kill). Guarded internally against live
-# tenders, and we only reach here between turns, so it never races a model
-# call. Quiet on the no-op common case.
-"$NESTLING" recover >/dev/null 2>&1 || true
+PIDFILE="$GREMLIN_DIR/.tending.pid"
+
+# Nestlings reports old claims but deliberately does not infer abandonment.
+# Gremlin owns that policy because it owns the tender process group. Resolve
+# stale claims only when the recorded group is absent or dead.
+tender_alive() {
+  local pgid
+  [ -f "$PIDFILE" ] || return 1
+  pgid="$(tr -d '[:space:]' < "$PIDFILE")"
+  [[ "$pgid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 -- "-$pgid" 2>/dev/null
+}
+
+recover_stale_claims() {
+  tender_alive && return 0
+  rm -f "$PIDFILE"
+
+  local name outcome
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    outcome="$("$NESTLING" resolve "$name" \
+      "orphaned stale claim (tender exited without completing it)" 2>&1)" \
+      || echo "tend-loop: resolve failed for $name: $outcome" >&2
+  done < <("$NESTLING" stale)
+}
+
+recover_stale_claims
 
 items="$("$NESTLING" list)"
 [ -n "$items" ] || exit 0
@@ -131,7 +153,6 @@ prompt_file="$(mktemp)"
 reply_file="$(mktemp)"
 err_file="$(mktemp)"
 timeout_flag="$(mktemp)"
-PIDFILE="$GREMLIN_DIR/.tending.pid"
 trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$timeout_flag" "$PIDFILE"' EXIT
 
 {

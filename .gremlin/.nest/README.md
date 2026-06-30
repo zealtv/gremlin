@@ -53,6 +53,8 @@ An item can be a file or a directory.
 3. Tend from `in/`
 4. Hatch to `out/`
 5. Drop to `dropped/` with a sibling `<item>.reason.md`
+6. Retry only directories explicitly marked with `.recoverable`; bounded retry
+   state travels with the item as `.attempts` and `.recovery.md`
 
 The file system is the protocol.
 
@@ -68,6 +70,17 @@ The file system is the protocol.
    * or move the item to `.nest/dropped/` and write a reason file
 
 Never touch anything ending in `.landing` or `.tending`.
+
+An abandoned claim is not inferred from age alone. `stale` reports claimed
+items older than a threshold without changing them; the process that owns the
+nest decides whether a claim is abandoned and passes it to `resolve`. Resolution
+returns a marked directory to `in/` while it is below the retry limit, otherwise
+it drops the claim with a reason. Bare files and unmarked directories fail
+closed and are dropped.
+
+Set `NEST_MAX_ATTEMPTS` to a non-negative integer to change the default limit
+of three. Producers should add `.recoverable` only when repeating the item is
+safe. Nestlings does not decide whether a tender process is still alive.
 
 ## Communicating between nests
 
@@ -109,5 +122,7 @@ vendored copy is self-contained.
 ./nestling.sh claim <n>
 ./nestling.sh complete <n> <result_src> [out_name]
 ./nestling.sh drop <n> <reason>
+./nestling.sh stale [max-age-mins]   # read-only; default 10
+./nestling.sh resolve <n> [reason]   # retry marked directories or drop
 ./nestling.sh sweep [days]   # remove out/dropped older than N days (default 14; pass 0 to sweep everything regardless of mtime). `.gitkeep` placeholders and `*.reason.md` siblings are preserved. Prints one line per item.
 ```
