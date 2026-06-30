@@ -220,6 +220,22 @@ extract_triggers() {
   ' "$1"
 }
 
+# Test whether a lowercased trigger phrase fires against lowercased input.
+# Prefers word-boundary matching so `chai` no longer fires inside "chair";
+# boundary = any non-[a-z0-9] (hyphens/apostrophes count as boundaries). Falls
+# back to plain substring when grep -P is unavailable, so recall degrades to its
+# former behaviour rather than erroring on a non-PCRE grep.
+recall_phrase_fires() {
+  local input="$1" phrase="$2" have_pcre="$3"
+  if (( have_pcre )); then
+    local escaped
+    escaped="$(printf '%s' "$phrase" | sed 's/[^[:alnum:]]/\\&/g')"
+    printf '%s' "$input" | grep -qiP -- "(?<![a-z0-9])${escaped}(?![a-z0-9])"
+  else
+    printf '%s' "$input" | grep -qF -- "$phrase"
+  fi
+}
+
 cmd_index() {
   require_glean
   local dir="$GLEAN_DIR/findings"
@@ -325,6 +341,12 @@ cmd_recall() {
   lc_input="$(printf '%s' "$input" | tr '[:upper:]' '[:lower:]')"
   [[ -n "${lc_input//[[:space:]]/}" ]] || return 0
 
+  # Detect PCRE support once; word-boundary matching needs lookaround.
+  local have_pcre=0
+  if printf 'x' | grep -qP '(?<![a-z])x' 2>/dev/null; then
+    have_pcre=1
+  fi
+
   local dir="$GLEAN_DIR/findings"
   local files=()
   mapfile -t files < <(find "$dir" -mindepth 1 -maxdepth 1 -type f -name '*.md' ! -name 'INDEX.md' 2>/dev/null | sort)
@@ -346,7 +368,7 @@ cmd_recall() {
         phrase="$(printf '%s' "$phrase" | tr '[:upper:]' '[:lower:]')"
         # Ignore trivially short phrases that would over-match.
         [[ "${#phrase}" -ge 2 ]] || continue
-        if printf '%s' "$lc_input" | grep -qF -- "$phrase"; then
+        if recall_phrase_fires "$lc_input" "$phrase" "$have_pcre"; then
           printf '%s\n' "$f"
           break 2
         fi

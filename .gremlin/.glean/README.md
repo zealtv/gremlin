@@ -30,11 +30,14 @@ A finding is one markdown file at `findings/<id>.md`, it only needs two things:
 
 - **Title** — first `# ` line. 
 - **Description** — first non-empty line *between* the title and the next
-  heading. One sentence. 
+  heading. One sentence. It is your **recall cue**: the line an agent reads in
+  `INDEX.md` to decide whether to pull this finding, so write it the way the
+  finding would come up ("when the user logs branded foods by shorthand…"), not
+  as a librarian's abstract.
 
 Everything else is free prose. Findings can link to other resources. The supplied `distil.md` *suggests* common sections:
 
-- **Triggers** — phrases under `## Triggers` (one per bullet, or comma separated) that should bring this finding to mind. They are searched by `fetch` and are the needles `recall` matches against an incoming text. Triggers are optional, but they are what makes a finding *recallable* automatically — a finding with none still surfaces through `INDEX.md`, but nothing will pull its body in by topic.
+- **Triggers** — a short list of literals under `## Triggers` (one per bullet, or comma separated) that you'd lose to paraphrase: product names, error strings, identifiers, and user shorthand aliases your description wouldn't contain (`roo burger`, `model exited 127`, `DEMO_KEY`). *Not* a keyword dump, and not a restatement of your title — the description already carries the topic. `recall` matches triggers on **whole words** (so `chai` no longer fires inside "chair"), so write the bare word a real message contains — one-word aliases like `chai`, `tempeh` are fine. Triggers are optional and feed two paths: `fetch` searches them loosely for an agent, and `recall` matches them deterministically against inbound text. A finding with none still surfaces through `INDEX.md`, but nothing will pull its body in by trigger.
 - **Associations** — wikilinks `[[id]]` under `##Associations` that resolve to `findings/<id>.md`. Associations are just bullet links - nothing parses them, but they read well and an agent can grep for backlinks trivially.
 - **Context** — examples, references, and longer notes can live under `## Context`, and can be loaded on demand for leaner systems.
 - **Why** - reasoning or historical context.
@@ -54,6 +57,20 @@ Three tiers of cost, by design:
 Promotion to always-loaded is the host's call (e.g. by symlinking a specific
 finding into the host's always-context surface). Glean stays unaware of how
 its output is consumed.
+
+These tiers split into **two retrieval surfaces serving two callers** — glean's
+filesystem decomposition of hybrid retrieval:
+
+- **Agentic surface** — `INDEX.md` + `fetch`. An agent reads one bullet per
+  finding (id + title + description) and decides what to pull, or runs `fetch`
+  with chosen terms. The agent's own comprehension is the semantic matcher; no
+  embeddings needed. The *description* is the cue it reads. This is the
+  dense/semantic half.
+- **Reflex surface** — `recall`. A host pipes each inbound message in and loads
+  findings whose **trigger phrases** fire, deterministically, with no model in
+  the loop. This is the cheap, precise, named-entity half. Its needle set is
+  `## Triggers` only — *not* the prose description, which over-fires on common
+  words against a no-agent grep.
 
 
 ## Procedure

@@ -16,7 +16,8 @@ and most findings only ever need the first two:
    every prompt regardless of topic. Reserve this for the small set that must
    affect nearly every turn.
 
-Good triggers make most findings useful without ever touching `context/`.
+Good, precise triggers make most findings useful without ever touching
+`context/`.
 Promotion is only for findings that must be present even when nothing in the
 message would recall them.
 
@@ -72,14 +73,18 @@ Transcript archives are not automatically copied into `in/`.
 A finding is one markdown file at `findings/<id>.md`:
 
 - first line: `# Title`;
-- first non-empty line after the title: one-sentence description;
+- first non-empty line after the title: a one-sentence recall cue, written the
+  way the finding would come up when an agent scans `INDEX.md`;
 - optional sections:
   - `## Why` for source, motivation, or decision history;
-  - `## Triggers` for terms that should bring this finding to mind;
+  - `## Triggers` for a short list of literal names, identifiers, error strings,
+    or user aliases the description would lose — not a keyword dump or a
+    restatement of the title; `recall` matches these on whole words;
   - `## Associations` for wikilinks such as `- [[other-id]]`;
   - `## Context` for compact examples or references.
 
-The description and triggers are retrieval surfaces. Keep them clear.
+The description is the agentic retrieval cue; triggers are the deterministic
+recall needles. Keep both precise.
 
 ## Promotion
 
