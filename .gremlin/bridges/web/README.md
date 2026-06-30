@@ -62,10 +62,17 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 ./.gremlin/gremlin web run       # run in the foreground (no daemon)
 ```
 
-Then open <http://127.0.0.1:8787/>. Type a message and send it: it appears as a
-muted pending echo, the bridge drops a `.nest/in/` item, and when the tender
-replies the real turns arrive over the tail and the echo clears. Appending a
-`## system —` line to `transcript.md` by hand also appears within a tick.
+`start` and `status` print the URL to open. The port is auto-assigned on first
+start — a free port derived from the gremlin's host-dir name, so several gremlins
+on one machine each get their own stable number — and pinned in `config`, so it
+survives restarts, reboots, and `/update`. Set `WEB_PORT` in `config` to fix it
+explicitly (then an in-use port fails loud). The default first choice is `8787`.
+
+Open the printed URL (e.g. <http://127.0.0.1:8787/>). Type a message and send it:
+it appears as a muted pending echo, the bridge drops a `.nest/in/` item, and when
+the tender replies the real turns arrive over the tail and the echo clears.
+Appending a `## system —` line to `transcript.md` by hand also appears within a
+tick.
 
 ## Verify
 

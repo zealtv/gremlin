@@ -7,8 +7,13 @@
 # token-gated, off-by-default opt-in handled by a later stitch (spec §17).
 WEB_BIND=127.0.0.1
 
-# Port to listen on. If it is already in use the bridge fails loud — no auto-bump.
-WEB_PORT=8787
+# Port to listen on. Leave it unset (the default) and the bridge auto-assigns a
+# free port on first start — derived from this gremlin's host-dir name so each
+# gremlin on a shared machine gets its own stable number — then pins it back into
+# the runtime `config` so it persists across restarts, reboots, and `/update`.
+# Set it explicitly to override; an explicit port already in use fails loud (no
+# auto-bump).
+# WEB_PORT=8787
 
 # Remote access (off by default). A non-loopback WEB_BIND (e.g. a tailnet IP)
 # REQUIRES a token or the bridge refuses to start. Every request must then

@@ -47,8 +47,11 @@ NESTLING="${WEB_NESTLING:-$GREMLIN_DIR/.nest/nestling.sh}"
 STOP_TIMEOUT="${WEB_STOP_TIMEOUT:-15}"
 
 # Defaults; config (if present) and the environment may override these.
+# WEB_PORT is intentionally left unset here: an unset port is auto-assigned and
+# pinned per host on first start (see ensure_port), so multiple gremlins sharing
+# a machine don't collide on one number. An explicit WEB_PORT (env or config) is
+# honored as-is and still fails loud if it's taken.
 WEB_BIND="${WEB_BIND:-127.0.0.1}"
-WEB_PORT="${WEB_PORT:-8787}"
 
 usage() {
   cat <<'USAGE'
@@ -93,6 +96,55 @@ require_remote_safety() {
   fi
 }
 
+# First free TCP port at or above $1 on the loopback address, probing a small
+# window. Matches how server.py binds (SO_REUSEADDR, like ThreadingHTTPServer's
+# allow_reuse_address) so a port held by a *live* listener is correctly skipped
+# while a TIME_WAIT one is reusable. Empty output + non-zero on exhaustion.
+find_free_port() {
+  python3 - "$1" <<'PY'
+import socket, sys
+start = int(sys.argv[1])
+for port in range(start, start + 64):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.bind(("127.0.0.1", port))
+    except OSError:
+        continue
+    finally:
+        s.close()
+    print(port)
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# Assign and persist a web-bridge port the first time, so several gremlins on one
+# host coexist and the choice survives reboots and `/update` (config is local
+# state the overlay preserves). No-op when WEB_PORT is already set, so an
+# explicit port — env or a prior pin — is honored untouched.
+#
+# The preferred start is derived from the gremlin's identity (its host-dir name,
+# the same identifier the web header shows), so each gremlin gravitates to its
+# own stable number even before anything is pinned; we then probe upward for the
+# first free port and write it back to config.
+ensure_port() {
+  [ -n "${WEB_PORT:-}" ] && return 0
+  local id sum pref port
+  id="$(basename "$HOST_DIR")"
+  sum="$(printf '%s' "$id" | cksum | cut -d' ' -f1)"
+  pref=$(( 8787 + sum % 200 ))
+  port="$(find_free_port "$pref")" \
+    || die "no free port found in [$pref, $((pref + 64))) for the web bridge; set WEB_PORT in $CONFIG"
+  WEB_PORT="$port"
+  if [ ! -f "$CONFIG" ]; then
+    ( umask 077; printf '# web bridge config (auto-created on first start)\n' > "$CONFIG" )
+  fi
+  printf 'WEB_PORT=%s\n' "$port" >> "$CONFIG"
+  chmod 600 "$CONFIG" 2>/dev/null || true
+  echo "web: assigned port $port for '$id' (pinned in $CONFIG)" >&2
+}
+
 require_runtime() {
   command -v python3 >/dev/null 2>&1 || die "python3 is required for the web bridge"
   python3 - <<'PY' || die "python3 >= 3.8 is required for the web bridge"
@@ -125,6 +177,7 @@ running_pid() {
 cmd_run() {
   load_config
   require_runtime
+  ensure_port
   require_remote_safety
   export WEB_BIND WEB_PORT WEB_REMOTE_TOKEN WEB_REMOTE_HOST
   export WEB_GREMLIN_DIR="$GREMLIN_DIR"
@@ -150,6 +203,7 @@ cmd_start() {
 
   load_config
   require_runtime
+  ensure_port
   require_remote_safety
   if ! is_loopback_bind; then
     echo "⚠️  binding non-loopback $WEB_BIND:$WEB_PORT — the gremlin's chat + files"
