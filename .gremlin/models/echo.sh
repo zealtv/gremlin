@@ -13,24 +13,23 @@
 
 set -euo pipefail
 
-# bin/tend-loop.sh assembles the prompt by concatenating gremlin.md,
-# context/*.md, skills/INDEX.md, tools/README.md, the full transcript,
-# and the current item body. The body therefore appears twice near
-# the end of the prompt:
+# bin/tend-loop.sh assembles the prompt as identity + context + the full
+# transcript; the active message to answer is the LAST turn of that
+# transcript, appended just before the model runs. Turns are headed with
+# the stable `## <role> — <iso>` convention, so the incoming body is simply
+# everything after the final turn header:
 #
-#   ## <role> — <iso>
-#   <body>          ← last transcript turn
-#                   ← blank line (transcript's per-turn '\n\n')
-#                   ← blank line (extra '\n' from tend-loop's `echo`)
-#   <body>          ← body re-emitted at end of prompt
+#   ## user — <iso>   ← the active turn's header (last in the prompt)
+#   <body>            ← what we want
 #
-# Two consecutive blank lines reliably mark that boundary regardless
-# of which roles appear in the transcript, so we drop everything up to
-# and including them and keep the trailing body.
+# Track that documented header contract rather than prompt whitespace:
+# reset at every turn header, keep what follows the last one, then trim
+# trailing blank lines. Layout-independent — unaffected by how many context
+# sections or transcript turns precede it, and by blank lines in the body.
 body="$(awk '
-  $0 == "" && prev == "" { buf = ""; prev = $0; next }
-  { buf = buf $0 ORS; prev = $0 }
-  END { sub(/\n+$/, "", buf); print buf }
+  /^## (user|assistant|system) — / { body = ""; capturing = 1; next }
+  capturing { body = body $0 ORS }
+  END { sub(/\n+$/, "", body); printf "%s", body }
 ')"
 
 printf 'echo: %s\n' "$body"
