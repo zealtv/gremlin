@@ -1,7 +1,7 @@
 ---
 name: long-task
 triggers:
-  - a task is too big to finish well in a single turn — including invoking a skill, command, or sub-agents that will run for more than a minute
+  - before starting work that runs more than a step or two — inspect then edit then test then commit, a build, a review, a skill/command/sub-agents, anything past about a minute of wall-clock — even when you could cram it all into one silent turn; also the moment a task you've already begun turns out bigger than it looked
   - user asks you to work on something step by step, "keep going", or report progress as you go
   - you want to send mid-task progress before the final answer
 ---
@@ -19,14 +19,48 @@ reply is a real `## assistant` turn, so it reaches the TUI and Telegram the
 moment it lands — your progress message *is* the reply of that step. No special
 channel, no marker; just finish a small turn and start another.
 
+## Recognise it before you're deep in it
+
+The trap isn't a task too big to *fit* in one turn — one tend can chew through
+many tool calls before it replies. The trap is exactly that it *fits*: you do the
+whole thing in one silent multi-minute span — inspect, edit, test, commit, tie
+off — and only speak at the end. While that span runs, nothing reaches anyone; a
+working gremlin and a wedged one look identical from outside. So use this skill —
+open with a start turn — even when you *could* do it all in one turn, whenever:
+
+- the plan is a chain of steps (inspect **then** edit **then** test **then**
+  commit), not one atomic action;
+- it will take several tool calls, or more than about a minute of wall-clock;
+- it invokes a skill, command, or sub-agents that run for minutes;
+- **the size only shows up once you start.** A quick-looking request opens up on
+  inspection. The moment you realise it's multi-step, announce and re-queue
+  before doing more — don't finish a now-large task silently just because you'd
+  already begun it.
+
+Genuinely one-shot work doesn't get this: a question answered, a single edit, a
+quick lookup — just reply. Don't wrap trivia in ceremony.
+
 ## How
 
-1. **Break the work into bounded steps**, each finishable inside one tend. Don't
-   start anything that can't complete before the tend's watchdog (~900s) — if a
-   step is too big, split it.
+1. **Announce first — as its own turn.** The first thing you do on a long task
+   is *say you're starting*, then end the turn. One line in your normal voice:
+   what you're doing and its shape if you know it ("on it — syncing the vendored
+   primitives across the three repos; I'll report as I go"). Do **not** do the
+   real work in this turn — its whole job is to give observers an immediate "on
+   it" before anything blocks. Then re-queue into the first real step:
 
-2. **Do one step.** Then reply with a short line: what you just did, what's next.
-   One sentence in your normal voice is plenty.
+   ```bash
+   ./.gremlin/tools/continue.sh "step 1/3: inspect the vendored copies, patch drift"
+   ```
+
+   If you only realised *mid-task* that the work is large, this same first spoken
+   turn is a progress line instead — "bigger than it looked, ~3 steps; carrying
+   on" — then `continue.sh` into the next step.
+
+2. **Do one bounded step**, finishable inside one tend — don't start anything
+   that can't complete before the tend's watchdog (~900s); if a step is too big,
+   split it. Then reply with a short line: what you just did, what's next. One
+   sentence in your normal voice is plenty.
 
 3. **Re-queue yourself for the next step:**
 
@@ -47,7 +81,8 @@ Emit on **milestones, not a clock.** A progress line marks a real step boundary
 or a meaningful state change — not "still working." Silence between milestones is
 correct, not a dead bot. One line, normal voice. When in doubt, **under-emit**:
 say less than feels natural, and only speak up when there's something a human
-would actually want to know.
+would actually want to know. The one turn you always owe is the opening
+announcement — after that, earn each line on a real milestone.
 
 ## When a step can't be split: announce before you block
 

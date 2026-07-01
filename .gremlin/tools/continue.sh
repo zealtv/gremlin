@@ -31,4 +31,9 @@ fi
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 printf '%s\n' "$msg" > "$tmp"
-"$NESTLING" ingest "$tmp" "$(date -u +%Y-%m-%dT%H-%M-%SZ).md" >/dev/null
+# The name carries a timestamp for ordering plus a random suffix for
+# uniqueness: a long task doing quick back-to-back steps can re-queue twice
+# within the same wall-clock second, and a bare second-resolution name would
+# collide on ingest — silently dropping a step. The suffix keeps every
+# self-continuation distinct while preserving lexical (time) ordering.
+"$NESTLING" ingest "$tmp" "$(date -u +%Y-%m-%dT%H-%M-%SZ)-$RANDOM.md" >/dev/null

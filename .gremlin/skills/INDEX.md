@@ -17,7 +17,7 @@ When you call a tool, weave its output into the reply naturally. Don't quote the
 
 - `curate` — user asks to curate, tidy, prune, consolidate, or sweep findings or memory
 - `distil` — user asks to distil, distill, remember, review, or consolidate material for memory
-- `long-task` — a task is too big to finish well in a single turn — including invoking a skill, command, or sub-agents that will run for more than a minute
+- `long-task` — before starting work that runs more than a step or two — inspect then edit then test then commit, a build, a review, a skill/command/sub-agents, anything past about a minute of wall-clock — even when you could cram it all into one silent turn; also the moment a task you've already begun turns out bigger than it looked
 - `loom` — a goal or intention needs to outlive the current turn — something to pursue across many tends, not finish now
 - `reflect` — user asks you to reflect, review your own performance, or improve yourself
 - `remind-me` — user asks to be reminded of something at a future time
