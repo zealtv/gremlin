@@ -92,7 +92,13 @@ background loops and reaps them on `INT`/`TERM`:
   turns. On success it sleeps `TELEGRAM_PUSH_INTERVAL` (default `1`); on failure
   it sleeps `TELEGRAM_OUTBOUND_BACKOFF` (default `5`). Splitting this from the
   inbound loop means an assistant turn that lands during a long-poll no longer
-  waits up to `TELEGRAM_POLL_TIMEOUT` for delivery.
+  waits up to `TELEGRAM_POLL_TIMEOUT` for delivery. A reply longer than
+  Telegram's 4096-character limit is split into ordered parts (on paragraph/line
+  boundaries) so it arrives in full instead of failing. Delivery failures are
+  classified: a *permanent* one (HTTP 4xx / `ok:false` — a malformed entity, an
+  over-limit body, a missing media file) is logged loudly and skipped so it does
+  not wedge the queue behind it, while a *transient* one (a network error, HTTP
+  429/5xx) holds the cursor so the turn is retried unchanged.
 - **typing pulse** — every `TELEGRAM_PULSE_INTERVAL` seconds (default `4`),
   sends `sendChatAction typing` if a telegram-origin nest item is outstanding.
 
@@ -188,3 +194,12 @@ per-message bookkeeping.
   `curl`, and `telegram.sh` honours `TELEGRAM_STOP_TIMEOUT` (default `35`).
 - Duplicate old replies after first startup should not happen. A missing
   `.cursor` initializes to the current end of `transcript.md`.
+
+## Tests
+
+`./.gremlin/bridges/telegram/test/run.sh` sources the bridge and drives the
+outbound path through the `TELEGRAM_TEST_*` seams (no network, no real gremlin):
+message chunking at the 4096 limit (single-part fast path, splitting, per-part
+HTML→plain fallback, hard-wrapping), and head-of-line behaviour (a permanent
+failure is skipped so the turn behind it still lands and the cursor advances; a
+transient failure holds the cursor for retry).

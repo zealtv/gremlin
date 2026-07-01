@@ -28,6 +28,13 @@ PUSH_INTERVAL="${TELEGRAM_PUSH_INTERVAL:-1}"
 PULSE_INTERVAL="${TELEGRAM_PULSE_INTERVAL:-4}"
 STOP_TIMEOUT="${TELEGRAM_STOP_TIMEOUT:-35}"
 
+# Per-message character budget for outbound sends. Telegram rejects a
+# sendMessage whose text exceeds 4096 UTF-16 code units; we split well under
+# that so each part stays clear of the limit with margin for markup and
+# multi-unit characters. TELEGRAM_TEST_MSG_LIMIT lets the test harness force a
+# tiny budget without generating multi-kilobyte fixtures.
+MESSAGE_LIMIT="${TELEGRAM_TEST_MSG_LIMIT:-3900}"
+
 usage() {
   cat <<'USAGE'
 usage:
@@ -300,16 +307,73 @@ markdown_to_telegram_html() {
   '
 }
 
-# Low-level sendMessage attempt. $2 is an optional parse_mode. Returns non-zero
-# on any API failure so the caller can fall back to a plainer attempt.
+# classify_telegram_response <curl_rc> <output> <label>: interpret a Telegram
+# API call captured with `curl -sS -w '\n%{http_code}'`. Distinguishing the
+# kind of failure is what lets the outbound queue skip a doomed turn without
+# wedging behind it while still retrying one that might yet succeed. Returns:
+#   0  success (HTTP 2xx with ok:true);
+#   1  PERMANENT failure — the request cannot succeed as written (HTTP 4xx, or a
+#      200 with ok:false: a malformed entity, an over-limit body, a missing
+#      chat). The caller should surface it loudly and move on.
+#   2  TRANSIENT failure — worth retrying unchanged (a transport/network error,
+#      or HTTP 429/5xx). The caller should hold and try again later.
+# Diagnostics go to stderr; <label> names the API method for the log line.
+classify_telegram_response() {
+  local rc="$1" out="$2" label="${3:-request}" http body ok description
+
+  if [ "$rc" -ne 0 ]; then
+    echo "telegram: $label transport error (curl exit $rc)" >&2
+    return 2
+  fi
+
+  http="${out##*$'\n'}"
+  body="${out%$'\n'*}"
+
+  case "$http" in
+    2*)
+      ok="$(printf '%s\n' "$body" | jq -r '.ok? // empty')"
+      [ "$ok" = "true" ] && return 0
+      description="$(printf '%s\n' "$body" | jq -r '.description? // "unknown Telegram API error"')"
+      echo "telegram: $label rejected: $description" >&2
+      return 1
+      ;;
+    429 | 5*)
+      echo "telegram: $label transient HTTP $http" >&2
+      return 2
+      ;;
+    *)
+      description="$(printf '%s\n' "$body" | jq -r '.description? // empty')"
+      echo "telegram: $label failed: HTTP $http${description:+ - $description}" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Low-level sendMessage attempt. $2 is an optional parse_mode. Returns 0 on
+# success, or the classify_telegram_response code (1 permanent / 2 transient) so
+# the caller can fall back to a plainer attempt and the outbound queue can decide
+# whether to skip or retry the turn.
 send_message_api() {
   local text="$1"
   local mode="${2:-}"
-  local response ok description
+  local out rc
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
     echo "telegram: mock send failure" >&2
     return 1
+  fi
+
+  # Content-keyed mocks: fail only the turn whose text contains the sentinel, so
+  # a test can wedge one specific turn while the rest of a chunk sends normally.
+  if [ -n "${TELEGRAM_TEST_FAIL_MATCH:-}" ] && \
+     [ "${text#*"$TELEGRAM_TEST_FAIL_MATCH"}" != "$text" ]; then
+    echo "telegram: mock permanent failure (matched)" >&2
+    return 1
+  fi
+  if [ -n "${TELEGRAM_TEST_TRANSIENT_MATCH:-}" ] && \
+     [ "${text#*"$TELEGRAM_TEST_TRANSIENT_MATCH"}" != "$text" ]; then
+    echo "telegram: mock transient failure (matched)" >&2
+    return 2
   fi
 
   # Simulate Telegram rejecting malformed entities, to exercise the fallback.
@@ -328,27 +392,59 @@ send_message_api() {
   fi
 
   if [ -n "$mode" ]; then
-    response="$(curl -fsS -X POST \
+    out="$(curl -sS -w '\n%{http_code}' -X POST \
       --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
       --data-urlencode "parse_mode=$mode" \
       --data-urlencode "text=$text" \
-      "$(telegram_api sendMessage)")" || return 1
+      "$(telegram_api sendMessage)")"
+    rc=$?
   else
-    response="$(curl -fsS -X POST \
+    out="$(curl -sS -w '\n%{http_code}' -X POST \
       --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
       --data-urlencode "text=$text" \
-      "$(telegram_api sendMessage)")" || return 1
+      "$(telegram_api sendMessage)")"
+    rc=$?
   fi
 
-  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
-  if [ "$ok" != "true" ]; then
-    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
-    echo "telegram: sendMessage failed: $description" >&2
-    return 1
-  fi
+  classify_telegram_response "$rc" "$out" "sendMessage"
 }
 
-send_message() {
+# split_for_telegram <limit>: read plain text on stdin and emit it as one or
+# more parts, each at most <limit> characters, separated by the FS control byte
+# (\034) since a part may itself contain newlines. Parts break on line
+# boundaries so paragraph structure survives; a single line longer than the
+# budget is hard-wrapped into budget-sized pieces. A short message yields
+# exactly one part identical to the input, so the common case is unchanged.
+split_for_telegram() {
+  local limit="$1"
+  awk -v limit="$limit" '
+    function emit(s) { printf "%s%c", s, 28 }
+    {
+      line = $0
+      # Hard-wrap a single overlong line, flushing any pending buffer first so
+      # ordering is preserved.
+      while (length(line) > limit) {
+        if (haspart) { emit(buf); buf = ""; haspart = 0 }
+        emit(substr(line, 1, limit))
+        line = substr(line, limit + 1)
+      }
+      # Start a fresh part when appending this line (plus its newline) would
+      # overflow the budget.
+      if (haspart && length(buf) + 1 + length(line) > limit) {
+        emit(buf); buf = ""; haspart = 0
+      }
+      if (haspart) buf = buf "\n" line
+      else { buf = line; haspart = 1 }
+    }
+    END { if (haspart) emit(buf) }
+  '
+}
+
+# send_message_part <text>: send one already-sized part, rendering it to
+# Telegram HTML with a plain-text fallback so a formatting slip never costs the
+# user the reply. Each part is rendered independently, so no HTML entity spans a
+# part boundary.
+send_message_part() {
   local text="$1"
   local html
 
@@ -357,10 +453,32 @@ send_message() {
     return 0
   fi
 
-  # The HTML render was rejected (or send failed); retry as plain text so a
-  # formatting slip never costs the user the reply itself.
   echo "telegram: retrying message as plain text" >&2
   send_message_api "$text" ""
+}
+
+# send_message <text>: deliver a turn's text, split into ordered parts that each
+# stay under Telegram's per-message limit. A normal short reply is a single part
+# and behaves exactly as a plain sendMessage. If a part ultimately fails it is
+# surfaced loudly (never dropped) and the remaining parts are still attempted so
+# as much of the reply as possible lands.
+send_message() {
+  local text="$1"
+  local part rc=0 prc
+
+  while IFS= read -r -d "$(printf '\034')" part; do
+    send_message_part "$part"
+    prc=$?
+    # A transient failure on any part means the turn should be retried, so it
+    # dominates a permanent one; a permanent failure still marks the turn failed.
+    if [ "$prc" -eq 2 ]; then
+      rc=2
+    elif [ "$prc" -eq 1 ] && [ "$rc" -ne 2 ]; then
+      rc=1
+    fi
+  done < <(printf '%s' "$text" | split_for_telegram "$MESSAGE_LIMIT")
+
+  return "$rc"
 }
 
 # Low-level sendPhoto attempt with an optional caption parse_mode.
@@ -368,7 +486,7 @@ send_photo_api() {
   local photo="$1"
   local caption="$2"
   local mode="${3:-}"
-  local response ok description
+  local out rc
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
     echo "telegram: mock photo failure" >&2
@@ -394,33 +512,30 @@ send_photo_api() {
   # file uploaded with multipart form data.
   case "$photo" in
     http://* | https://*)
-      response="$(curl -fsS -X POST \
+      out="$(curl -sS -w '\n%{http_code}' -X POST \
         --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
         --data-urlencode "photo=$photo" \
         ${mode:+--data-urlencode "parse_mode=$mode"} \
         --data-urlencode "caption=$caption" \
-        "$(telegram_api sendPhoto)")" || return 1
+        "$(telegram_api sendPhoto)")"
+      rc=$?
       ;;
     *)
       if [ ! -f "$photo" ]; then
         echo "telegram: photo not found: $photo" >&2
         return 1
       fi
-      response="$(curl -fsS -X POST \
+      out="$(curl -sS -w '\n%{http_code}' -X POST \
         -F "chat_id=$TELEGRAM_CHAT_ID" \
         ${mode:+-F "parse_mode=$mode"} \
         -F "caption=$caption" \
         -F "photo=@$photo" \
-        "$(telegram_api sendPhoto)")" || return 1
+        "$(telegram_api sendPhoto)")"
+      rc=$?
       ;;
   esac
 
-  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
-  if [ "$ok" != "true" ]; then
-    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
-    echo "telegram: sendPhoto failed: $description" >&2
-    return 1
-  fi
+  classify_telegram_response "$rc" "$out" "sendPhoto"
 }
 
 send_photo() {
@@ -459,7 +574,7 @@ send_document_api() {
   local document="$1"
   local caption="$2"
   local mode="${3:-}"
-  local response ok description
+  local out rc
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
     echo "telegram: mock document failure" >&2
@@ -485,33 +600,30 @@ send_document_api() {
   # file uploaded with multipart form data.
   case "$document" in
     http://* | https://*)
-      response="$(curl -fsS -X POST \
+      out="$(curl -sS -w '\n%{http_code}' -X POST \
         --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
         --data-urlencode "document=$document" \
         ${mode:+--data-urlencode "parse_mode=$mode"} \
         --data-urlencode "caption=$caption" \
-        "$(telegram_api sendDocument)")" || return 1
+        "$(telegram_api sendDocument)")"
+      rc=$?
       ;;
     *)
       if [ ! -f "$document" ]; then
         echo "telegram: document not found: $document" >&2
         return 1
       fi
-      response="$(curl -fsS -X POST \
+      out="$(curl -sS -w '\n%{http_code}' -X POST \
         -F "chat_id=$TELEGRAM_CHAT_ID" \
         ${mode:+-F "parse_mode=$mode"} \
         -F "caption=$caption" \
         -F "document=@$document" \
-        "$(telegram_api sendDocument)")" || return 1
+        "$(telegram_api sendDocument)")"
+      rc=$?
       ;;
   esac
 
-  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
-  if [ "$ok" != "true" ]; then
-    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
-    echo "telegram: sendDocument failed: $description" >&2
-    return 1
-  fi
+  classify_telegram_response "$rc" "$out" "sendDocument"
 }
 
 # send_document <path-or-url> [caption]: upload a generic file as a native
@@ -554,7 +666,7 @@ send_document() {
 # turn (mirrors the image-missing-file behavior).
 send_voice() {
   local voice="$1"
-  local response ok description
+  local out rc
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
     echo "telegram: mock voice failure" >&2
@@ -574,22 +686,18 @@ send_voice() {
     return 1
   fi
 
-  response="$(curl -fsS -X POST \
+  out="$(curl -sS -w '\n%{http_code}' -X POST \
     -F "chat_id=$TELEGRAM_CHAT_ID" \
     -F "voice=@$voice;type=audio/ogg" \
-    "$(telegram_api sendVoice)")" || return 1
+    "$(telegram_api sendVoice)")"
+  rc=$?
 
-  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
-  if [ "$ok" != "true" ]; then
-    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
-    echo "telegram: sendVoice failed: $description" >&2
-    return 1
-  fi
+  classify_telegram_response "$rc" "$out" "sendVoice"
 }
 
 send_chat_action() {
   local action="$1"
-  local response ok description
+  local out rc
 
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
     echo "telegram: mock chat action failure" >&2
@@ -604,17 +712,13 @@ send_chat_action() {
     return 0
   fi
 
-  response="$(curl -fsS -X POST \
+  out="$(curl -sS -w '\n%{http_code}' -X POST \
     --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
     --data-urlencode "action=$action" \
-    "$(telegram_api sendChatAction)")" || return 1
+    "$(telegram_api sendChatAction)")"
+  rc=$?
 
-  ok="$(printf '%s\n' "$response" | jq -r '.ok')"
-  if [ "$ok" != "true" ]; then
-    description="$(printf '%s\n' "$response" | jq -r '.description? // "unknown Telegram API error"')"
-    echo "telegram: sendChatAction failed: $description" >&2
-    return 1
-  fi
+  classify_telegram_response "$rc" "$out" "sendChatAction"
 }
 
 file_size() {
@@ -687,9 +791,12 @@ extract_pushable_turns() {
 # the host folder so the gremlin can reference files it created with a relative
 # path. Voice audio is synthesized at send time (models/tts.sh) and never stored
 # — the transcript stays text, with the `(tts:)` markup as the source of truth.
+# Returns 0 if the whole turn was delivered, or a classify_telegram_response
+# code (1 permanent / 2 transient) from the first send that failed, so the
+# outbound queue can decide whether to skip past this turn or hold and retry it.
 push_turn() {
   local turn="$1"
-  local images voices docs imgemoji text line photo caption speak audio doc
+  local images voices docs imgemoji text line photo caption speak audio doc rc
 
   voices="$(printf '%s\n' "$turn" | grep -oE '🔊 \[[^]]*\]\(tts:[^)]*\)' || true)"
   docs="$(printf '%s\n' "$turn" | grep -oE '📎 \[[^]]*\]\([^)]+\)' || true)"
@@ -703,7 +810,8 @@ push_turn() {
   text="$(printf '%s\n' "$turn" | sed -E 's/📎 \[[^]]*\]\([^)]+\)//g; s/🖼️ \[[^]]*\]\([^)]+\)//g; s/!\[[^]]*\]\([^)]+\)//g; s/🔊 \[[^]]*\]\(tts:[^)]*\)//g')"
 
   if [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
-    send_message "$text" || return 1
+    send_message "$text"; rc=$?
+    [ "$rc" -ne 0 ] && return "$rc"
   fi
 
   if [ -n "$images" ]; then
@@ -715,7 +823,8 @@ push_turn() {
         http://* | https://* | /*) : ;;
         *) photo="$HOST_DIR/$photo" ;;
       esac
-      send_photo "$photo" "$caption" || return 1
+      send_photo "$photo" "$caption"; rc=$?
+      [ "$rc" -ne 0 ] && return "$rc"
     done <<EOF_IMAGES
 $images
 EOF_IMAGES
@@ -730,7 +839,8 @@ EOF_IMAGES
         http://* | https://* | /*) : ;;
         *) doc="$HOST_DIR/$doc" ;;
       esac
-      send_document "$doc" "$caption" || return 1
+      send_document "$doc" "$caption"; rc=$?
+      [ "$rc" -ne 0 ] && return "$rc"
     done <<EOF_DOCS
 $docs
 EOF_DOCS
@@ -747,9 +857,10 @@ EOF_DOCS
       echo "telegram: TTS render failed for: $speak" >&2
       return 1
     fi
-    if ! send_voice "$audio"; then
+    send_voice "$audio"; rc=$?
+    if [ "$rc" -ne 0 ]; then
       rm -f "$audio"
-      return 1
+      return "$rc"
     fi
     rm -f "$audio"
   done <<EOF_VOICES
@@ -757,8 +868,49 @@ $voices
 EOF_VOICES
 }
 
+# push_pushable_turns <chunk>: deliver every pushable turn in <chunk>, in order.
+# Returns 0 when the whole chunk has been dealt with — every turn either sent or
+# determined permanently undeliverable — so the caller may advance the cursor
+# past it. Returns 1 when a *transient* failure means the caller must hold the
+# cursor and try the same chunk again later.
+#
+# The distinction is what keeps one bad turn from wedging the queue: a permanent
+# failure (a turn Telegram will always reject, a missing media file) is surfaced
+# loudly and skipped so later turns still get through, while a transient failure
+# (a network blip, 429/5xx) preserves the turn for a retry. Sets PUSHED_ANY=1 if
+# any turn was handled, matching the old sent_any behaviour for the log line.
+push_pushable_turns() {
+  local chunk="$1" turn rc first
+  PUSHED_ANY=0
+
+  while IFS= read -r -d "$(printf '\034')" turn; do
+    [ -n "$turn" ] || continue
+    push_turn "$turn"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      PUSHED_ANY=1
+      continue
+    fi
+    if [ "$rc" -eq 2 ]; then
+      # Transient: stop here with the cursor unmoved so this turn — and the ones
+      # behind it — are retried on the next pass rather than skipped.
+      echo "telegram: transient outbound failure; holding cursor to retry" >&2
+      return 1
+    fi
+    # Permanent: this turn can never be sent as written. Surface it loudly (the
+    # bridge's log is the loud channel) and skip past it so it does not starve
+    # every later turn. The transcript remains the source of truth; we do not
+    # rewrite it.
+    first="$(printf '%s\n' "$turn" | sed -n '1{p;q;}' | cut -c1-80)"
+    echo "telegram: DROPPING an undeliverable turn (permanent send failure): $first" >&2
+    PUSHED_ANY=1
+  done < <(printf '%s\n' "$chunk" | extract_pushable_turns)
+
+  return 0
+}
+
 push_transcript_once() {
-  local cursor size chunk sent_any=0 turn
+  local cursor size chunk
 
   load_config
   require_runtime
@@ -777,14 +929,14 @@ push_transcript_once() {
   fi
 
   chunk="$(tail -c +"$((cursor + 1))" "$TRANSCRIPT")"
-  while IFS= read -r -d "$(printf '\034')" turn; do
-    [ -n "$turn" ] || continue
-    push_turn "$turn" || return 1
-    sent_any=1
-  done < <(printf '%s\n' "$chunk" | extract_pushable_turns)
+  if ! push_pushable_turns "$chunk"; then
+    # A transient failure held the cursor; report failure so outbound_loop backs
+    # off and retries the same chunk.
+    return 1
+  fi
 
   write_cursor "$size"
-  if [ "$sent_any" -eq 1 ]; then
+  if [ "$PUSHED_ANY" -eq 1 ]; then
     echo "pushed transcript turns through byte $size"
   fi
 }
@@ -1256,6 +1408,12 @@ cmd_run() {
     wait "$!" || true
   done
 }
+
+# Only dispatch when executed directly; sourcing (e.g. from the test harness)
+# loads the functions without running a command.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+  return 0 2>/dev/null || true
+fi
 
 cmd="${1:-help}"
 shift || true
