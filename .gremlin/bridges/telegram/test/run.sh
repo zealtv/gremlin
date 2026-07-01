@@ -175,6 +175,56 @@ else
 fi
 
 # ============================================================================
+echo "== multiple same-kind embeds in one turn are all sent, in authored order =="
+
+# The media grammar (docs/media-embeds.md) allows any number of embeds in a
+# reply. push_turn must render every one — none lost, same-kind order preserved.
+# Real files: send_photo/send_document fail-fast on a missing local path.
+IMG1="$WORK/one.png"; IMG2="$WORK/two.png"; printf 'PNG1' > "$IMG1"; printf 'PNG2' > "$IMG2"
+TURN=$'here are two images\n🖼️ [first]('"$IMG1"$')\n🖼️ [second]('"$IMG2"$')'
+
+LOG="$WORK/multi-img.log"; : > "$LOG"
+TELEGRAM_TEST_SEND_LOG="$LOG" push_turn "$TURN" >/dev/null 2>&1
+photos="$(grep '^photo=' "$LOG")"
+if [ "$(printf '%s\n' "$photos" | grep -c .)" -eq 2 ] \
+  && [ "$(printf '%s\n' "$photos" | sed -n '1p')" = "photo=$IMG1" ] \
+  && [ "$(printf '%s\n' "$photos" | sed -n '2p')" = "photo=$IMG2" ]; then
+  ok "both images sent as ordered sendPhoto calls"
+else
+  bad "both images sent in order (got: $(printf '%s' "$photos" | tr '\n' ' '))"
+fi
+grep -q 'here are two images' "$LOG" && ok "surrounding prose still sent as a message" \
+  || bad "surrounding prose still sent as a message"
+grep -q 'caption=first' "$LOG" && grep -q 'caption=second' "$LOG" \
+  && ok "each image keeps its own caption" || bad "each image keeps its own caption"
+
+# ============================================================================
+echo "== a turn mixing text, an image and a file delivers all three (nothing lost) =="
+
+DOC1="$WORK/report.csv"; printf 'a,b\n1,2\n' > "$DOC1"
+MIXED=$'summary line\n🖼️ [chart]('"$IMG1"$')\n📎 [data]('"$DOC1"$')'
+
+LOG="$WORK/mixed.log"; : > "$LOG"
+TELEGRAM_TEST_SEND_LOG="$LOG" push_turn "$MIXED" >/dev/null 2>&1
+have_text=0; have_photo=0; have_doc=0
+grep -q 'summary line' "$LOG" && have_text=1
+grep -q "^photo=$IMG1$" "$LOG" && have_photo=1
+grep -q "^document=$DOC1$" "$LOG" && have_doc=1
+if [ "$have_text" -eq 1 ] && [ "$have_photo" -eq 1 ] && [ "$have_doc" -eq 1 ]; then
+  ok "text, image and file all delivered from one turn"
+else
+  bad "mixed turn lost a part (text=$have_text photo=$have_photo doc=$have_doc)"
+fi
+
+# NOTE (audit 2026-07-01): push_turn currently renders by *type group* — text,
+# then all images, then all docs, then all voices — so a turn authored as
+# image→file→image would arrive image→image→file. Cross-type authored ordering
+# and mid-turn partial-failure atomicity (a transient failure on the 2nd of 3
+# embeds re-sends the 1st on retry; a permanent one silently drops the rest) are
+# tracked by the child stitch gremlin--multi-attachment-bridge-audit--tg-outbound-order-and-atomicity,
+# which will add a per-embed fail seam and tighten these into assertions.
+
+# ============================================================================
 echo
 echo "passed: $pass, failed: $fail"
 [ "$fail" -eq 0 ]

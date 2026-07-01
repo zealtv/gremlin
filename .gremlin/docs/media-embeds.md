@@ -58,4 +58,22 @@ any picture the user should see rather than read about.
 
 Inbound files need no grammar: when the user sends you a document, it arrives as
 an openable attachment under `## attachments` with its real filename — just
-`Read` it (or `cat`/`unzip -l` it via Bash) and respond.
+`Read` it (or `cat`/`unzip -l` it via Bash) and respond. A single turn may carry
+several attachments — every non-control file in the item is listed under
+`## attachments`.
+
+## How bridges render embeds
+
+The grammar is the same everywhere; presentation differs by bridge:
+
+- **Web** renders each embed inline, in the order you wrote it, as an image card
+  or file chip.
+- **Telegram** sends each embed as its own native message (`sendPhoto` /
+  `sendDocument` / `sendVoice`) alongside the text. Ordering and multi-embed
+  atomicity are being tightened — see the loom stitch
+  `tg-outbound-order-and-atomicity`.
+- **TUI** has no native attachments; the embed markup is shown as written.
+
+Inbound albums (multiple photos sent as one Telegram media group) are still
+coalesced per the loom stitch `tg-inbound-media-group`; until then each photo of
+an album arrives as its own turn.
