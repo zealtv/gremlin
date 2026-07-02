@@ -2,11 +2,13 @@
 
 A gremlin is a folder you can talk to. This `.gremlin/` directory turns its parent folder into an agent.
 
-The parent folder that contains `.gremlin/` is also the gremlin's working directory. `bin/run.sh` changes into that host folder before invoking the loops and model preset, so tools and model CLIs should treat it as the normal workspace scope.
+The folder that holds `.gremlin/` is the gremlin's workspace — it reads, writes, and runs things there.
 
 ## Run
 
-Configure a model preset first. The default preset is `models/default.sh`; edit it for the model CLI you want to use, or add another executable `models/<alias>.sh`and select it from the TUI with`/model <alias>`. A preset is any executable that reads the prompt on stdin and writes a reply on stdout, so it doesn't have to call an LLM — `models/echo.sh` ships as a script-only example.
+Point the gremlin at a model first. The default preset is `models/default.sh` — edit it for the model CLI you want, or drop in another executable `models/<alias>.sh` and pick it from the TUI with `/model <alias>`.
+
+A preset is just an executable that reads the prompt on stdin and writes a reply on stdout, so it doesn't even have to call an LLM — `models/echo.sh` ships as a script-only example.
 
 Start the gremlin runner from the host folder:
 
@@ -33,7 +35,7 @@ Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands
 ./.gremlin/gremlin say /help
 ```
 
-Use `/new` at a real session boundary. It rotates the transcript, starts fresh, and queues a visible memory-review item for the archived session. Use `/discard` for temporary sessions that should be archived but not reviewed for memory.
+Use `/new` at a real session boundary: it starts a clean conversation, files the old one away, and reviews it for anything worth remembering. Use `/discard` for throwaway sessions that should be archived but not reviewed for memory.
 
 ## Telegram
 
@@ -66,6 +68,7 @@ More detail: `bridges/telegram/README.md`.
 - `gremlin.md`: identity, personality, purpose, voice.
 - `context/`: the always-loaded broadcast surface; `context/system/` is gremlin-managed.
 - `.glean/`: memory workbench for distilled findings; see `.glean/README.md`.
+- `.lore/`: durable, dated records kept whole — the library beside Glean's memory; see `.lore/README.md`.
 - `.loom/`: durable goals that outlive a turn and human-gated self-edit proposals; see `.loom/README.md`.
 - `skills/*.md`: procedures the gremlin can follow.
 - `tools/*.sh`: bash tools the gremlin can run.
@@ -76,7 +79,7 @@ Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is re
 
 ## Memory
 
-`.gremlin/.glean/` is the local memory workbench. It stores raw distillation inbox items in `.glean/in/`, distilled findings in `.glean/findings/`, completed inbox residue in `.glean/out/`, and retired findings in `.glean/dropped/`.
+`.gremlin/.glean/` is the local memory workbench: it keeps distilled findings as flat markdown. See `.glean/README.md` for the full layout.
 
 The generated finding catalog is broadcast by default through `context/system/memory.md`. Search or fetch finding bodies when they are relevant, then promote only the small set that should always be fully broadcast by symlinking them into `.gremlin/context/`:
 
@@ -102,7 +105,7 @@ From a script or shell:
 ./.gremlin/gremlin update
 ```
 
-`/update` overlays canonical files while preserving identity, context, transcripts, queues, schedules, local Glean memory state, `.upstream`, `.model`, and `.paused`. Canonical `.glean/glean.sh`and`.glean/README.md`still update;`.glean/in/`, `.glean/findings/`, `.glean/out/`, `.glean/dropped/`, and `.glean/distil.md` are local state. After the overlay, `/update` runs `gremlin doctor` to restore missing managed `context/system/` symlinks without touching top-level context files.
+`/update` refreshes the shared machinery and leaves everything that's *yours* untouched — your identity, context, transcripts, queues, schedules, memory, and settings (`.upstream`, `.model`, `.paused`). Afterwards it runs `gremlin doctor` to restore any managed `context/system/` links.
 
 
 ## Developing
@@ -138,4 +141,5 @@ Before pushing:
 - `.nest/README.md`: the nestling inbox/claim/complete protocol.
 - `.groundhog/README.md`: the schedule/tick protocol.
 - `.glean/README.md`: the glean memory protocol.
+- `.lore/README.md`: the lore protocol for durable, dated records.
 - `.loom/README.md`: the loom protocol for goals that outlive a turn.

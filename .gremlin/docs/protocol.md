@@ -2,11 +2,12 @@
 
 This is the single-gremlin mechanics reference.
 
-Gremlin contains three nested protocols worth reading directly:
+Gremlin contains several nested protocols worth reading directly:
 
 - `.nest/README.md`: inbound item lifecycle, claims, completion, and sweep.
 - `.groundhog/README.md`: schedules, ticks, fired items, and materialized work.
 - `.glean/README.md`: memory workbench, finding contract, and distillation flow.
+- `.lore/README.md`: durable, dated records kept whole — the retention sibling to Glean.
 
 ## Layout
 
@@ -24,6 +25,7 @@ Gremlin contains three nested protocols worth reading directly:
   skills/               # markdown procedures
   models/               # model runner presets
   .glean/               # memory workbench: inbox, findings, out, dropped
+  .lore/                # durable, dated records: items, generated INDEX
   .nest/                # inbound/completed item protocol
   .groundhog/           # scheduled work protocol
 ```

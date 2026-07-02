@@ -28,5 +28,7 @@ src="$extracted/.gremlin"
 cp -R "$src" "$dest"
 "$dest/.glean/glean.sh" init
 "$dest/.glean/glean.sh" index >/dev/null
+"$dest/.lore/lore.sh" init
+"$dest/.lore/lore.sh" index >/dev/null
 "$dest/bin/doctor.sh" >/dev/null
 echo "initialised gremlin at $dest"

@@ -69,6 +69,11 @@ excludes=(
   --exclude='.loom/threads/'
   --exclude='.loom/tied/'
   --exclude='.loom/dropped/'
+  # Lore: items/ (durable dated records) and the generated INDEX.md are local
+  # state, preserved across updates; lore.sh + README ride the overlay — the
+  # same split as glean's findings/ vs glean.sh.
+  --exclude='.lore/items/'
+  --exclude='.lore/INDEX.md'
   --exclude='context/'
   --exclude='gremlin.md'
   --exclude='.upstream'
@@ -166,5 +171,13 @@ count=0
 [ -n "$changes" ] && count="$(printf '%s\n' "$changes" | wc -l | tr -d ' ')"
 
 echo "✨ updated: $count file(s)"
+
+# A gremlin that just gained the lore primitive needs an initialised store so
+# its INDEX.md exists (the overlay ships lore.sh + README but not INDEX.md).
+# init is idempotent — it never clobbers existing items or a populated INDEX.
+if [ -x "$GREMLIN_DIR/.lore/lore.sh" ]; then
+  "$GREMLIN_DIR/.lore/lore.sh" init >/dev/null 2>&1 || true
+fi
+
 echo "🩺 doctor:"
 "$GREMLIN_DIR/bin/doctor.sh" | sed 's/^/  /'

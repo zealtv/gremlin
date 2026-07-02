@@ -46,6 +46,7 @@ Run `/help` for commands.
 - **Scheduled and persistent.** Background tend + tick loops give you reminders, nightly summaries, and self-initiated work without a separate scheduler.
 - **Append-only transcript.** `transcript.md` is the source of truth. Bridges tail it. Debugging is `cat`.
 - **Memory you control.** Glean stores findings as flat markdown; the catalog is broadcast by default, bodies are fetched on demand, and selected findings can be promoted into full context with a symlink.
+- **A library, not just memory.** Lore keeps complete, dated records — specs, decisions, transcripts — whole and findable, durable and dark by default: the append-and-keep sibling to Glean's revisable memory.
 - **Everything is a file.** Skills, tools, commands, model presets, bridges — every extension point is a directory of small scripts or markdown.
 
 ## Layout
@@ -63,6 +64,7 @@ your-folder/
     ├── .nest/               inbox / claimed / completed items
     ├── .groundhog/          scheduled work
     ├── .glean/              memory workbench
+    ├── .lore/               durable, dated records
     ├── transcript.md        append-only conversation log
     └── gremlin              the executable
 ```
@@ -80,6 +82,7 @@ The underlying file-based protocols are vendored and documented on their own:
 - 🪺 [nestlings](https://github.com/zealtv/nestlings) — queueing and actioning work
 - 🦫 [groundhog](https://github.com/zealtv/groundhog) — scheduling recurring tasks
 - 🔮 [glean](https://github.com/zealtv/glean) — memory distillation and retrieval
+- 🐉 [lore](https://github.com/zealtv/lore) — durable, dated reference and record
 - 🪡 [loom](https://github.com/zealtv/loom) — planning structured work
 
 ## Sandboxing
