@@ -493,6 +493,20 @@ send_photo_api() {
     return 1
   fi
 
+  # Content-keyed mocks (as in send_message_api): fail only the embed whose
+  # caption contains the sentinel, so a test can wedge one embed of a multi-embed
+  # turn while the rest send normally.
+  if [ -n "${TELEGRAM_TEST_FAIL_MATCH:-}" ] && \
+     [ "${caption#*"$TELEGRAM_TEST_FAIL_MATCH"}" != "$caption" ]; then
+    echo "telegram: mock permanent photo failure (matched)" >&2
+    return 1
+  fi
+  if [ -n "${TELEGRAM_TEST_TRANSIENT_MATCH:-}" ] && \
+     [ "${caption#*"$TELEGRAM_TEST_TRANSIENT_MATCH"}" != "$caption" ]; then
+    echo "telegram: mock transient photo failure (matched)" >&2
+    return 2
+  fi
+
   if [ "$mode" = "HTML" ] && [ -n "${TELEGRAM_TEST_HTML_FAIL:-}" ]; then
     echo "telegram: mock HTML parse failure" >&2
     return 1
@@ -579,6 +593,18 @@ send_document_api() {
   if [ -n "${TELEGRAM_TEST_SEND_FAIL:-}" ]; then
     echo "telegram: mock document failure" >&2
     return 1
+  fi
+
+  # Content-keyed mocks: fail only the embed whose caption contains the sentinel.
+  if [ -n "${TELEGRAM_TEST_FAIL_MATCH:-}" ] && \
+     [ "${caption#*"$TELEGRAM_TEST_FAIL_MATCH"}" != "$caption" ]; then
+    echo "telegram: mock permanent document failure (matched)" >&2
+    return 1
+  fi
+  if [ -n "${TELEGRAM_TEST_TRANSIENT_MATCH:-}" ] && \
+     [ "${caption#*"$TELEGRAM_TEST_TRANSIENT_MATCH"}" != "$caption" ]; then
+    echo "telegram: mock transient document failure (matched)" >&2
+    return 2
   fi
 
   if [ "$mode" = "HTML" ] && [ -n "${TELEGRAM_TEST_HTML_FAIL:-}" ]; then
@@ -786,86 +812,118 @@ extract_pushable_turns() {
 # The markdown form ![caption](path-or-url) is also accepted for images as a
 # silent back-compat alias (vision models emit it, and old transcripts contain
 # it) — it routes to sendPhoto too but is undocumented going forward.
-# Each reference is sent as its own message; the remaining text, with the media
-# markup stripped, is sent as a normal message. File/image paths resolve against
-# the host folder so the gremlin can reference files it created with a relative
-# path. Voice audio is synthesized at send time (models/tts.sh) and never stored
-# — the transcript stays text, with the `(tts:)` markup as the source of truth.
+# Each reference is sent as its own message, in the order it appears in the body
+# (text first, then the embeds interleaved by authored position). Every local
+# attachment is pre-flighted before anything is sent, so a missing file fails the
+# whole turn with nothing delivered rather than stranding the remainder. File and
+# image paths resolve against the host folder so the gremlin can reference files
+# it created with a relative path. Voice audio is synthesized at send time
+# (models/tts.sh) and never stored — the transcript stays text, with the `(tts:)`
+# markup as the source of truth.
 # Returns 0 if the whole turn was delivered, or a classify_telegram_response
 # code (1 permanent / 2 transient) from the first send that failed, so the
 # outbound queue can decide whether to skip past this turn or hold and retry it.
+# _embed_fields <line>: classify one embed token, setting _ek/_et/_ec.
+#   _ek = voice | doc | image
+#   _et = resolved path or URL (empty for voice); a relative path is resolved
+#         against the host folder
+#   _ec = caption (for voice, the words to speak)
+# Shared by push_turn's pre-flight and send passes so both parse identically.
+_embed_fields() {
+  local line="$1"
+  case "$line" in
+    '🔊 '*)
+      _ek=voice; _et=""
+      _ec="$(printf '%s' "$line" | sed -E 's/^🔊 \[([^]]*)\]\(tts:[^)]*\)$/\1/')"
+      ;;
+    '📎 '*)
+      _ek=doc
+      _ec="$(printf '%s' "$line" | sed -E 's/^📎 \[([^]]*)\].*/\1/')"
+      _et="$(printf '%s' "$line" | sed -E 's/^📎 \[[^]]*\]\(([^)]+)\)$/\1/')"
+      ;;
+    *)  # 🖼️ [caption](src) or the ![caption](src) back-compat alias
+      _ek=image
+      if [ "${line#🖼️ }" != "$line" ]; then
+        _ec="$(printf '%s' "$line" | sed -E 's/^🖼️ \[([^]]*)\].*/\1/')"
+        _et="$(printf '%s' "$line" | sed -E 's/^🖼️ \[[^]]*\]\(([^)]+)\)$/\1/')"
+      else
+        _ec="$(printf '%s' "$line" | sed -E 's/^!\[([^]]*)\].*/\1/')"
+        _et="$(printf '%s' "$line" | sed -E 's/^!\[[^]]*\]\(([^)]+)\)$/\1/')"
+      fi
+      ;;
+  esac
+  case "$_et" in
+    "" | http://* | https://* | /*) : ;;
+    *) _et="$HOST_DIR/$_et" ;;
+  esac
+}
+
 push_turn() {
   local turn="$1"
-  local images voices docs imgemoji text line photo caption speak audio doc rc
+  local embeds text line audio rc
+  local _ek _et _ec
 
-  voices="$(printf '%s\n' "$turn" | grep -oE '🔊 \[[^]]*\]\(tts:[^)]*\)' || true)"
-  docs="$(printf '%s\n' "$turn" | grep -oE '📎 \[[^]]*\]\([^)]+\)' || true)"
-  images="$(printf '%s\n' "$turn" | grep -oE '!\[[^]]*\]\([^)]+\)' || true)"
-  # Normalize the 🖼️ verb to the markdown shape so a single loop sends both forms.
-  imgemoji="$(printf '%s\n' "$turn" | grep -oE '🖼️ \[[^]]*\]\([^)]+\)' \
-    | sed -E 's/^🖼️ \[([^]]*)\]\(([^)]+)\)$/![\1](\2)/' || true)"
-  if [ -n "$imgemoji" ]; then
-    images="${images:+$images$'\n'}$imgemoji"
-  fi
+  # Every embed in authored (document) order, tagged by its leading verb — grep
+  # -oE emits matches in position order across the whole body, so a turn written
+  # image -> file -> image sends in exactly that order (matching the web bridge's
+  # single-pass renderer) rather than the old text/images/docs/voices grouping.
+  embeds="$(printf '%s\n' "$turn" | grep -oE '🔊 \[[^]]*\]\(tts:[^)]*\)|📎 \[[^]]*\]\([^)]+\)|🖼️ \[[^]]*\]\([^)]+\)|!\[[^]]*\]\([^)]+\)' || true)"
   text="$(printf '%s\n' "$turn" | sed -E 's/📎 \[[^]]*\]\([^)]+\)//g; s/🖼️ \[[^]]*\]\([^)]+\)//g; s/!\[[^]]*\]\([^)]+\)//g; s/🔊 \[[^]]*\]\(tts:[^)]*\)//g')"
 
+  # Pre-flight: resolve and check every local attachment BEFORE sending anything.
+  # A missing file is a permanent error, and catching it here makes the turn
+  # all-or-none — nothing goes out if any part can't — instead of delivering the
+  # earlier parts and then failing partway, which would strand the remainder.
+  if [ -n "$embeds" ]; then
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      _embed_fields "$line"
+      [ "$_ek" = voice ] && continue
+      case "$_et" in http://* | https://*) continue ;; esac
+      if [ ! -f "$_et" ]; then
+        echo "telegram: attachment not found, not sending turn: $_et" >&2
+        return 1
+      fi
+    done <<EOF_PREFLIGHT
+$embeds
+EOF_PREFLIGHT
+  fi
+
+  # Text first (context for the attachments), then each embed in authored order.
   if [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
     send_message "$text"; rc=$?
     [ "$rc" -ne 0 ] && return "$rc"
   fi
 
-  if [ -n "$images" ]; then
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      caption="$(printf '%s' "$line" | sed -E 's/^!\[([^]]*)\].*/\1/')"
-      photo="$(printf '%s' "$line" | sed -E 's/^!\[[^]]*\]\(([^)]+)\)$/\1/')"
-      case "$photo" in
-        http://* | https://* | /*) : ;;
-        *) photo="$HOST_DIR/$photo" ;;
-      esac
-      send_photo "$photo" "$caption"; rc=$?
-      [ "$rc" -ne 0 ] && return "$rc"
-    done <<EOF_IMAGES
-$images
-EOF_IMAGES
-  fi
-
-  if [ -n "$docs" ]; then
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      caption="$(printf '%s' "$line" | sed -E 's/^📎 \[([^]]*)\].*/\1/')"
-      doc="$(printf '%s' "$line" | sed -E 's/^📎 \[[^]]*\]\(([^)]+)\)$/\1/')"
-      case "$doc" in
-        http://* | https://* | /*) : ;;
-        *) doc="$HOST_DIR/$doc" ;;
-      esac
-      send_document "$doc" "$caption"; rc=$?
-      [ "$rc" -ne 0 ] && return "$rc"
-    done <<EOF_DOCS
-$docs
-EOF_DOCS
-  fi
-
-  [ -n "$voices" ] || return 0
+  [ -n "$embeds" ] || return 0
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    speak="$(printf '%s' "$line" | sed -E 's/^🔊 \[([^]]*)\]\(tts:[^)]*\)$/\1/')"
-    [ -n "$(printf '%s' "$speak" | tr -d '[:space:]')" ] || continue
-    audio="$(mktemp "$BRIDGE_DIR/telegram-tts.XXXXXX")"
-    if ! render_tts "$speak" "$audio"; then
-      rm -f "$audio"
-      echo "telegram: TTS render failed for: $speak" >&2
-      return 1
-    fi
-    send_voice "$audio"; rc=$?
-    if [ "$rc" -ne 0 ]; then
-      rm -f "$audio"
-      return "$rc"
-    fi
-    rm -f "$audio"
-  done <<EOF_VOICES
-$voices
-EOF_VOICES
+    _embed_fields "$line"
+    case "$_ek" in
+      image)
+        send_photo "$_et" "$_ec"; rc=$?
+        [ "$rc" -ne 0 ] && return "$rc"
+        ;;
+      doc)
+        send_document "$_et" "$_ec"; rc=$?
+        [ "$rc" -ne 0 ] && return "$rc"
+        ;;
+      voice)
+        [ -n "$(printf '%s' "$_ec" | tr -d '[:space:]')" ] || continue
+        audio="$(mktemp "$BRIDGE_DIR/telegram-tts.XXXXXX")"
+        if ! render_tts "$_ec" "$audio"; then
+          rm -f "$audio"
+          echo "telegram: TTS render failed for: $_ec" >&2
+          return 1
+        fi
+        send_voice "$audio"; rc=$?
+        rm -f "$audio"
+        [ "$rc" -ne 0 ] && return "$rc"
+        ;;
+    esac
+  done <<EOF_EMBEDS
+$embeds
+EOF_EMBEDS
 }
 
 # push_pushable_turns <chunk>: deliver every pushable turn in <chunk>, in order.

@@ -216,13 +216,60 @@ else
   bad "mixed turn lost a part (text=$have_text photo=$have_photo doc=$have_doc)"
 fi
 
-# NOTE (audit 2026-07-01): push_turn currently renders by *type group* — text,
-# then all images, then all docs, then all voices — so a turn authored as
-# image→file→image would arrive image→image→file. Cross-type authored ordering
-# and mid-turn partial-failure atomicity (a transient failure on the 2nd of 3
-# embeds re-sends the 1st on retry; a permanent one silently drops the rest) are
-# tracked by the child stitch gremlin--multi-attachment-bridge-audit--tg-outbound-order-and-atomicity,
-# which will add a per-embed fail seam and tighten these into assertions.
+# ============================================================================
+echo "== mixed embeds send in authored order, not grouped by type =="
+
+# A turn authored image -> file -> image must arrive in exactly that order (the
+# old code grouped all images before all docs). Distinct captions let us read the
+# delivery order off the log regardless of send kind.
+ORDER=$'look:\n🖼️ [alpha]('"$IMG1"$')\n📎 [bravo]('"$DOC1"$')\n🖼️ [charlie]('"$IMG2"$')'
+LOG="$WORK/order.log"; : > "$LOG"
+TELEGRAM_TEST_SEND_LOG="$LOG" push_turn "$ORDER" >/dev/null 2>&1
+seq="$(grep -E '^caption=(alpha|bravo|charlie)$' "$LOG" | sed 's/^caption=//' | tr '\n' ',')"
+seq="${seq%,}"
+[ "$seq" = "alpha,bravo,charlie" ] \
+  && ok "embeds delivered in authored order (image,file,image)" \
+  || bad "authored order not preserved (got: $seq)"
+
+# ============================================================================
+echo "== a missing attachment fails the whole turn: nothing is sent (all-or-none) =="
+
+# Pre-flight must catch the missing file before any part goes out, so the earlier
+# valid image and the text are NOT delivered — the turn is retried/handled as a
+# unit rather than stranded half-sent.
+GONE="$WORK/nope.png"; rm -f "$GONE"
+PARTIAL=$'important context\n🖼️ [present]('"$IMG1"$')\n🖼️ [absent]('"$GONE"$')'
+LOG="$WORK/allnone.log"; ERR="$WORK/allnone.err"; : > "$LOG"
+TELEGRAM_TEST_SEND_LOG="$LOG" push_turn "$PARTIAL" >/dev/null 2>"$ERR"
+rc=$?
+[ "$rc" -ne 0 ] && ok "missing attachment fails the turn (permanent)" \
+  || bad "missing attachment should fail the turn (rc=$rc)"
+[ ! -s "$LOG" ] && ok "nothing was sent — no half-delivered turn" \
+  || bad "turn was partially sent: $(tr '\n' ' ' < "$LOG")"
+grep -q 'attachment not found' "$ERR" && ok "the missing file is surfaced loudly" \
+  || bad "missing file was not surfaced"
+
+# ============================================================================
+echo "== a send-time permanent failure on one embed is surfaced loudly, never silent =="
+
+# Not every permanent failure is pre-flightable (Telegram may reject content on
+# receipt). When one embed fails at send time, push_pushable_turns must surface
+# it loudly (DROPPING) rather than reporting a clean success.
+POISONED=$'here\n🖼️ [good]('"$IMG1"$')\n📎 [POISON bad]('"$DOC1"$')'
+CHUNK2=$'## assistant — 2026-07-02T02:00:00Z\n\n'"$POISONED"$'\n'
+LOG="$WORK/sendfail.log"; ERR="$WORK/sendfail.err"; : > "$LOG"
+TELEGRAM_TEST_SEND_LOG="$LOG" TELEGRAM_TEST_FAIL_MATCH="POISON" \
+  push_pushable_turns "$CHUNK2" >/dev/null 2>"$ERR"
+grep -q 'DROPPING an undeliverable turn' "$ERR" \
+  && ok "send-time permanent failure surfaced loudly" \
+  || bad "send-time permanent failure was not surfaced"
+
+# NOTE (2026-07-02): transient-retry duplication (a held chunk is re-sent whole)
+# is a pre-existing, bridge-wide property of the byte-cursor delivery model in
+# push_transcript_once — it re-sends the chunk on any transient failure, for
+# single- and multi-attachment turns alike. It is not specific to multiple
+# attachments and is out of scope for this stitch; changing it means reworking
+# the cursor/ack model, tracked separately if it ever earns priority.
 
 # ============================================================================
 echo
