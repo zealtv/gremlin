@@ -1302,6 +1302,135 @@ handle_slash() {
   echo "ran telegram slash command (rc=$rc)"
 }
 
+# --- media-group (album) coalescing -----------------------------------------
+# Telegram delivers a photo album as several updates that share one
+# media_group_id, with the caption on the first only. Handled one-per-update,
+# each becomes its own nest item and its own turn — the album's grouping identity
+# is lost. dispatch_updates buffers the members of a group and flushes them as
+# ONE multi-photo item. The nest/transcript already expresses a group (an item
+# dir with N files, surfaced under `## attachments`), so no protocol change is
+# needed — this is bridge-local coalescing into the existing container.
+#
+# Buffer state (module-level; the bridge polls single-threaded):
+MG_ID=""       # media_group_id being accumulated
+MG_CAPTION=""  # first non-empty caption seen in the group
+MG_LIST=""     # newline list of "<file_id> <ext>" in album order
+MG_COUNT=0     # members buffered
+MG_MAX=0       # highest update_id in the group (for the offset advance)
+
+reset_media_group() { MG_ID=""; MG_CAPTION=""; MG_LIST=""; MG_COUNT=0; MG_MAX=0; }
+
+# ingest_media_group <caption> <list>: <list> is "<file_id> <ext>" lines in album
+# order. Downloads every photo into one item dir as source-N.<ext> (plus a scaled
+# preview-N.<ext> when a resizer is available), frames the turn in
+# instructions.md, stamps .model=image, and ingests it as a single vision item.
+ingest_media_group() {
+  local caption="$1" list="$2"
+  local itemdir n=0 fid ext src preview notes=""
+
+  itemdir="$(mktemp -d "$BRIDGE_DIR/telegram-album.XXXXXX")"
+  while IFS=' ' read -r fid ext; do
+    [ -n "$fid" ] || continue
+    n=$((n + 1))
+    src="$itemdir/source-$n.$ext"
+    if ! download_file "$fid" "$src"; then
+      rm -rf "$itemdir"
+      echo "telegram: failed to download album photo $fid" >&2
+      return 1
+    fi
+    preview="$itemdir/preview-$n.$ext"
+    if image_resize "$src" "$preview"; then
+      notes="${notes}Photo $n: preview \`preview-$n.$ext\`, full-resolution \`source-$n.$ext\`.
+"
+    else
+      rm -f "$preview"
+      notes="${notes}Photo $n: \`source-$n.$ext\`.
+"
+    fi
+  done <<EOF_MG
+$list
+EOF_MG
+
+  if [ "$n" -eq 0 ]; then
+    rm -rf "$itemdir"
+    echo "telegram: media group had no downloadable photos" >&2
+    return 1
+  fi
+
+  {
+    printf 'The user sent %d photos as one album via Telegram.\n\n' "$n"
+    [ -n "$caption" ] && printf 'Caption: %s\n\n' "$caption"
+    printf '%s\n' "$notes"
+    printf 'Look at the images and respond to the user about them.\n'
+  } > "$itemdir/instructions.md"
+  printf 'image\n' > "$itemdir/.model"
+
+  local suffix name
+  suffix="$(basename "$itemdir")"
+  suffix="${suffix#telegram-album.}"
+  name="$(date -u +%Y%m%dT%H%M%SZ)-telegram-album-$suffix"
+  "$NESTLING" ingest "$itemdir" "$name" >/dev/null
+  rm -rf "$itemdir"
+  echo "ingested telegram album ($n photos) as $name"
+}
+
+# flush_media_group: ingest the buffered album (if any) and advance the update
+# offset past it, then reset. A one-member group (shouldn't occur — a
+# media_group_id implies >=2) degrades to a normal single photo.
+flush_media_group() {
+  [ "$MG_COUNT" -gt 0 ] || return 0
+  if [ "$MG_COUNT" -ge 2 ]; then
+    ingest_media_group "$MG_CAPTION" "$MG_LIST" \
+      || echo "telegram: media group ingest failed (group $MG_ID)" >&2
+  else
+    local fid ext
+    IFS=' ' read -r fid ext <<EOF_ONE
+$MG_LIST
+EOF_ONE
+    ingest_photo "$fid" "$ext" "$MG_CAPTION" \
+      || echo "telegram: single-member group ingest failed" >&2
+  fi
+  write_update_offset "$((MG_MAX + 1))"
+  reset_media_group
+}
+
+# dispatch_updates: read update JSON objects (one per line) on stdin. A photo
+# that is part of an album in the configured chat is buffered and coalesced;
+# everything else — including album members that aren't plain photos, and any
+# other chat — flushes the current album and takes the normal per-update path,
+# which owns its own guards and offset advance. Buffers across the stream and
+# flushes any trailing album at the end (an album split across two poll batches
+# degrades to one item per batch — grouped, never per-photo).
+dispatch_updates() {
+  local update uid chat mgid photo_id cap
+  reset_media_group
+  while IFS= read -r update; do
+    [ -n "$update" ] || continue
+    uid="$(printf '%s\n' "$update" | jq -r '.update_id')"
+    chat="$(printf '%s\n' "$update" | jq -r '.message.chat.id? // empty')"
+    mgid="$(printf '%s\n' "$update" | jq -r '.message.media_group_id? // empty')"
+    photo_id="$(printf '%s\n' "$update" | jq -r '.message.photo[-1].file_id? // empty')"
+    cap="$(printf '%s\n' "$update" | jq -r '.message.caption? // empty')"
+
+    if [ -n "$mgid" ] && [ -n "$photo_id" ] && [ "$chat" = "$TELEGRAM_CHAT_ID" ]; then
+      if [ "$MG_COUNT" -gt 0 ] && [ "$mgid" != "$MG_ID" ]; then
+        flush_media_group
+      fi
+      MG_ID="$mgid"
+      MG_LIST="${MG_LIST}${photo_id} jpg
+"
+      MG_COUNT=$((MG_COUNT + 1))
+      MG_MAX="$uid"
+      [ -z "$MG_CAPTION" ] && [ -n "$cap" ] && MG_CAPTION="$cap"
+      continue
+    fi
+
+    flush_media_group
+    handle_update "$update"
+  done
+  flush_media_group
+}
+
 poll_once() {
   local offset response updates update ok description
 
@@ -1325,12 +1454,7 @@ poll_once() {
     return 0
   fi
 
-  while IFS= read -r update; do
-    [ -n "$update" ] || continue
-    handle_update "$update"
-  done <<EOF_UPDATES
-$updates
-EOF_UPDATES
+  printf '%s\n' "$updates" | dispatch_updates
 }
 
 cmd_status() {

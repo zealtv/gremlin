@@ -272,6 +272,77 @@ grep -q 'DROPPING an undeliverable turn' "$ERR" \
 # the cursor/ack model, tracked separately if it ever earns priority.
 
 # ============================================================================
+echo "== inbound: a Telegram photo album is coalesced into one multi-photo item =="
+
+# Drive dispatch_updates with a synthetic getUpdates batch. download_file copies
+# a fixture (TELEGRAM_TEST_FILE_SRC); a nestling stub captures each ingested item
+# so we can inspect the shape without a real nest.
+CHAT=12345
+TELEGRAM_CHAT_ID="$CHAT"
+BRIDGE_DIR="$WORK"                    # album/photo temp dirs + offset land here
+UPDATE_OFFSET="$WORK/offset"          # never touch real bridge state
+export TELEGRAM_TEST_FILE_SRC="$WORK/fixture.png"; printf 'PNGDATA' > "$TELEGRAM_TEST_FILE_SRC"
+export TELEGRAM_TEST_CAPTURE="$WORK/captured"; rm -rf "$TELEGRAM_TEST_CAPTURE"; mkdir -p "$TELEGRAM_TEST_CAPTURE"
+NEST_STUB="$WORK/nestling-stub.sh"
+cat > "$NEST_STUB" <<'STUB'
+#!/usr/bin/env bash
+# On `ingest <src> <name>`, copy the item into the capture dir for inspection.
+[ "$1" = ingest ] && cp -R "$2" "$TELEGRAM_TEST_CAPTURE/$3"
+exit 0
+STUB
+chmod +x "$NEST_STUB"
+NESTLING="$NEST_STUB"
+
+# Batch: a 2-photo album (caption on the first), a plain text turn, a lone photo,
+# and a grouped photo from a DIFFERENT chat (must be ignored, not coalesced).
+UPDATES="$(cat <<JSON
+{"update_id":101,"message":{"chat":{"id":$CHAT},"media_group_id":"AG1","photo":[{"file_id":"a-s"},{"file_id":"a-l"}],"caption":"my trip"}}
+{"update_id":102,"message":{"chat":{"id":$CHAT},"media_group_id":"AG1","photo":[{"file_id":"b-s"},{"file_id":"b-l"}]}}
+{"update_id":103,"message":{"chat":{"id":$CHAT},"text":"hi there"}}
+{"update_id":104,"message":{"chat":{"id":$CHAT},"photo":[{"file_id":"c-s"},{"file_id":"c-l"}],"caption":"single"}}
+{"update_id":105,"message":{"chat":{"id":99999},"media_group_id":"AG2","photo":[{"file_id":"x"}],"caption":"other"}}
+JSON
+)"
+dispatch_updates <<<"$UPDATES" >/dev/null 2>&1
+
+album="$(find "$TELEGRAM_TEST_CAPTURE" -maxdepth 1 -type d -name '*telegram-album*')"
+n_album="$(printf '%s\n' "$album" | grep -c . )"
+if [ "$n_album" -eq 1 ]; then
+  ok "the album coalesced into exactly one item"
+  nsrc="$(find "$album" -maxdepth 1 -name 'source-*.jpg' | grep -c .)"
+  [ "$nsrc" -eq 2 ] && ok "the item holds both album photos (source-1, source-2)" \
+    || bad "album item should hold 2 photos (got $nsrc)"
+  grep -q '2 photos' "$album/instructions.md" && ok "instructions name the photo count" \
+    || bad "instructions should name the photo count"
+  grep -q 'Caption: my trip' "$album/instructions.md" \
+    && ok "the album's shared caption is carried" || bad "album caption not carried"
+else
+  bad "album should coalesce to one item (got $n_album)"
+fi
+
+# The lone photo still takes the single-photo path, unchanged.
+single="$(find "$TELEGRAM_TEST_CAPTURE" -maxdepth 1 -type d -name '*telegram-photo*')"
+if [ "$(printf '%s\n' "$single" | grep -c .)" -eq 1 ] \
+  && grep -q 'Caption: single' "$single/instructions.md"; then
+  ok "a lone photo is still a single-photo item"
+else
+  bad "lone photo should be one unchanged single-photo item"
+fi
+
+# The wrong-chat grouped photo was ignored, not coalesced or ingested.
+if find "$TELEGRAM_TEST_CAPTURE" -type f -name instructions.md -exec grep -l 'other' {} + \
+   | grep -q .; then
+  bad "a grouped photo from another chat leaked in"
+else
+  ok "a grouped photo from another chat is ignored"
+fi
+
+# Offset advanced monotonically past the whole batch (crash-safety).
+[ "$(cat "$UPDATE_OFFSET" 2>/dev/null)" = "106" ] \
+  && ok "update offset advanced past the batch (106)" \
+  || bad "offset should be 106 (got $(cat "$UPDATE_OFFSET" 2>/dev/null))"
+
+# ============================================================================
 echo
 echo "passed: $pass, failed: $fail"
 [ "$fail" -eq 0 ]

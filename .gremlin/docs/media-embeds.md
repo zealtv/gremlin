@@ -74,6 +74,6 @@ The grammar is the same everywhere; presentation differs by bridge:
   `tg-outbound-order-and-atomicity`.
 - **TUI** has no native attachments; the embed markup is shown as written.
 
-Inbound albums (multiple photos sent as one Telegram media group) are still
-coalesced per the loom stitch `tg-inbound-media-group`; until then each photo of
-an album arrives as its own turn.
+Inbound albums (multiple photos sent as one Telegram media group) arrive as a
+single turn holding every photo and the album's shared caption, listed under
+`## attachments`.
