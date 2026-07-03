@@ -330,6 +330,25 @@
     autosize();
   }
 
+  // Enter behaves differently with a physical keyboard vs an on-screen one. A
+  // coarse primary pointer ⇒ a touch-first device (phone/tablet); a fine primary
+  // pointer ⇒ a laptop/desktop (a touch-laptop with a trackpad reports fine, so
+  // it is correctly treated as a laptop). Evaluated once at load.
+  var touchPrimary = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+  var sendBtn = document.getElementById("send");
+  if (sendBtn) {
+    sendBtn.title = touchPrimary
+      ? "Send"
+      : "Send · Enter to send, ⌘/Ctrl+Enter for a newline";
+  }
+
+  function insertNewlineAtCursor() {
+    var start = input.selectionStart, end = input.selectionEnd, v = input.value;
+    input.value = v.slice(0, start) + "\n" + v.slice(end);
+    input.selectionStart = input.selectionEnd = start + 1;
+    autosize();
+  }
+
   if (form) {
     form.addEventListener("submit", function (e) {
       e.preventDefault();
@@ -347,19 +366,21 @@
         if (e.key === "ArrowUp") {
           e.preventDefault(); menuIndex = (menuIndex - 1 + menuItems.length) % menuItems.length; renderMenu(); return;
         }
-        // Plain Enter or Tab commits the highlighted command; Ctrl/⌘+Enter
-        // falls through below so a deliberate send still works with the menu up.
+        // While the menu is open, plain Enter or Tab commits the highlighted
+        // command; a modified Enter (⌘/Ctrl) falls through to newline below.
         if ((e.key === "Enter" && !e.ctrlKey && !e.metaKey) || e.key === "Tab") {
           e.preventDefault(); completeCommand(menuItems[menuIndex].name); return;
         }
         if (e.key === "Escape") { e.preventDefault(); hideMenu(); return; }
       }
-      // Enter inserts a newline (the default textarea behavior, kept for easy
-      // multiline composing on desktop and mobile). Submitting is a deliberate
-      // gesture: Ctrl/⌘+Enter on a keyboard, or the touch send button.
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      // Platform-aware Enter. Touch: leave the on-screen Enter to insert a
+      // newline (submit is the send button only), so the return key never fires
+      // a half-typed message. Laptop: plain Enter submits; ⌘/Ctrl+Enter inserts
+      // a newline. Shift/Alt+Enter stay the browser's default newline either way.
+      if (e.key === "Enter" && !touchPrimary && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        send();
+        if (e.ctrlKey || e.metaKey) insertNewlineAtCursor();
+        else send();
       }
     });
   }
