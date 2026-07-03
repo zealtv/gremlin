@@ -281,6 +281,27 @@ def build_commands():
     return envelope("commands", os.path.realpath(GREMLIN_DIR), items)
 
 
+# The inspector primitives, in hub order, each with a terse (1–3 word) role hint
+# so a newcomer can tell them apart without knowing Gremlin's vocabulary. The
+# labels are the role words Gremlin's own docs use for these primitives
+# (scheduling / action tracking / memory / reference) — a compression of each
+# primitive's README purpose, not a divergent second vocabulary.
+PRIMITIVES = [
+    {"id": "groundhog", "hint": "scheduling"},
+    {"id": "loom", "hint": "action tracking"},
+    {"id": "glean", "hint": "memory"},
+    {"id": "lore", "hint": "reference"},
+]
+
+
+def build_primitives():
+    """Each inspector primitive with its concise purpose hint (stitch 26). An
+    unknown/extension primitive simply isn't listed here, so the hub degrades to
+    no hint rather than an invented one."""
+    items = [{"name": p["id"], "hint": p["hint"]} for p in PRIMITIVES]
+    return envelope("primitives", os.path.realpath(GREMLIN_DIR), items)
+
+
 def build_context():
     """gremlin.md + the context the tender loads (context/system/*.md then
     context/*.md, symlinks resolved for display) + the active model + the
@@ -741,6 +762,8 @@ class Handler(BaseHTTPRequestHandler):
                              "path": os.path.realpath(HOST_DIR)})
         elif path == "/api/commands":
             self._send_json(build_commands())
+        elif path == "/api/primitives":
+            self._send_json(build_primitives())
         elif path == "/api/context":
             self._send_json(build_context())
         elif path == "/api/status":

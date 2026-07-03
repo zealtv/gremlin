@@ -192,6 +192,16 @@ pre { max-width: 100%; overflow-x: auto; }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* honest activity indicator (stitch 29): a calm line above the composer, shown
+   only while the tender is actually handling a turn (file-derived, not faked) */
+.activity {
+  max-width: 66ch;
+  margin: 0 auto;
+  padding: 6px 24px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 /* slash-command autocomplete: a menu docked above the composer, same width */
 .cmd-menu {
   max-width: 66ch;
@@ -400,7 +410,9 @@ pre { max-width: 100%; overflow-x: auto; }
 }
 .hub-row:first-of-type { border-top: none; }
 .hub-emoji { font-size: 20px; }
+.hub-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .hub-label { font-weight: 600; }
+.hub-hint { font-size: 13px; color: var(--muted); line-height: 1.3; }
 .hub-row.soon { color: var(--muted); }
 .hub-row.soon .hub-label { font-weight: 400; }
 

@@ -373,6 +373,33 @@ else
   bad "autocomplete vocabulary drift: disk [$disk_cmds] vs api [$api_cmds]"
 fi
 
+# Inspector purpose hints (stitch 26): terse (1–3 word) role labels, one per
+# inspector primitive.
+prim_json="$(curl -fsS "$M1URL/api/primitives")"
+if printf '%s' "$prim_json" | python3 -c 'import sys,json
+h={x["name"]:x["hint"] for x in json.load(sys.stdin)["items"]}
+ok = h.get("groundhog")=="scheduling" and h.get("loom")=="action tracking" \
+  and h.get("glean")=="memory" and h.get("lore")=="reference" \
+  and all(v and 1 <= len(v.split()) <= 3 for v in h.values())
+sys.exit(0 if ok else 1)'; then
+  ok "/api/primitives → terse 1–3 word purpose hints (stitch 26)"
+else
+  bad "/api/primitives hints: $prim_json"
+fi
+
+# Activity indicator (stitch 29) data contract: a claimed .nest/in item surfaces
+# as in-progress>0 in /api/status (the second honest signal; the first — a live
+# .tending.pid ⇒ "thinking" — is covered in the M3 status tests).
+touch "$M1GREM/.nest/in/zzz-claim.tending"
+if curl -fsS "$M1URL/api/status" | python3 -c 'import sys,json
+i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="in-progress"][0]
+sys.exit(0 if i["fields"]["tending"]>=1 else 1)'; then
+  ok "claimed .nest/in item → in-progress>0 (activity signal, stitch 29)"
+else
+  bad "in-progress claim not reflected in /api/status (stitch 29)"
+fi
+rm -f "$M1GREM/.nest/in/zzz-claim.tending"
+
 # A message that is NOT a slash command is still ingested as a nest item.
 before_norm="$(web_items)"
 curl -fsS -X POST -H "$ORIGIN" -H 'Content-Type: application/json' \

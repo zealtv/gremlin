@@ -704,6 +704,23 @@
   ];
   var SOON = [];
 
+  // Purpose hints (stitch 26), keyed by primitive id, sourced live from each
+  // primitive's own README via /api/primitives — never authored here, so the
+  // hub can't drift from canonical docs. Fetched once, then the hub re-renders.
+  var primitiveHints = null;
+
+  function loadPrimitiveHints() {
+    if (primitiveHints) return Promise.resolve(primitiveHints);
+    return fetch("/api/primitives")
+      .then(function (r) { return r.json(); })
+      .then(function (env) {
+        primitiveHints = {};
+        (env.items || []).forEach(function (p) { primitiveHints[p.name] = p.hint || ""; });
+        return primitiveHints;
+      })
+      .catch(function () { primitiveHints = {}; return primitiveHints; });
+  }
+
   function backHeader() {
     var b = el("button", "back", "‹ Inspect");
     b.addEventListener("click", renderInspectHub);
@@ -716,7 +733,11 @@
     INSPECTORS.forEach(function (insp) {
       var row = el("div", "hub-row");
       row.appendChild(el("span", "hub-emoji", insp.emoji));
-      row.appendChild(el("span", "hub-label", insp.label));
+      var text = el("span", "hub-text");
+      text.appendChild(el("span", "hub-label", insp.label));
+      var hint = primitiveHints && primitiveHints[insp.id];
+      if (hint) text.appendChild(el("span", "hub-hint", hint));
+      row.appendChild(text);
       row.style.cursor = "pointer";
       row.addEventListener("click", function () { openInspector(insp); });
       s.appendChild(row);
@@ -728,6 +749,13 @@
       s.appendChild(row);
     });
     inspect.appendChild(s);
+    // First visit: hints aren't cached yet — fetch, then repaint the hub in
+    // place (only if the user is still looking at it) so hints appear.
+    if (!primitiveHints) {
+      loadPrimitiveHints().then(function () {
+        if (!inspect.hidden && inspect.querySelector(".hub-row")) renderInspectHub();
+      });
+    }
   }
 
   function openInspector(insp) {
@@ -754,6 +782,47 @@
     });
   }
 
+  // --- honest activity indicator (stitch 29) ---------------------------------
+  // NOT a fabricated "typing…": the council forbids inventing liveness the files
+  // can't justify (designer report §8). This reflects only what build_status
+  // derives from disk — the tender is actively handling a turn when .tending.pid
+  // is alive ("thinking") or a .nest/in item is claimed. It clears on completion
+  // (pid idle), on disconnect (fetch fails), and on leaving Chat. A short linger
+  // bridges the idle gap between back-to-back turns so it doesn't flicker.
+  var activityEl = document.getElementById("activity");
+  var activityTimer = null;
+  var lastWorkingAt = 0;
+
+  function setActivity(on) {
+    if (!activityEl) return;
+    activityEl.hidden = !on;
+    activityEl.textContent = on ? "⚙ the gremlin is working…" : "";
+  }
+
+  function pollActivity() {
+    fetch("/api/status").then(function (r) { return r.json(); }).then(function (env) {
+      var items = env.items || [];
+      function f(n) { for (var i = 0; i < items.length; i++) if (items[i].name === n) return items[i]; return null; }
+      var tend = f("tending"), prog = f("in-progress");
+      var working = (tend && tend.state === "thinking") ||
+        (prog && prog.fields && prog.fields.tending > 0);
+      var now = Date.now();
+      if (working) lastWorkingAt = now;
+      setActivity(!!working || (now - lastWorkingAt < 3000));
+    }).catch(function () { lastWorkingAt = 0; setActivity(false); });
+  }
+
+  function startActivity() {
+    stopActivity();
+    pollActivity();
+    activityTimer = setInterval(pollActivity, 2500);
+  }
+  function stopActivity() {
+    if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
+    lastWorkingAt = 0;
+    setActivity(false);
+  }
+
   function showView(name) {
     Object.keys(VIEWS).forEach(function (k) { VIEWS[k].hidden = k !== name; });
     composer.style.display = name === "chat" ? "" : "none";
@@ -764,7 +833,13 @@
       else t.removeAttribute("aria-current");
     });
     if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
-    if (name === "more") {
+    stopActivity();
+    if (name === "chat") {
+      // Entering Chat always reveals the latest turn + composer (stitch 27) and
+      // starts the honest activity poll (stitch 29).
+      scrollToBottom();
+      startActivity();
+    } else if (name === "more") {
       loadPanel();
       statusTimer = setInterval(loadPanel, 4000); // poll: the inspector shape
     } else if (name === "inspect") {
@@ -881,4 +956,8 @@
   } else {
     startPolling();
   }
+
+  // Chat is the default view (HTML), but normalize through showView so the
+  // activity poll (29) and initial scroll-to-latest (27) start on first paint.
+  showView("chat");
 })();

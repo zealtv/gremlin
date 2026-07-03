@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="light dark">
   <title>Gremlin</title>
   <link rel="stylesheet" href="/styles.css">
@@ -20,6 +20,7 @@
   <main id="panel" class="panel" hidden></main>
 
   <footer class="dock">
+    <div id="activity" class="activity" role="status" aria-live="polite" hidden></div>
     <div id="cmd-menu" class="cmd-menu" role="listbox" aria-label="Slash commands" hidden></div>
     <form id="composer" class="composer" autocomplete="off">
       <textarea id="input" rows="1" placeholder="Message…" aria-label="Message"></textarea>
