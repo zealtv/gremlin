@@ -31,6 +31,31 @@ author; the bridge only serves what you write. Read the web bridge's
   npm, no build step). Before you write any chart code, **read the `dataviz` skill**
   for palette, marks, and light/dark.
 
+## Embedding video / third-party media
+
+A view's CSP is locked to same-origin by default, so a raw `<iframe src="youtube…">`
+or remote `<img>` **will be blocked**. Two ways to show external media:
+
+- **Prefer mirroring same-origin.** Download the asset into the view dir (e.g.
+  `.dash/<name>/assets/…`) and reference it with a relative path. No CSP change,
+  nothing to maintain — the right default for images.
+- **Opt into a vetted embed profile** when you genuinely need a live third-party
+  frame (a YouTube player). Drop a `.dash/<name>/.embeds` marker listing profile
+  names, one per line (`#` comments allowed):
+
+  ```
+  # .dash/<name>/.embeds
+  youtube
+  ```
+
+  The bridge merges that profile's vetted hosts into *this view's* `frame-src`/
+  `img-src` only. Available profiles: **`youtube`** (adds youtube.com /
+  youtube-nocookie.com frames + i.ytimg.com thumbnails). You name a profile, never
+  a raw host; unknown names are ignored. The exfil boundary — `default-src` /
+  `script-src` / `connect-src` — stays `'self'` no matter what, so a view can never
+  be given a channel to phone data out. Need a profile that doesn't exist yet? Add
+  it to `EMBED_PROFILES` in the bridge (a framework change), not per-view config.
+
 ## The build tool
 
 **Location — inside the gremlin.** The tool lives at

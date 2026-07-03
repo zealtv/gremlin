@@ -487,10 +487,29 @@ LORE_INDEX_LINE = re.compile(r"^- \[([^\]]+)\]\([^)]*\) — (.*)$")
 # filesystem is the registry: a <name>/ with an index.html is a view.
 DASH_DIR = os.path.join(HOST_DIR, ".dash")
 DASH_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
-# The bridge sends no CSP today; a served view is gremlin-authored JS, so pin it
-# to same-origin (blocks third-party exfil of jailed data) and framing to self.
-DASH_CSP = ("default-src 'self'; base-uri 'none'; object-src 'none'; "
-            "frame-ancestors 'self'")
+
+# A served view is gremlin-authored code, so its CSP is pinned same-origin: the
+# base below blocks third-party exfil of jailed data and pins framing to self.
+# The exfil boundary — default-src / script-src / connect-src — is 'self', ALWAYS.
+DASH_BASE_CSP = [
+    ("default-src", ["'self'"]),
+    ("base-uri", ["'none'"]),
+    ("object-src", ["'none'"]),
+    ("frame-ancestors", ["'self'"]),
+]
+# Opt-in embed profiles a view enables via a `.dash/<name>/.embeds` marker (one
+# profile name per line/space). A profile only ever contributes media-display
+# directives — never script-src/connect-src/default-src — so no profile can widen
+# the exfil boundary. The host allowlist is fixed here; a view picks a name, never
+# a raw host. Grows by adding vetted entries (vimeo, etc.), not by view config.
+EMBED_ALLOWED_DIRECTIVES = {"frame-src", "img-src", "media-src"}
+EMBED_PROFILES = {
+    "youtube": {
+        "frame-src": ["https://www.youtube.com", "https://www.youtube-nocookie.com"],
+        "img-src": ["data:", "https://i.ytimg.com"],
+    },
+}
+SAFE_PROFILE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 def looks_binary(path):
@@ -685,6 +704,49 @@ def glean_finding(fid):
 
 
 # --- Dash views (custom per-gremlin dashboards; the bridge serves, never writes)
+
+def read_embed_profiles(view_dir):
+    """Profile names a view opted into via its `.embeds` marker. Whitespace/newline
+    separated; `#` comments and malformed tokens ignored. Names are validated but
+    NOT trusted to name hosts — they only select a fixed EMBED_PROFILES entry."""
+    path = os.path.join(view_dir, ".embeds")
+    if not os.path.isfile(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read(4096)
+    except OSError:
+        return []
+    names = []
+    for tok in text.split():
+        if tok.startswith("#") or not SAFE_PROFILE.match(tok):
+            continue
+        if tok not in names:
+            names.append(tok)
+    return names
+
+
+def dash_csp(view_dir):
+    """Compose a view's CSP: the locked base plus any vetted embed profiles the
+    view opted into. Profiles only merge frame-src/img-src/media-src hosts (each
+    seeded with 'self'); default-src/script-src/connect-src can never be widened,
+    so the exfil boundary holds regardless of what a view requests."""
+    directives = {d: list(v) for d, v in DASH_BASE_CSP}  # dict keeps insertion order
+    for name in read_embed_profiles(view_dir):
+        prof = EMBED_PROFILES.get(name)
+        if prof is None:
+            log("dash: unknown embed profile %r in %s/.embeds — ignored"
+                % (name, os.path.basename(view_dir.rstrip(os.sep))))
+            continue
+        for directive, hosts in prof.items():
+            if directive not in EMBED_ALLOWED_DIRECTIVES:
+                continue  # defensive: profiles never touch script-src/connect-src
+            bucket = directives.setdefault(directive, ["'self'"])
+            for h in hosts:
+                if h not in bucket:
+                    bucket.append(h)
+    return "; ".join("%s %s" % (d, " ".join(v)) for d, v in directives.items())
+
 
 def build_dash():
     """Discovery: each HOST_DIR/.dash/<name>/ containing an index.html is a view.
@@ -1042,10 +1104,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, "not found\n")
             return
         # no-cache: a stale gremlin build must never be cached. CSP pins the
-        # gremlin-authored view to same-origin (design §3).
+        # gremlin-authored view same-origin (design §3), widened only by the
+        # view's own vetted `.embeds` profiles (never script-src/connect-src).
         self._send(200, body, ctype, {
             "Cache-Control": "no-cache",
-            "Content-Security-Policy": DASH_CSP,
+            "Content-Security-Policy": dash_csp(vdir),
         })
 
     def _serve_static(self, path):

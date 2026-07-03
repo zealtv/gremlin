@@ -928,12 +928,16 @@ fi
 
 DFIX="$(mktemp -d)"
 DH="$DFIX/host"; DG="$DH/.gremlin"
-mkdir -p "$DG" "$DH/.dash/hello" "$DH/.dash/noindex"
+mkdir -p "$DG" "$DH/.dash/hello" "$DH/.dash/noindex" "$DH/.dash/embedview"
 : > "$DG/transcript.md"
 printf '<!doctype html><title>Hello Dash</title><body><h1>hi</h1><script src="./view.js"></script>\n' > "$DH/.dash/hello/index.html"
 printf 'console.log("view");\n' > "$DH/.dash/hello/view.js"
 printf '{"generated_at":"2026-07-03T00:00:00Z"}\n' > "$DH/.dash/hello/dashboard-index.json"
 printf '<h1>no index here</h1>\n' > "$DH/.dash/noindex/other.html"
+# A view opting into the vetted "youtube" embed profile, plus an unknown one that
+# must be ignored (never trusted to name a host).
+printf '<!doctype html><title>Embed</title><body><h1>vid</h1>\n' > "$DH/.dash/embedview/index.html"
+printf '# opt into vetted embed sources\nyoutube\nnope-not-a-profile\n' > "$DH/.dash/embedview/.embeds"
 # A secret outside .dash, plus a symlink from inside a view that escapes the jail.
 printf 'TOP SECRET\n' > "$DH/secret.txt"
 ln -s ../../secret.txt "$DH/.dash/hello/escape"
@@ -959,7 +963,7 @@ if curl -fsS "$DURL/api/dash" | python3 -c 'import sys,json
 env=json.load(sys.stdin)
 names={x["name"] for x in env["items"]}
 h=[x for x in env["items"] if x["name"]=="hello"]
-sys.exit(0 if names=={"hello"} and h and h[0]["fields"]["title"]=="Hello Dash" else 1)'; then
+sys.exit(0 if names=={"hello","embedview"} and "noindex" not in names and h and h[0]["fields"]["title"]=="Hello Dash" else 1)'; then
   ok "discovery lists index.html views with <title>; index-less dir ignored"
 else
   bad "discovery lists index.html views with <title>; index-less dir ignored"
@@ -980,14 +984,31 @@ else
   bad "co-located dashboard-index.json served"
 fi
 
-# CSP + no-cache headers present on /dash/* (the new wire policy).
+# CSP + no-cache headers present on /dash/* (the new wire policy). A view with no
+# .embeds marker gets ONLY the locked base — no frame-src/img-src widening.
 dh="$(curl -s -D - -o /dev/null "$DURL/dash/hello/index.html")"
 if printf '%s' "$dh" | grep -qi "content-security-policy: default-src 'self'" \
   && printf '%s' "$dh" | grep -qi "frame-ancestors 'self'" \
-  && printf '%s' "$dh" | grep -qi 'cache-control: no-cache'; then
-  ok "CSP (default-src+frame-ancestors 'self') + no-cache on /dash/*"
+  && printf '%s' "$dh" | grep -qi 'cache-control: no-cache' \
+  && ! printf '%s' "$dh" | grep -qi 'frame-src'; then
+  ok "CSP (default-src+frame-ancestors 'self') + no-cache on /dash/*; base has no frame-src"
 else
-  bad "CSP + no-cache header on /dash/*"
+  bad "CSP + no-cache header on /dash/* (base locked)"
+fi
+
+# A view that opts into the vetted "youtube" profile gets frame-src/img-src widened
+# for youtube ONLY — the exfil boundary (default-src/script-src/connect-src) stays
+# locked, and an unknown profile name in the same .embeds is ignored.
+ecsp="$(curl -s -D - -o /dev/null "$DURL/dash/embedview/index.html" | grep -i 'content-security-policy')"
+if printf '%s' "$ecsp" | grep -qi 'frame-src.*youtube.com' \
+  && printf '%s' "$ecsp" | grep -qi 'img-src.*i.ytimg.com' \
+  && printf '%s' "$ecsp" | grep -qi "default-src 'self'" \
+  && ! printf '%s' "$ecsp" | grep -qi 'script-src' \
+  && ! printf '%s' "$ecsp" | grep -qi 'connect-src' \
+  && ! printf '%s' "$ecsp" | grep -qi 'nope-not-a-profile'; then
+  ok "vetted .embeds (youtube) widens frame-src/img-src only; exfil boundary locked; unknown ignored"
+else
+  bad "embed profile CSP composition: $ecsp"
 fi
 
 # Path jail: encoded + literal traversal, and a symlink escaping .dash, all 404.

@@ -155,11 +155,16 @@ is the design: the **bridge serves, the tender authors**.
   can read cookie-authed jailed routes) + `sandbox="allow-scripts allow-same-origin"`
   to suppress top-nav/popups from a buggy view. It can still reach `window.parent`;
   that is fine given no escalation. A broken view breaks only its own frame.
-- **CSP pins the wire.** `/dash/*` responses carry
-  `default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'`,
+- **CSP pins the wire.** `/dash/*` responses carry a locked base —
+  `default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'` —
   which blocks a view from `fetch()`-ing jailed data out to a third party and
-  enforces the vendored-assets/no-CDN policy. Widen only `style-src 'self'
-  'unsafe-inline'` if a view needs inline styling — never loosen `script-src`/`connect-src`.
+  enforces the vendored-assets/no-CDN policy. A view may widen its *own* CSP for
+  vetted media by naming an embed profile in a `.dash/<name>/.embeds` marker (see
+  the `EMBED_PROFILES` allowlist in `server.py`, e.g. `youtube` → youtube frames +
+  ytimg thumbnails). Profiles only ever add `frame-src`/`img-src`/`media-src` hosts;
+  `default-src`/`script-src`/`connect-src` stay `'self'` for every view, so the
+  exfil boundary can never be widened by view config. A view names a profile, never
+  a raw host; new profiles are a framework change, not per-view config.
 - **Remote binding** rides the same token gate as everything else (views are *not*
   localhost-only, so a tailnet-bound gremlin's dashboard still works). Traffic is
   cleartext unless tunneled, and the startup warning notes that the bridge now also
