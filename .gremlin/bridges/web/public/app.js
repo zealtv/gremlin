@@ -389,10 +389,11 @@
   var panel = document.getElementById("panel");
   var inspect = document.getElementById("inspect");
   var transcriptView = document.getElementById("transcript");
+  var dashView = document.getElementById("dash");
   var composer = document.getElementById("composer");
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab[data-view]"));
   var statusTimer = null;
-  var VIEWS = { chat: log, transcript: transcriptView, inspect: inspect, more: panel };
+  var VIEWS = { chat: log, transcript: transcriptView, dash: dashView, inspect: inspect, more: panel };
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -742,6 +743,19 @@
       row.addEventListener("click", function () { openInspector(insp); });
       s.appendChild(row);
     });
+    // Transcript is a read-only lens over the conversation record — an inspector
+    // in nature (route→read→render), so it lives in the hub rather than the
+    // primary thumb-bar (owner steer 2026-07-03). Its own rich renderer (archive
+    // switch, search) opens one level down, with a back link to the hub.
+    var trow = el("div", "hub-row");
+    trow.appendChild(el("span", "hub-emoji", "📝"));
+    var ttext = el("span", "hub-text");
+    ttext.appendChild(el("span", "hub-label", "Transcript"));
+    ttext.appendChild(el("span", "hub-hint", "conversation record"));
+    trow.appendChild(ttext);
+    trow.style.cursor = "pointer";
+    trow.addEventListener("click", function () { showView("transcript"); });
+    s.appendChild(trow);
     SOON.forEach(function (label) {
       var row = el("div", "hub-row soon");
       row.appendChild(el("span", "hub-label", label));
@@ -823,11 +837,77 @@
     setActivity(false);
   }
 
+  // --- Dash: custom per-gremlin views the bridge serves from HOST_DIR/.dash/ ---
+  // The bridge is a lens: it only *serves* views (discovery + jailed static). A
+  // view is trusted gremlin-authored code — loading it is a smaller grant than
+  // the POST /send every token-holder already wields (design §4). The iframe is
+  // failure-isolation (a broken view breaks only its frame), NOT containment.
+  function renderDashEmpty() {
+    dashView.classList.remove("framed");
+    dashView.textContent = "";
+    var s = section("Dash");
+    s.appendChild(el("div", "sub", "No dashboard yet — ask me in chat to build one."));
+    dashView.appendChild(s);
+  }
+
+  function mountDashView(name) {
+    dashView.textContent = "";
+    dashView.classList.add("framed");
+    var frame = document.createElement("iframe");
+    frame.className = "dash-frame";
+    frame.title = name;
+    // Trailing slash: relative asset/data refs in the view resolve under
+    // /dash/<name>/. Same-origin so the view can read cookie-authed jailed
+    // routes; the sandbox suppresses top-nav/popups from a buggy view but is
+    // not a containment boundary (it can still reach window.parent).
+    frame.src = "/dash/" + encodeURIComponent(name) + "/";
+    frame.setAttribute("sandbox", "allow-scripts allow-same-origin");
+    dashView.appendChild(frame);
+  }
+
+  function renderDashHub(views) {
+    dashView.classList.remove("framed");
+    dashView.textContent = "";
+    var s = section("Dash");
+    views.forEach(function (v) {
+      var row = el("div", "hub-row");
+      row.appendChild(el("span", "hub-emoji", "📊"));
+      var text = el("span", "hub-text");
+      text.appendChild(el("span", "hub-label", (v.fields && v.fields.title) || v.name));
+      row.appendChild(text);
+      row.style.cursor = "pointer";
+      row.addEventListener("click", function () { mountDashView(v.name); });
+      s.appendChild(row);
+    });
+    dashView.appendChild(s);
+  }
+
+  function loadDash() {
+    dashView.classList.remove("framed");
+    dashView.textContent = "";
+    dashView.appendChild(el("div", "sub", "loading…"));
+    fetch("/api/dash").then(function (r) { return r.json(); })
+      .then(function (env) {
+        var views = env.items || [];
+        if (!views.length) renderDashEmpty();
+        else if (views.length === 1) mountDashView(views[0].name);
+        else renderDashHub(views);
+      })
+      .catch(function () {
+        dashView.classList.remove("framed");
+        dashView.textContent = "";
+        dashView.appendChild(el("div", "sub warn", "could not load dashboard"));
+      });
+  }
+
   function showView(name) {
     Object.keys(VIEWS).forEach(function (k) { VIEWS[k].hidden = k !== name; });
     composer.style.display = name === "chat" ? "" : "none";
     tabs.forEach(function (t) {
-      var active = t.getAttribute("data-view") === name;
+      // Transcript has no thumb-bar tab of its own — it's a child of Inspect, so
+      // keep the Inspect tab lit while its transcript detail is open.
+      var dv = t.getAttribute("data-view");
+      var active = dv === name || (name === "transcript" && dv === "inspect");
       t.classList.toggle("active", active);
       if (active) t.setAttribute("aria-current", "page");
       else t.removeAttribute("aria-current");
@@ -846,6 +926,8 @@
       renderInspectHub();
     } else if (name === "transcript") {
       loadTranscript(null);
+    } else if (name === "dash") {
+      loadDash();
     }
   }
 
@@ -868,6 +950,10 @@
 
   function renderTranscript(env) {
     transcriptView.textContent = "";
+    // Transcript lives under Inspect now — a back link returns to the hub.
+    var back = el("button", "back", "‹ Inspect");
+    back.addEventListener("click", function () { showView("inspect"); });
+    transcriptView.appendChild(back);
     var controls = el("div", "tcontrols");
     var sel = document.createElement("select");
     sel.className = "tselect";

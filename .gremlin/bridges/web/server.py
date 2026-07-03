@@ -482,6 +482,16 @@ def build_groundhog():
 LORE_DIR = os.path.join(HOST_DIR, ".lore")
 LORE_INDEX_LINE = re.compile(r"^- \[([^\]]+)\]\([^)]*\) — (.*)$")
 
+# Custom "Dash" views live at HOST_DIR/.dash/<name>/ — outside the /update overlay,
+# derived from WEB_HOST_DIR with no new env knob (design 2026-07-03, §2). The
+# filesystem is the registry: a <name>/ with an index.html is a view.
+DASH_DIR = os.path.join(HOST_DIR, ".dash")
+DASH_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+# The bridge sends no CSP today; a served view is gremlin-authored JS, so pin it
+# to same-origin (blocks third-party exfil of jailed data) and framing to self.
+DASH_CSP = ("default-src 'self'; base-uri 'none'; object-src 'none'; "
+            "frame-ancestors 'self'")
+
 
 def looks_binary(path):
     try:
@@ -674,6 +684,38 @@ def glean_finding(fid):
     }])
 
 
+# --- Dash views (custom per-gremlin dashboards; the bridge serves, never writes)
+
+def build_dash():
+    """Discovery: each HOST_DIR/.dash/<name>/ containing an index.html is a view.
+    The filesystem is the registry — no manifest. Absent/empty .dash → []. The
+    view's <title> (if any) is its screen title; the name is the fallback."""
+    items = []
+    try:
+        names = sorted(os.listdir(DASH_DIR))
+    except OSError:
+        names = []
+    for name in names:
+        if not SAFE_ID.match(name) or name in (".", ".."):
+            continue
+        vdir = under(DASH_DIR, os.path.join(DASH_DIR, name))
+        if not vdir or not os.path.isdir(vdir):
+            continue
+        if not os.path.isfile(os.path.join(vdir, "index.html")):
+            continue
+        title = name
+        head = read_text(os.path.join(vdir, "index.html"), 64 * 1024)
+        if head:
+            m = DASH_TITLE.search(head)
+            if m:
+                t = re.sub(r"\s+", " ", m.group(1)).strip()
+                if t:
+                    title = t
+        items.append({"path": "%s/" % name, "name": name, "state": "view",
+                      "fields": {"title": title}})
+    return envelope("dash", os.path.realpath(DASH_DIR), items)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "gremlin-web/0"
     protocol_version = "HTTP/1.1"
@@ -792,6 +834,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, "no such finding\n")
             else:
                 self._send_json(env)
+        elif path == "/api/dash":
+            self._send_json(build_dash())
+        elif path.startswith("/dash/"):
+            self._serve_dash(unquote(path[len("/dash/"):]))
         else:
             self._send(404, "not found\n")
 
@@ -972,6 +1018,36 @@ class Handler(BaseHTTPRequestHandler):
             "Content-Disposition": '%s; filename="%s"' % (disposition, os.path.basename(real)),
         })
 
+    def _serve_dash(self, rest):
+        # rest = "<name>/<subpath>"; serve a Dash view file, jailed under that
+        # view's HOST_DIR/.dash/<name>/ dir. This is the bridge's first
+        # arbitrary-path static surface — it routes through under(), NOT the
+        # exact-match STATIC dict. A bare "<name>/" (or a dir path) serves index.html.
+        name, _, sub = rest.partition("/")
+        if not SAFE_ID.match(name) or name in (".", ".."):
+            self._send(404, "not found\n")
+            return
+        if not sub or sub.endswith("/"):
+            sub += "index.html"
+        vdir = os.path.join(DASH_DIR, name)
+        real = under(vdir, os.path.join(vdir, sub))
+        if not real or not os.path.isfile(real):
+            self._send(404, "not found\n")
+            return
+        ctype = mimetypes.guess_type(real)[0] or "application/octet-stream"
+        try:
+            with open(real, "rb") as fh:
+                body = fh.read()
+        except OSError:
+            self._send(404, "not found\n")
+            return
+        # no-cache: a stale gremlin build must never be cached. CSP pins the
+        # gremlin-authored view to same-origin (design §3).
+        self._send(200, body, ctype, {
+            "Cache-Control": "no-cache",
+            "Content-Security-Policy": DASH_CSP,
+        })
+
     def _serve_static(self, path):
         name, ctype = STATIC[path]
         try:
@@ -1036,8 +1112,9 @@ def main():
     if IS_REMOTE:
         log("WARNING: serving the gremlin's files and chat to the network on "
             "%s:%d — anyone who can reach this port and present the token can read "
-            "the transcript and send messages the gremlin acts on. Traffic is "
-            "cleartext unless tunneled." % (BIND, PORT))
+            "the transcript and send messages the gremlin acts on. The Dash tab "
+            "also serves gremlin-authored view code (HTML/JS) that runs in the "
+            "client's browser. Traffic is cleartext unless tunneled." % (BIND, PORT))
 
     threading.Thread(target=TAIL.watch, daemon=True).start()
     try:

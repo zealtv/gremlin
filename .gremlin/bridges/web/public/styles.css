@@ -360,6 +360,10 @@ pre { max-width: 100%; overflow-x: auto; }
   border-radius: 14px;
   padding: 14px 16px;
 }
+/* Dash: a mounted view fills the panel edge-to-edge (full-bleed, no 66ch clamp);
+   the empty-state invite / hub keep the standard padded card column. */
+#dash.framed { max-width: none; padding: 0; }
+.dash-frame { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; display: block; }
 .card-title { font-size: 16px; margin: 0 0 8px; }
 .path-chip {
   font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;

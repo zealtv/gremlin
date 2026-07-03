@@ -52,6 +52,18 @@ calls a model, and serves nothing but its own `public/` assets (M0).
 > returns parsed turns (live or a dated archive, date-validated + jailed) plus the
 > archive list; the frontend adds a date switcher, in-document search, and
 > jump-to-bottom. The file is never modified.
+> **Dash (custom views)** — the always-present **📊 Dash** tab. The bridge stays a
+> lens: it only *serves* per-gremlin views from `HOST_DIR/.dash/<name>/`.
+> `GET /api/dash` discovers each `<name>/` with an `index.html` (the filesystem is
+> the registry — no manifest); `GET /dash/<name>/*path` is jailed static served
+> through `under(HOST_DIR/.dash)` (**not** the exact-match `STATIC` dict), `no-cache`,
+> under a `Content-Security-Policy`. One view mounts in a same-origin iframe; many
+> → a hub; none → a calm invite. The tender *authors* views (see below); the bridge
+> never writes them. See **Custom Dash views** for the contract + trust boundary.
+> The thumb-bar is now **Chat · Dash · Inspect · More**: a custom view is promoted
+> to a primary tab, and **Transcript is demoted into the Inspect hub** (📝, a
+> read-only lens over the conversation record — an inspector in nature), reachable
+> one level down with a back link (owner steer 2026-07-03).
 
 ## Run
 
@@ -108,6 +120,48 @@ bridge reconstructs its view from `.gremlin/` files alone.
 
 Uploads and the file-serving inspectors are later stitches with their own
 mitigations (see the design spec §17).
+
+## Custom Dash views
+
+A gremlin exposes purpose-built dashboards through the **📊 Dash** tab. The split
+is the design: the **bridge serves, the tender authors**.
+
+- **Layout.** A view is a directory `HOST_DIR/.dash/<name>/` with a static
+  `index.html` + assets. It lives in the home dir, **outside** `.gremlin/` — so
+  `/update` (which rsyncs the framework overlay) never touches it, and no new
+  exclude knob is needed. The regenerable `dashboard-index.json` a view reads is a
+  disposable cache (gitignore it); the `index.html` + build tool are code (track
+  them). The `<name>/` is discovered by having an `index.html`; the view's
+  `<title>` is its on-screen title.
+- **Data.** Views are dumb; aggregation is a tool. A per-gremlin
+  `tools/build-<name>-index.sh` rolls raw data into `.dash/<name>/dashboard-index.json`
+  (atomic, with a `generated_at`); the view `fetch('./dashboard-index.json')`s it
+  through the same jailed route. No view-specific API, no new datastore.
+- **Authoring** is a normal chat turn — "build me a nutrition dashboard" — handled
+  by the `custom-view` skill (`skills/custom-view.md`): the `.dash/<name>/` layout,
+  the inline `index.html` skeleton, the data-driven-chart idempotent-modify rule,
+  and the freshness contract (rebuild on-demand + a daily `.groundhog/` job;
+  render `generated_at`).
+
+### Trust boundary
+
+- **A view is trusted gremlin-authored code — no privilege escalation.** It runs
+  same-origin in the client's browser, but a read-only view is strictly *weaker*
+  than the `POST /send` every token-holder already wields (send triggers the
+  gremlin's Bash). Loading a view is a smaller grant than the send you already extend.
+- **The iframe is failure-isolation, not containment.** Same-origin (so the view
+  can read cookie-authed jailed routes) + `sandbox="allow-scripts allow-same-origin"`
+  to suppress top-nav/popups from a buggy view. It can still reach `window.parent`;
+  that is fine given no escalation. A broken view breaks only its own frame.
+- **CSP pins the wire.** `/dash/*` responses carry
+  `default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'`,
+  which blocks a view from `fetch()`-ing jailed data out to a third party and
+  enforces the vendored-assets/no-CDN policy. Widen only `style-src 'self'
+  'unsafe-inline'` if a view needs inline styling — never loosen `script-src`/`connect-src`.
+- **Remote binding** rides the same token gate as everything else (views are *not*
+  localhost-only, so a tailnet-bound gremlin's dashboard still works). Traffic is
+  cleartext unless tunneled, and the startup warning notes that the bridge now also
+  serves view code that runs in the client's browser.
 
 ## Remote access (off by default)
 

@@ -903,6 +903,124 @@ fi
 rm -rf "$LFIX"
 
 # ============================================================================
+echo "== 28 dash: custom views (serve-only lens + jailed static + CSP) =="
+
+# Static teeth: the new arbitrary-path surface must route through under(), and
+# the exact-match STATIC dict must NOT have grown a /dash entry (design §3).
+if grep -q 'under(vdir' "$SERVER_PY" && grep -q 'def _serve_dash' "$SERVER_PY"; then
+  ok "dash static routes through under() (not the STATIC dict)"
+else
+  bad "dash static must route through under()"
+fi
+static_block="$(awk '/^STATIC = \{/{f=1} f{print} f&&/^\}/{exit}' "$SERVER_PY")"
+if printf '%s' "$static_block" | grep -q 'dash'; then
+  bad "STATIC/exact-match must not carry a /dash key (use the jailed route)"
+else
+  ok "no exact-match /dash key — arbitrary paths go through the jail"
+fi
+# The view is mounted in a same-origin iframe (failure isolation, frontend).
+if grep -q 'dash-frame' "$BRIDGE_DIR/public/app.js" \
+  && grep -q 'allow-scripts allow-same-origin' "$BRIDGE_DIR/public/app.js"; then
+  ok "views mount in a sandboxed same-origin iframe (failure isolation)"
+else
+  bad "views must mount in a sandboxed same-origin iframe"
+fi
+
+DFIX="$(mktemp -d)"
+DH="$DFIX/host"; DG="$DH/.gremlin"
+mkdir -p "$DG" "$DH/.dash/hello" "$DH/.dash/noindex"
+: > "$DG/transcript.md"
+printf '<!doctype html><title>Hello Dash</title><body><h1>hi</h1><script src="./view.js"></script>\n' > "$DH/.dash/hello/index.html"
+printf 'console.log("view");\n' > "$DH/.dash/hello/view.js"
+printf '{"generated_at":"2026-07-03T00:00:00Z"}\n' > "$DH/.dash/hello/dashboard-index.json"
+printf '<h1>no index here</h1>\n' > "$DH/.dash/noindex/other.html"
+# A secret outside .dash, plus a symlink from inside a view that escapes the jail.
+printf 'TOP SECRET\n' > "$DH/secret.txt"
+ln -s ../../secret.txt "$DH/.dash/hello/escape"
+
+DPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+DURL="http://127.0.0.1:$DPORT"
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$DG" WEB_HOST_DIR="$DH" WEB_TRANSCRIPT="$DG/transcript.md" WEB_PORT="$DPORT" WEB_BIND="127.0.0.1"
+unset WEB_REMOTE_TOKEN
+
+dcleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$DFIX"; }
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$DURL/"; then
+  ok "dash daemon boots against fixture"
+else
+  bad "dash daemon boots against fixture"
+  cat "$BRIDGE_DIR/web.log" 2>/dev/null | sed 's/^/  /'
+fi
+
+# Discovery: a <name>/ with an index.html is a view; its <title> is the title.
+# A dir without index.html (noindex) is NOT listed (filesystem is the registry).
+if curl -fsS "$DURL/api/dash" | python3 -c 'import sys,json
+env=json.load(sys.stdin)
+names={x["name"] for x in env["items"]}
+h=[x for x in env["items"] if x["name"]=="hello"]
+sys.exit(0 if names=={"hello"} and h and h[0]["fields"]["title"]=="Hello Dash" else 1)'; then
+  ok "discovery lists index.html views with <title>; index-less dir ignored"
+else
+  bad "discovery lists index.html views with <title>; index-less dir ignored"
+fi
+
+# Serve: a bare "<name>/" serves index.html; a co-located asset serves too.
+if curl -fsS "$DURL/dash/hello/" | grep -q '<h1>hi</h1>' \
+  && curl -fsS "$DURL/dash/hello/view.js" | grep -q 'console.log'; then
+  ok "GET /dash/<name>/ serves index.html; assets serve too"
+else
+  bad "GET /dash/<name>/ serves index.html; assets serve too"
+fi
+
+# The view reads its own co-located data through the same jailed route.
+if curl -fsS "$DURL/dash/hello/dashboard-index.json" | grep -q 'generated_at'; then
+  ok "co-located dashboard-index.json served through the jailed route"
+else
+  bad "co-located dashboard-index.json served"
+fi
+
+# CSP + no-cache headers present on /dash/* (the new wire policy).
+dh="$(curl -s -D - -o /dev/null "$DURL/dash/hello/index.html")"
+if printf '%s' "$dh" | grep -qi "content-security-policy: default-src 'self'" \
+  && printf '%s' "$dh" | grep -qi "frame-ancestors 'self'" \
+  && printf '%s' "$dh" | grep -qi 'cache-control: no-cache'; then
+  ok "CSP (default-src+frame-ancestors 'self') + no-cache on /dash/*"
+else
+  bad "CSP + no-cache header on /dash/*"
+fi
+
+# Path jail: encoded + literal traversal, and a symlink escaping .dash, all 404.
+for bad_path in "..%2f..%2fsecret.txt" "../../secret.txt" "escape"; do
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$DURL/dash/hello/$bad_path")"
+  [ "$code" = "404" ] || { bad "dash jail breach ($bad_path → $code)"; DJAIL=1; }
+done
+# And a bad view name / the .dash root itself must not escape.
+for bad_path in "../secret.txt" "..%2fsecret.txt"; do
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$DURL/dash/$bad_path")"
+  [ "$code" = "404" ] || { bad "dash name jail breach ($bad_path → $code)"; DJAIL=1; }
+done
+if [ -z "${DJAIL:-}" ]; then
+  ok "traversal (encoded + literal) + symlink escape + bad name → 404"
+fi
+# The secret was never served through any of those.
+if curl -s "$DURL/dash/hello/../../secret.txt" | grep -q 'TOP SECRET'; then
+  bad "the jail LEAKED a file outside .dash"
+else
+  ok "no file outside .dash was ever served"
+fi
+
+# Empty state: with no .dash dir, discovery is empty (the tab shows the invite).
+rm -rf "$DH/.dash"
+if curl -fsS "$DURL/api/dash" | python3 -c 'import sys,json; sys.exit(0 if json.load(sys.stdin)["items"]==[] else 1)'; then
+  ok "absent .dash → empty discovery (invite state), no crash"
+else
+  bad "absent .dash → empty discovery"
+fi
+
+dcleanup
+
+# ============================================================================
 echo
 echo "passed: $pass   failed: $fail"
 [ "$fail" -eq 0 ]
