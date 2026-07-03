@@ -44,6 +44,8 @@ POLL_INTERVAL = float(os.environ.get("WEB_TAIL_INTERVAL", "1.0"))
 SSE_PING_INTERVAL = float(os.environ.get("WEB_SSE_PING_INTERVAL", "15.0"))
 # Text-only cap for M1's POST /send; real uploads (and WEB_MAX_UPLOAD) are M8.
 MAX_SEND_BYTES = int(os.environ.get("WEB_MAX_SEND", str(1 << 20)))
+# A slash command that hasn't returned by now is failed loud rather than hung.
+SLASH_TIMEOUT = 30.0
 
 # The transcript turn grammar (docs/protocol.md, spec §16): a header line of
 # `## <role> — <ISO8601Z>`, body is everything to the next header. The separator
@@ -248,6 +250,35 @@ def rel_to_gremlin(path):
         return os.path.relpath(path, GREMLIN_DIR)
     except ValueError:
         return path
+
+
+def build_commands():
+    """The slash-command vocabulary, derived from the same `commands/*.sh` that
+    bin/slash.sh dispatches to (the autocomplete menu, stitch 22). Summary rule
+    mirrors help.sh: the first `# ` comment line, minus a leading `<name> — `.
+    Read-only listing — never runs a command."""
+    items = []
+    d = os.path.join(GREMLIN_DIR, "commands")
+    if os.path.isdir(d):
+        for name in sorted(os.listdir(d)):
+            if not name.endswith(".sh"):
+                continue
+            cmd = name[:-3]
+            summary = ""
+            try:
+                with open(os.path.join(d, name), encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        if line.startswith("# "):
+                            summary = line[2:].strip()
+                            break
+            except OSError:
+                pass
+            for prefix in (cmd + " — ", cmd + " -- "):
+                if summary.startswith(prefix):
+                    summary = summary[len(prefix):]
+                    break
+            items.append({"name": cmd, "summary": summary})
+    return envelope("commands", os.path.realpath(GREMLIN_DIR), items)
 
 
 def build_context():
@@ -708,6 +739,8 @@ class Handler(BaseHTTPRequestHandler):
             # The gremlin's identifier is its host directory's name.
             self._send_json({"host": os.path.basename(os.path.realpath(HOST_DIR)),
                              "path": os.path.realpath(HOST_DIR)})
+        elif path == "/api/commands":
+            self._send_json(build_commands())
         elif path == "/api/context":
             self._send_json(build_context())
         elif path == "/api/status":
@@ -770,6 +803,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, "empty message\n")
             return
 
+        # A slash command runs through the shared dispatcher and returns an
+        # ephemeral bridge result — never a nest item, never a transcript turn.
+        # This mirrors telegram.sh `handle_slash`; the tender stays sole writer.
+        if text.lstrip().startswith("/"):
+            result = self._run_slash(text.strip())
+            self._send(
+                200,
+                json.dumps(result, ensure_ascii=False),
+                "application/json; charset=utf-8",
+            )
+            return
+
         item = self._ingest_text(text)
         if item is None:
             self._send(500, "ingest failed\n")
@@ -808,6 +853,42 @@ class Handler(BaseHTTPRequestHandler):
             return (parse_qs(raw.decode("utf-8")).get("text") or [""])[0]
         except (ValueError, UnicodeDecodeError):
             return None
+
+    def _run_slash(self, text):
+        """Dispatch a slash command through the shared `bin/slash.sh` — the same
+        dispatcher telegram.sh uses — and return its output + exit code. This
+        writes nothing to the transcript or `.nest/in/`: a slash command is a
+        bridge-level action, not a conversational turn. An unknown command fails
+        loud (slash.sh returns 127 with `try /help`); output is returned raw and
+        rendered inert (escaped) by the client."""
+        slash = os.path.join(GREMLIN_DIR, "bin", "slash.sh")
+        if not os.path.isfile(slash):
+            log("no slash dispatcher at bin/slash.sh; refusing /command")
+            return {"slash": True, "ok": False, "rc": 127,
+                    "output": "slash dispatcher not available"}
+        try:
+            result = subprocess.run(
+                [slash, text],
+                cwd=GREMLIN_DIR,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=SLASH_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            log("slash command timed out (>%ds): %r" % (int(SLASH_TIMEOUT), text))
+            return {"slash": True, "ok": False, "rc": 124,
+                    "output": "command timed out after %ds" % int(SLASH_TIMEOUT)}
+        except OSError as exc:
+            log("slash dispatch failed: %r" % exc)
+            return {"slash": True, "ok": False, "rc": 1,
+                    "output": "slash dispatch failed"}
+        out = result.stdout.decode("utf-8", "replace")
+        if not out.strip():
+            out = ("(no output)" if result.returncode == 0
+                   else "(command exited %d)" % result.returncode)
+        return {"slash": True, "ok": result.returncode == 0,
+                "rc": result.returncode, "output": out}
 
     def _ingest_text(self, text):
         """Stage the text to a temp file and hand it to `nestling.sh ingest` as

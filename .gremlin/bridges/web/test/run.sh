@@ -312,6 +312,77 @@ else
   bad "transcript turns present after tend (invariant 1)"
 fi
 
+# --- slash commands (stitch 21): dispatch via bin/slash.sh, never a turn -------
+
+# /help returns the real command list as a bridge result (JSON), rc 0.
+help_json="$(curl -fsS -X POST -H "$ORIGIN" -H 'Content-Type: application/json' \
+  --data '{"text":"/help"}' "$M1URL/send")"
+if printf '%s' "$help_json" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+out=d.get("output","")
+sys.exit(0 if d.get("slash") and d.get("rc")==0 and "/help" in out and "/model" in out else 1)'; then
+  ok "/help → bridge result with the real command list (rc 0)"
+else
+  bad "/help → bridge result with the real command list (rc 0): $help_json"
+fi
+
+# Slash handling writes NOTHING: no new transcript turn, no new nest item.
+turns_before="$(grep -c '^## ' "$M1GREM/transcript.md")"
+items_before="$(web_items)"
+curl -fsS -X POST -H "$ORIGIN" -H 'Content-Type: application/json' \
+  --data '{"text":"/help"}' "$M1URL/send" >/dev/null
+if [ "$(grep -c '^## ' "$M1GREM/transcript.md")" = "$turns_before" ] \
+  && [ "$(web_items)" = "$items_before" ]; then
+  ok "slash command writes no transcript turn and no nest item (invariant 1)"
+else
+  bad "slash command must not write a transcript turn or nest item"
+fi
+
+# An unknown command fails loud: rc 127, guidance toward /help.
+unk_json="$(curl -fsS -X POST -H "$ORIGIN" -H 'Content-Type: application/json' \
+  --data '{"text":"/frobnicate"}' "$M1URL/send")"
+if printf '%s' "$unk_json" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+sys.exit(0 if d.get("rc")==127 and d.get("ok") is False and "/help" in d.get("output","") else 1)'; then
+  ok "unknown /frobnicate fails loud (rc 127, points at /help)"
+else
+  bad "unknown /frobnicate fails loud: $unk_json"
+fi
+
+# The autocomplete menu (stitch 22) derives from the SAME commands/*.sh source.
+cmd_json="$(curl -fsS "$M1URL/api/commands")"
+if printf '%s' "$cmd_json" | python3 -c 'import sys,json
+env=json.load(sys.stdin)
+names=set(x["name"] for x in env["items"])
+# every commands/*.sh must appear, and each entry carries name+summary keys
+sys.exit(0 if {"help","model","new"} <= names
+  and all("name" in x and "summary" in x for x in env["items"]) else 1)'; then
+  ok "/api/commands lists commands/*.sh (autocomplete source, stitch 22)"
+else
+  bad "/api/commands lists commands/*.sh: $cmd_json"
+fi
+
+# The menu vocabulary must not diverge from the CLI: /api/commands names match
+# exactly the *.sh basenames under commands/.
+disk_cmds="$(cd "$M1GREM/commands" && ls *.sh 2>/dev/null | sed 's/\.sh$//' | sort | tr '\n' ' ')"
+api_cmds="$(printf '%s' "$cmd_json" | python3 -c 'import sys,json
+print(" ".join(sorted(x["name"] for x in json.load(sys.stdin)["items"]))+" ")')"
+if [ "$disk_cmds" = "$api_cmds" ]; then
+  ok "autocomplete vocabulary matches commands/ exactly (no web-only drift)"
+else
+  bad "autocomplete vocabulary drift: disk [$disk_cmds] vs api [$api_cmds]"
+fi
+
+# A message that is NOT a slash command is still ingested as a nest item.
+before_norm="$(web_items)"
+curl -fsS -X POST -H "$ORIGIN" -H 'Content-Type: application/json' \
+  --data '{"text":"not a slash command"}' "$M1URL/send" >/dev/null
+if [ "$(web_items)" = "$((before_norm + 1))" ]; then
+  ok "ordinary message still ingested as a nest item (unaffected)"
+else
+  bad "ordinary message ingest regressed"
+fi
+
 "$WEB_SH" stop >/dev/null 2>&1 || true
 
 # ============================================================================

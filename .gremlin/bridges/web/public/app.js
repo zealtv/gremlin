@@ -176,11 +176,67 @@
     input.style.height = Math.min(input.scrollHeight, 160) + "px";
   }
 
+  // A slash command (leading `/`) is a bridge-level action, not a chat turn:
+  // it runs server-side through bin/slash.sh and its output renders as an
+  // ephemeral bridge message — never a transcript turn, never a pending echo.
+  function isSlash(text) {
+    return /^\s*\//.test(text);
+  }
+
+  // Bridge message: visually distinct from gremlin turns, client-only and
+  // ephemeral (a reset/reconnect drops it). Command + output both go in via
+  // textContent, so any HTML in the output is rendered inert.
+  function renderBridge(cmd, output, kind) {
+    var stick = atBottom();
+    var el = document.createElement("div");
+    el.className = "turn bridge" + (kind ? " " + kind : "");
+    var head = document.createElement("div");
+    head.className = "bridge-cmd";
+    head.textContent = cmd;
+    el.appendChild(head);
+    var pre = document.createElement("pre");
+    pre.className = "bridge-out code";
+    pre.textContent = output;
+    el.appendChild(pre);
+    var meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = "bridge · not saved to transcript";
+    el.appendChild(meta);
+    log.appendChild(el);
+    floatPendings();
+    if (stick) scrollToBottom();
+  }
+
+  function sendSlash(cmd) {
+    fetch("/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: cmd }),
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var d = {};
+        try { d = JSON.parse(t); } catch (e) { d = { output: t }; }
+        return { ok: r.ok, status: r.status, data: d };
+      });
+    }).then(function (res) {
+      var d = res.data || {};
+      if (!res.ok && d.output == null) {
+        renderBridge(cmd, "command failed (" + res.status + ")", "error");
+        return;
+      }
+      renderBridge(cmd, d.output || "(no output)", d.rc === 0 ? "" : "error");
+    }).catch(function () {
+      renderBridge(cmd, "command not sent (offline)", "error");
+    });
+  }
+
   function send() {
     var text = input.value;
     if (!text.trim()) return;
     input.value = "";
+    hideMenu();
     autosize();
+    if (isSlash(text)) { sendSlash(text.trim()); return; }
     addPending(text);
     fetch("/send", {
       method: "POST",
@@ -199,15 +255,109 @@
     });
   }
 
+  // --- slash-command autocomplete (stitch 22) ---------------------------------
+  // The menu derives from /api/commands — the same commands/*.sh bin/slash.sh
+  // dispatches to — so the web vocabulary can never drift from the CLI's.
+  var cmdMenu = document.getElementById("cmd-menu");
+  var commandList = null; // [{name, summary}], fetched once and cached
+  var menuItems = [];     // current filtered subset
+  var menuIndex = -1;     // highlighted row
+
+  function loadCommands() {
+    if (commandList) return Promise.resolve(commandList);
+    return fetch("/api/commands")
+      .then(function (r) { return r.json(); })
+      .then(function (env) { commandList = env.items || []; return commandList; })
+      .catch(function () { commandList = []; return commandList; });
+  }
+
+  // The command token being typed: value is `/` + non-space run, nothing after.
+  // A space (or a second `/`, i.e. a pasted path) ends command-typing mode.
+  function slashToken(value) {
+    var m = /^\/([^\s/]*)$/.exec(value);
+    return m ? m[1] : null;
+  }
+
+  function menuOpen() { return cmdMenu && !cmdMenu.hidden && menuItems.length > 0; }
+
+  function hideMenu() {
+    if (!cmdMenu) return;
+    cmdMenu.hidden = true;
+    cmdMenu.textContent = "";
+    menuItems = [];
+    menuIndex = -1;
+  }
+
+  function renderMenu() {
+    if (!cmdMenu) return;
+    cmdMenu.textContent = "";
+    if (!menuItems.length) { cmdMenu.hidden = true; return; }
+    menuItems.forEach(function (c, i) {
+      var row = el("div", "cmd-item" + (i === menuIndex ? " active" : ""));
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", i === menuIndex ? "true" : "false");
+      row.appendChild(el("span", "cmd-name", "/" + c.name));
+      if (c.summary) row.appendChild(el("span", "cmd-summary", c.summary));
+      // mousedown (not click) so completion runs before the textarea blurs.
+      row.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        completeCommand(c.name);
+      });
+      cmdMenu.appendChild(row);
+    });
+    cmdMenu.hidden = false;
+  }
+
+  function updateMenu() {
+    var token = slashToken(input.value);
+    if (token === null) { hideMenu(); return; }
+    loadCommands().then(function (list) {
+      var t = slashToken(input.value); // may have changed while awaiting
+      if (t === null) { hideMenu(); return; }
+      var lower = t.toLowerCase();
+      menuItems = list.filter(function (c) {
+        return c.name.toLowerCase().indexOf(lower) === 0;
+      });
+      menuIndex = menuItems.length ? 0 : -1;
+      renderMenu();
+    });
+  }
+
+  function completeCommand(name) {
+    input.value = "/" + name + " ";
+    hideMenu();
+    input.focus();
+    autosize();
+  }
+
   if (form) {
     form.addEventListener("submit", function (e) {
       e.preventDefault();
+      hideMenu();
       send();
     });
-    input.addEventListener("input", autosize);
-    // Enter sends; Shift+Enter inserts a newline.
+    input.addEventListener("input", function () { autosize(); updateMenu(); });
+    input.addEventListener("blur", function () { hideMenu(); });
     input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && !e.shiftKey) {
+      // When the autocomplete menu is open it owns the navigation/commit keys.
+      if (menuOpen()) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault(); menuIndex = (menuIndex + 1) % menuItems.length; renderMenu(); return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault(); menuIndex = (menuIndex - 1 + menuItems.length) % menuItems.length; renderMenu(); return;
+        }
+        // Plain Enter or Tab commits the highlighted command; Ctrl/⌘+Enter
+        // falls through below so a deliberate send still works with the menu up.
+        if ((e.key === "Enter" && !e.ctrlKey && !e.metaKey) || e.key === "Tab") {
+          e.preventDefault(); completeCommand(menuItems[menuIndex].name); return;
+        }
+        if (e.key === "Escape") { e.preventDefault(); hideMenu(); return; }
+      }
+      // Enter inserts a newline (the default textarea behavior, kept for easy
+      // multiline composing on desktop and mobile). Submitting is a deliberate
+      // gesture: Ctrl/⌘+Enter on a keyboard, or the touch send button.
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         send();
       }
@@ -271,6 +421,22 @@
     return s;
   }
 
+  // Which More-panel disclosures the reader has opened, keyed by a stable path.
+  // The 4s status poll rebuilds the panel from fresh data (loadPanel wipes and
+  // re-renders); this map survives that rebuild so an expanded section — a
+  // context body, a tools/skills list — stays open across refreshes. It is
+  // client-only session state, so a deliberate page reload starts collapsed.
+  var moreExpanded = {};
+
+  function bindDisclosure(head, body, key) {
+    head.style.cursor = "pointer";
+    body.hidden = !moreExpanded[key];
+    head.addEventListener("click", function () {
+      body.hidden = !body.hidden;
+      moreExpanded[key] = !body.hidden;
+    });
+  }
+
   function renderContext(env) {
     var frag = document.createDocumentFragment();
 
@@ -297,17 +463,23 @@
         head.appendChild(el("span", "ctx-target", "→ " + it.fields.target));
       }
       if (it.fields.names) {
-        head.appendChild(el("span", "ctx-target", it.fields.names.join(" · ")));
+        // A skills/tools surface (e.g. "Tools"): show the count in the head and
+        // move the list into a disclosure body below, so it stays scannable on
+        // mobile and its open/shut state persists across the periodic refresh.
+        head.appendChild(el("span", "ctx-target", it.fields.names.length + " items"));
       }
       row.appendChild(head);
       row.appendChild(el("div", "path-chip mono", it.path));
       if (it.fields.body) {
         var body = el("pre", "code ctx-body");
-        body.hidden = true;
         body.textContent = it.fields.body;
-        head.style.cursor = "pointer";
-        head.addEventListener("click", function () { body.hidden = !body.hidden; });
+        bindDisclosure(head, body, it.path || it.name);
         row.appendChild(body);
+      } else if (it.fields.names) {
+        var list = el("div", "ctx-body sub");
+        list.textContent = it.fields.names.join(" · ");
+        bindDisclosure(head, list, it.path || it.name);
+        row.appendChild(list);
       } else if (it.fields.escaped) {
         row.appendChild(el("div", "sub warn", "target outside host — not shown"));
       }

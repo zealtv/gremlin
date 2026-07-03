@@ -144,6 +144,30 @@ pre { max-width: 100%; overflow-x: auto; }
   background: color-mix(in srgb, var(--error) 22%, var(--accent));
 }
 
+/* bridge message: an ephemeral, client-only result of a slash command — not a
+   transcript turn. Full-width, boxed, and visually distinct from gremlin turns. */
+.turn.bridge { align-items: stretch; }
+.turn.bridge .bridge-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--accent);
+  padding: 6px 12px 0;
+}
+.turn.bridge .bridge-out {
+  margin: 4px 12px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bubble);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.turn.bridge.error .bridge-out {
+  border-color: color-mix(in srgb, var(--error) 50%, transparent);
+  color: var(--error);
+}
+.turn.bridge .meta { text-align: left; }
+
 /* system turn: full-width, dimmed, centered notice — never a bubble */
 .turn.system { align-items: stretch; }
 .notice {
@@ -166,6 +190,38 @@ pre { max-width: 100%; overflow-x: auto; }
   background: var(--paper);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* slash-command autocomplete: a menu docked above the composer, same width */
+.cmd-menu {
+  max-width: 66ch;
+  margin: 0 auto;
+  padding: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+.cmd-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.cmd-item.active { background: var(--bubble); }
+.cmd-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.cmd-summary {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* composer: thumb-sized send, grows with content */

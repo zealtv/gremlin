@@ -20,9 +20,10 @@
   <main id="panel" class="panel" hidden></main>
 
   <footer class="dock">
+    <div id="cmd-menu" class="cmd-menu" role="listbox" aria-label="Slash commands" hidden></div>
     <form id="composer" class="composer" autocomplete="off">
-      <textarea id="input" rows="1" placeholder="Message…" aria-label="Message"></textarea>
-      <button id="send" type="submit" aria-label="Send">⮕</button>
+      <textarea id="input" rows="1" placeholder="Message…  (Enter = newline)" aria-label="Message"></textarea>
+      <button id="send" type="submit" aria-label="Send" title="Send (Ctrl/⌘+Enter)">⮕</button>
     </form>
     <nav class="tabbar" aria-label="Sections">
       <button class="tab active" data-view="chat" aria-current="page">💬<span>Chat</span></button>
