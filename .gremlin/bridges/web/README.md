@@ -134,9 +134,11 @@ is the design: the **bridge serves, the tender authors**.
   them). The `<name>/` is discovered by having an `index.html`; the view's
   `<title>` is its on-screen title.
 - **Data.** Views are dumb; aggregation is a tool. A per-gremlin
-  `tools/build-<name>-index.sh` rolls raw data into `.dash/<name>/dashboard-index.json`
-  (atomic, with a `generated_at`); the view `fetch('./dashboard-index.json')`s it
-  through the same jailed route. No view-specific API, no new datastore.
+  `.gremlin/tools/build-<name>-index.sh` (gremlin-owned code lives *inside* the
+  gremlin, with its other tools — not a bare host-level `tools/`) rolls raw data
+  into `.dash/<name>/dashboard-index.json` (atomic, with a `generated_at`); the view
+  `fetch('./dashboard-index.json')`s it through the same jailed route. No
+  view-specific API, no new datastore.
 - **Authoring** is a normal chat turn — "build me a nutrition dashboard" — handled
   by the `custom-view` skill (`skills/custom-view.md`): the `.dash/<name>/` layout,
   the inline `index.html` skeleton, the data-driven-chart idempotent-modify rule,

@@ -22,7 +22,7 @@ author; the bridge only serves what you write. Read the web bridge's
   (`.dash/nutrition/`, `.dash/dashboard/`).
 - **Views are dumb; aggregation is a tool.** The `index.html` renders; it does not
   compute. All real state lives in a co-located `dashboard-index.json` produced by a
-  per-gremlin `tools/build-<name>-index.sh` (see below). The view
+  per-gremlin `.gremlin/tools/build-<name>-index.sh` (see below). The view
   `fetch('./dashboard-index.json')`s it through the same jailed route it is served
   from. No view-specific bridge route, no new datastore.
 - **Charts:** default to **hand-rolled inline SVG** (line, bars, KPI tiles — zero
@@ -33,13 +33,23 @@ author; the bridge only serves what you write. Read the web bridge's
 
 ## The build tool
 
-`tools/build-<name>-index.sh` follows the `tools/` contract (args → the file it
-writes; fail loud, non-zero on malformed data). It is the disposable-cache
-exception: it writes `.dash/<name>/dashboard-index.json` **atomically** (write a
-temp file, then `mv`), always stamping a top-level `generated_at` (ISO-8601 Z). It
-reads the gremlin's raw data (logs, series, progress notes) and emits named series
-the view iterates over. Gitignore the generated `dashboard-index.json`; track the
-tool and the `index.html`.
+**Location — inside the gremlin.** The tool lives at
+`.gremlin/tools/build-<name>-index.sh`, alongside the gremlin's other tools —
+**not** at a bare host-level `tools/`. The host dir's gremlin-owned state is all
+high-level **dot-dirs** (`.gremlin`, `.lore`, `.dash`) so it never collides with
+the user's own files; a plain `tools/` folder there breaks that pattern and gets
+lost. Only the view and its regenerable cache are host-level (`.dash/<name>/`);
+the tool is gremlin-owned code, so it lives in `.gremlin/tools/`. Bespoke tools
+there survive `/update` (it overlays, never deletes — the gremlin's existing app
+tools prove it).
+
+The tool follows the `tools/` contract (args → the file it writes; fail loud,
+non-zero on malformed data). It resolves the host dir (the parent of `.gremlin`),
+reads the gremlin's raw data (logs, series, progress notes), and writes the
+disposable-cache exception `.dash/<name>/dashboard-index.json` there
+**atomically** (temp file, then `mv`), always stamping a top-level `generated_at`
+(ISO-8601 Z) and emitting named series the view iterates over. Gitignore the
+generated `dashboard-index.json`; track the tool and the `index.html`.
 
 ## Freshness
 
