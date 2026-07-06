@@ -72,6 +72,11 @@ label. Three presets ship as starting points:
   bots, lookup tables, or local rule engines that need a
   deterministic reply without a model.
 
+Runnable per-harness references (claude, codex, gemini, ollama) live in
+`models/examples/` — delivered and refreshed by `/update`, unlike the live
+`models/*.sh` presets, which are host-owned. Copy one out rather than
+editing it in place.
+
 Copy from one, or write your own.
 
 ```sh

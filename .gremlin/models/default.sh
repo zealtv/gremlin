@@ -46,17 +46,19 @@ exec claude -p --model claude-sonnet-4-6 --allowedTools "Bash Read"
 
 # --- gemini (google) ----------------------------------------------------
 # Requires the gemini CLI (https://github.com/google-gemini/gemini-cli).
-# Verify stdin support against your installed version. Gemini's trusted
-# folders feature is optional and disabled by default; if you enable it,
-# trust the gremlin host folder or its parent directory.
-# exec gemini -p --model gemini-2.5-flash
+# `-p` takes the prompt as its argument, so slurp stdin first. Verify
+# against your installed version. Gemini's trusted folders feature is
+# optional and disabled by default; if you enable it, trust the gremlin
+# host folder or its parent directory.
+# prompt="$(cat)"
+# exec gemini --model gemini-2.5-flash -p "$prompt"
 
 # --- codex (openai) -----------------------------------------------------
 # Requires the openai codex CLI. The `exec` subcommand is the
 # non-interactive entry point; `-` makes it read the prompt from stdin.
 # Gremlin usually runs from a normal host folder rather than a git repo,
 # so Codex presets should skip the repo trust check.
-# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.5 -s workspace-write -a on-request -
+# exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.5 -s workspace-write -
 # exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.2 -s workspace-write -
 # exec codex --ask-for-approval never exec --skip-git-repo-check --model gpt-5.5 -s danger-full-access -
 # exec codex --ask-for-approval on-request exec --skip-git-repo-check --model gpt-5.4 -s workspace-write -
