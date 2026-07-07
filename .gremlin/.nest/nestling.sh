@@ -162,6 +162,9 @@ drop_claimed() {
     printf '%s\n' "$reason"
   } > "$reason_file"
   printf '%s\n' "$dropped"
+  if (( $# == 0 )); then
+    printf 'next: read, then edit %s (agent harnesses refuse to overwrite unread files)\n' "$reason_file"
+  fi
 }
 
 cmd_ensure() {

@@ -426,6 +426,9 @@ cmd_drop() {
   } > "$reason"
 
   echo "$dest"
+  if (( $# == 0 )); then
+    echo "next: read, then edit $reason (agent harnesses refuse to overwrite unread files)"
+  fi
 }
 
 print_dir_entries() {
