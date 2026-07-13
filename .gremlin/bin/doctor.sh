@@ -74,6 +74,32 @@ else
   echo "‼️  .loom/loom.sh MISSING — run /update to restore the loom tool"
 fi
 
+# Placement drift (docs/protocol.md "Placement"): primitives live INSIDE
+# .gremlin/. One appearing as a sibling of .gremlin at the host dir is drift —
+# unless it is a complete self-named installation (carries its own script),
+# which marks a deliberate higher-scope (Tier 3) instance sharing the host dir
+# (e.g. a workspace root). Tier 2 artifact dirs (.dash) are noted, not failed.
+HOST_DIR="$(dirname "$GREMLIN_DIR")"
+check_sibling() {
+  local prim="$1"
+  local script="$2"
+  local sib="$HOST_DIR/.$prim"
+  [ -d "$sib" ] || return 0
+  if [ -e "$sib/$script" ]; then
+    echo "note .$prim is a sibling of .gremlin with its own $script — a higher-scope (Tier 3) install, not this gremlin's"
+  else
+    echo "‼️  .$prim is a SIBLING of .gremlin — placement drift: primitives live inside .gremlin/ (docs/protocol.md, Placement)"
+  fi
+}
+check_sibling "loom" "loom.sh"
+check_sibling "lore" "lore.sh"
+check_sibling "nest" "nestling.sh"
+check_sibling "glean" "glean.sh"
+check_sibling "groundhog" "groundhog.sh"
+if [ -d "$HOST_DIR/.dash" ]; then
+  echo "note .dash present at host level — Tier 2 gremlin-produced content (correct placement)"
+fi
+
 check_preset() {
   local alias="$1"
   local path="$GREMLIN_DIR/models/$alias.sh"
