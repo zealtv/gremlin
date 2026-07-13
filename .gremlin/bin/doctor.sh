@@ -53,11 +53,21 @@ for f in "$SYSTEM_DIR"/*.md; do
   echo "skipped (real file) context/system/$(basename "$f")"
 done
 
+# Regenerate the primitives map from disk before linking it: generated, so
+# it cannot rot the way hand-written prose does.
+if [ -x "$GREMLIN_DIR/bin/index-primitives.sh" ]; then
+  "$GREMLIN_DIR/bin/index-primitives.sh" >/dev/null
+  echo "ok PRIMITIVES.md (regenerated)"
+else
+  echo "‼️  bin/index-primitives.sh MISSING — run /update to restore it"
+fi
+
 repair_link "skills.md" "../../skills/INDEX.md"
 repair_link "tools.md" "../../tools/README.md"
 repair_link "memory.md" "../../.glean/findings/INDEX.md"
 repair_link "turntaking.md" "../../docs/turntaking.md"
 repair_link "media-embeds.md" "../../docs/media-embeds.md"
+repair_link "primitives.md" "../../PRIMITIVES.md"
 
 # The gremlin's own loom: ensure its trays exist. loom.sh + README ride
 # /update, but the runtime trays are excluded from the overlay, so a fresh
