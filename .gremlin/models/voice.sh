@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# voice — speech-to-text preset (the audio analogue of models/image.sh).
+# speech-to-text preset
 #
 # Contract: stdin is the absolute path to ONE audio file; stdout is the verbatim
 # transcript as plain text (never audio). The Telegram bridge runs this when a

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# echo — script-as-model demo (no LLM)
+# script-as-model demo (no LLM)
 #
 # A model preset is just an executable that reads the prompt on stdin
 # and writes a reply on stdout. Nothing requires it to call an LLM.

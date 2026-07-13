@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tts — text-to-speech preset (the audio analogue of models/voice.sh).
+# text-to-speech preset
 #
 # Contract: stdin is the text to speak; stdout is the spoken audio as OGG/Opus
 # bytes (a Telegram voice message). The Telegram bridge runs this when an
