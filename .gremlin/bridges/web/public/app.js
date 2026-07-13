@@ -14,6 +14,46 @@
     liveLabel.textContent = label;
   }
 
+  // --- unread badge (stitch 65) ------------------------------------------
+  // lastResetAt marks the last SSE `reset` (a fresh connection or an auto-
+  // reconnect, both of which replay a backfill burst); initialized now so the
+  // poll fallback — which never sees a `reset` event — also gets a sane value
+  // instead of counting its own first backfill as unread.
+  var lastResetAt = Date.now();
+  var badgeState = { unread: 0 };
+
+  // Base title is read lazily at apply time, not captured once at load: a
+  // later stitch retitles the page to name@host, and the badge must compose
+  // with whatever the current base title is.
+  function baseTitle() {
+    if (window.GremlinBadge) {
+      var t = document.title;
+      var m = /^\(\d+\) (.*)$/.exec(t);
+      return m ? m[1] : t;
+    }
+    return document.title;
+  }
+
+  function feedBadge(ev) {
+    if (!window.GremlinBadge) return;
+    badgeState = window.GremlinBadge.next(badgeState, ev);
+    window.GremlinBadge.apply(baseTitle(), badgeState.unread);
+  }
+
+  function badgeTurn(turn) {
+    feedBadge({
+      type: "turn",
+      role: turn.role,
+      hidden: document.visibilityState === "hidden",
+      msSinceReset: Date.now() - lastResetAt,
+    });
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") feedBadge({ type: "visible" });
+  });
+  window.addEventListener("focus", function () { feedBadge({ type: "visible" }); });
+
   // Is the log scrolled near the bottom? Only auto-scroll if so, so a reader
   // scrolled up to an older turn is not yanked back down.
   function atBottom() {
@@ -128,9 +168,12 @@
       // A fresh connection (incl. auto-reconnect) replays the backfill, so
       // clear first to re-render cleanly rather than duplicate.
       clear();
+      lastResetAt = Date.now();
     });
     es.addEventListener("turn", function (e) {
-      renderTurn(JSON.parse(e.data));
+      var turn = JSON.parse(e.data);
+      renderTurn(turn);
+      badgeTurn(turn);
     });
     es.addEventListener("error", function () {
       setLive("down", "reconnecting…");
@@ -148,7 +191,10 @@
         .then(function (data) {
           if (first) { clear(); first = false; }
           setLive("up", "live");
-          (data.turns || []).forEach(renderTurn);
+          (data.turns || []).forEach(function (turn) {
+            renderTurn(turn);
+            badgeTurn(turn);
+          });
           cursor = data.cursor;
         })
         .catch(function () { setLive("down", "reconnecting…"); })

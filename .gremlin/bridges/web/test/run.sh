@@ -177,6 +177,13 @@ else
   bad "GET /render.js → 200"
 fi
 
+# stitch 65: the unread-badge asset is served.
+if curl -fsS -o /dev/null -w '%{http_code}' "$URL/badge.js" | grep -q 200; then
+  ok "GET /badge.js → 200"
+else
+  bad "GET /badge.js → 200"
+fi
+
 # Append a system line by hand → it appears within a tick.
 cat >> "$FIXTURE/transcript.md" <<'EOF'
 
@@ -593,8 +600,14 @@ if command -v node >/dev/null 2>&1; then
   else
     bad "render.js unit tests pass"
   fi
+  if node "$BRIDGE_DIR/test/badge.test.js"; then
+    ok "badge.js unit tests pass"
+  else
+    bad "badge.js unit tests pass"
+  fi
 else
   echo "  skip render.js unit tests (no node)"
+  echo "  skip badge.js unit tests (no node)"
 fi
 
 # ============================================================================
