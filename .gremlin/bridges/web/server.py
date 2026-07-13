@@ -20,11 +20,14 @@ import os
 import queue
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from email import policy
+from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
 
@@ -44,6 +47,7 @@ POLL_INTERVAL = float(os.environ.get("WEB_TAIL_INTERVAL", "1.0"))
 SSE_PING_INTERVAL = float(os.environ.get("WEB_SSE_PING_INTERVAL", "15.0"))
 # Text-only cap for M1's POST /send; real uploads (and WEB_MAX_UPLOAD) are M8.
 MAX_SEND_BYTES = int(os.environ.get("WEB_MAX_SEND", str(1 << 20)))
+MAX_UPLOAD_BYTES = int(os.environ.get("WEB_MAX_UPLOAD", str(25 * 1024 * 1024)))
 # A slash command that hasn't returned by now is failed loud rather than hung.
 SLASH_TIMEOUT = 30.0
 
@@ -101,6 +105,18 @@ def read_range(path, start, end):
             return fh.read(end - start).decode("utf-8", "replace")
     except OSError:
         return ""
+
+
+def read_byte_range(path, start, end):
+    """Read bytes [start, end); callers choose the wire/content semantics."""
+    if end <= start:
+        return b""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(start)
+            return fh.read(end - start)
+    except OSError:
+        return None
 
 
 def parse_turns(text):
@@ -219,6 +235,24 @@ def under(base, path):
 
 def within_host(path):
     return under(HOST_DIR, path)
+
+
+def sanitize_upload_name(name, used):
+    """Telegram's §11 upload-name rule: basename, narrow chars, reserve control
+    names, then make the result unique inside the staged item directory."""
+    base = re.split(r"[/\\]", name or "")[-1]
+    ext = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.splitext(base)[1])
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    if safe in ("", ".", "..", "instructions.md", ".model"):
+        safe = "file" + ext
+    stem, suffix = os.path.splitext(safe)
+    candidate = safe
+    n = 2
+    while candidate in used:
+        candidate = "%s-%d%s" % (stem, n, suffix)
+        n += 1
+    used.add(candidate)
+    return candidate
 
 
 def read_text(path, limit=256 * 1024):
@@ -860,6 +894,8 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_events()
         elif path == "/poll":
             self._serve_poll(parse_qs(parsed.query))
+        elif path == "/media":
+            self._serve_media(parse_qs(parsed.query))
         elif path == "/api/identity":
             # The gremlin's identifier is its host directory's name.
             self._send_json({"host": os.path.basename(os.path.realpath(HOST_DIR)),
@@ -926,6 +962,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(403, "forbidden: cross-origin\n")
             return
 
+        ctype = self.headers.get("Content-Type", "")
+        if "multipart/form-data" in ctype:
+            self._handle_multipart_send(ctype)
+            return
+
         text = self._read_send_text()
         if text is None:
             self._send(400, "bad request\n")
@@ -984,6 +1025,143 @@ class Handler(BaseHTTPRequestHandler):
             return (parse_qs(raw.decode("utf-8")).get("text") or [""])[0]
         except (ValueError, UnicodeDecodeError):
             return None
+
+    def _handle_multipart_send(self, ctype):
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send(413, "upload too large\n")
+            return
+        if length <= 0 or length > MAX_UPLOAD_BYTES:
+            self._send(413, "upload too large\n")
+            return
+        if "boundary=" not in ctype.lower():
+            self._send(400, "bad multipart\n")
+            return
+
+        raw = self.rfile.read(length)
+        if len(raw) != length:
+            self._send(400, "bad multipart\n")
+            return
+
+        parsed = self._parse_multipart(ctype, raw)
+        if parsed is None:
+            self._send(400, "bad multipart\n")
+            return
+        text, files = parsed
+        if not files:
+            if not text or not text.strip():
+                self._send(400, "empty message\n")
+                return
+            if text.lstrip().startswith("/"):
+                result = self._run_slash(text.strip())
+                self._send(
+                    200,
+                    json.dumps(result, ensure_ascii=False),
+                    "application/json; charset=utf-8",
+                )
+                return
+            item = self._ingest_text(text)
+            if item is None:
+                self._send(500, "ingest failed\n")
+                return
+            self._send(
+                200,
+                json.dumps({"ok": True, "item": item}, ensure_ascii=False),
+                "application/json; charset=utf-8",
+            )
+            return
+
+        result = self._ingest_attachments(text, files)
+        if result is None:
+            self._send(500, "ingest failed\n")
+            return
+        self._send(
+            200,
+            json.dumps(
+                {"ok": True, "item": result["item"], "files": result["files"]},
+                ensure_ascii=False,
+            ),
+            "application/json; charset=utf-8",
+        )
+
+    def _parse_multipart(self, ctype, raw):
+        try:
+            msg = BytesParser(policy=policy.default).parsebytes(
+                ("Content-Type: %s\r\nMIME-Version: 1.0\r\n\r\n" % ctype).encode("utf-8")
+                + raw
+            )
+        except Exception:
+            return None
+        if not msg.is_multipart():
+            return None
+        parts = list(msg.iter_parts())
+        if not parts:
+            return None
+
+        text = ""
+        files = []
+        used = set()
+        try:
+            for part in parts:
+                filename = part.get_filename()
+                field = part.get_param("name", header="content-disposition")
+                if filename is not None:
+                    payload = part.get_payload(decode=True)
+                    if payload is None:
+                        return None
+                    safe = sanitize_upload_name(filename, used)
+                    files.append({"name": safe, "bytes": payload})
+                elif field == "text":
+                    payload = part.get_payload(decode=True)
+                    if payload is None:
+                        return None
+                    text = payload.decode("utf-8")
+        except (LookupError, UnicodeDecodeError, ValueError):
+            return None
+        return text, files
+
+    def _ingest_attachments(self, text, files):
+        """Stage an attachment item directory, then let nestling atomically land
+        it in `.nest/in/`. The bridge writes only under CACHE_DIR before ingest."""
+        if not NESTLING:
+            log("no nestling configured; refusing attachment /send")
+            return None
+        item = "%s-web-%s" % (
+            time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()),
+            secrets.token_hex(3),
+        )
+        tmpdir = None
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            tmpdir = tempfile.mkdtemp(prefix="web-upload-", dir=CACHE_DIR)
+            for f in files:
+                with open(os.path.join(tmpdir, f["name"]), "wb") as fh:
+                    fh.write(f["bytes"])
+            with open(os.path.join(tmpdir, "instructions.md"), "w", encoding="utf-8") as fh:
+                fh.write("The user sent a message via web with attachments.\n\n")
+                if text:
+                    fh.write(text.rstrip("\n") + "\n\n")
+                fh.write("## attachments\n")
+                for f in files:
+                    mt = mimetypes.guess_type(f["name"])[0] or "application/octet-stream"
+                    fh.write("- `%s` (%s)\n" % (f["name"], mt))
+                fh.write("\nOpen the files above and respond to the user.\n")
+            result = subprocess.run(
+                [NESTLING, "ingest", tmpdir, item],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if result.returncode != 0:
+                log("nestling attachment ingest failed (rc=%d)" % result.returncode)
+                return None
+            return {"item": item, "files": [f["name"] for f in files]}
+        except OSError as exc:
+            log("attachment stage failed: %r" % exc)
+            return None
+        finally:
+            if tmpdir:
+                shutil.rmtree(tmpdir, ignore_errors=True)
 
     def _run_slash(self, text):
         """Dispatch a slash command through the shared `bin/slash.sh` — the same
@@ -1079,6 +1257,53 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, body, ctype, {
             "Content-Disposition": '%s; filename="%s"' % (disposition, os.path.basename(real)),
         })
+
+    def _serve_media(self, params):
+        vals = params.get("path") or []
+        rel = vals[0] if vals else ""
+        # Refuse traversal lexically as well as after realpath resolution: the
+        # route is an outbound bytes lens over HOST_DIR, not a path normalizer.
+        parts = re.split(r"[\\/]+", rel)
+        if not rel or os.path.isabs(rel) or ".." in parts:
+            self._send(404, "not found\n")
+            return
+        real = under(HOST_DIR, os.path.join(HOST_DIR, rel))
+        if not real or not os.path.isfile(real):
+            self._send(404, "not found\n")
+            return
+
+        try:
+            size = os.path.getsize(real)
+        except OSError:
+            self._send(404, "not found\n")
+            return
+        ctype = mimetypes.guess_type(real)[0] or "application/octet-stream"
+        disposition = "inline" if ctype.startswith(("text/", "image/", "audio/", "video/")) else "attachment"
+        filename = os.path.basename(real).replace('"', "_")
+        headers = {"Content-Disposition": '%s; filename="%s"' % (disposition, filename)}
+
+        range_header = self.headers.get("Range", "")
+        m = re.match(r"^bytes=(\d+)-(\d*)$", range_header)
+        if m:
+            start = int(m.group(1))
+            end = int(m.group(2)) + 1 if m.group(2) else size
+            if start < size and end > start:
+                end = min(end, size)
+                body = read_byte_range(real, start, end)
+                if body is None:
+                    self._send(404, "not found\n")
+                    return
+                headers["Content-Range"] = "bytes %d-%d/%d" % (start, end - 1, size)
+                self._send(206, body, ctype, headers)
+                return
+
+        try:
+            with open(real, "rb") as fh:
+                body = fh.read()
+        except OSError:
+            self._send(404, "not found\n")
+            return
+        self._send(200, body, ctype, headers)
 
     def _serve_dash(self, rest):
         # rest = "<name>/<subpath>"; serve a Dash view file, jailed under that

@@ -28,4 +28,4 @@ WEB_BIND=127.0.0.1
 # WEB_REMOTE_HOST=
 
 # Reserved for attachments (a later stitch): per-file/per-body upload cap.
-# WEB_MAX_UPLOAD=26214400
+WEB_MAX_UPLOAD=26214400

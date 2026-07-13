@@ -170,6 +170,10 @@
   // --- composer (POST /send) -------------------------------------------
   var form = document.getElementById("composer");
   var input = document.getElementById("input");
+  var attachBtn = document.getElementById("attach");
+  var fileInput = document.getElementById("file-input");
+  var fileChips = document.getElementById("file-chips");
+  var selectedFiles = [];
 
   function autosize() {
     input.style.height = "auto";
@@ -230,9 +234,70 @@
     });
   }
 
+  function renderFileChips() {
+    if (!fileChips) return;
+    fileChips.textContent = "";
+    if (!selectedFiles.length) {
+      fileChips.hidden = true;
+      return;
+    }
+    selectedFiles.forEach(function (file, i) {
+      var chip = document.createElement("span");
+      chip.className = "file-chip";
+      chip.appendChild(document.createTextNode(file.name));
+      var remove = document.createElement("button");
+      remove.type = "button";
+      remove.setAttribute("aria-label", "Remove " + file.name);
+      remove.textContent = "✕";
+      remove.addEventListener("click", function () {
+        selectedFiles.splice(i, 1);
+        if (fileInput) fileInput.value = "";
+        renderFileChips();
+      });
+      chip.appendChild(remove);
+      fileChips.appendChild(chip);
+    });
+    fileChips.hidden = false;
+  }
+
+  function clearFiles() {
+    selectedFiles = [];
+    if (fileInput) fileInput.value = "";
+    renderFileChips();
+  }
+
+  function sendWithFiles(text) {
+    var data = new FormData();
+    data.append("text", text);
+    selectedFiles.forEach(function (file) { data.append("files", file); });
+    fetch("/send", { method: "POST", body: data }).then(function (r) {
+      return r.text().then(function (body) {
+        return { ok: r.ok, status: r.status, body: body };
+      });
+    }).then(function (res) {
+      if (!res.ok) {
+        var msg = res.status === 413
+          ? "file is too large"
+          : "message not sent (" + res.status + "): " + res.body.trim();
+        renderTurn({ role: "system", body: "⚠️ error: " + msg });
+        return;
+      }
+      input.value = "";
+      clearFiles();
+      autosize();
+      hideMenu();
+    }).catch(function () {
+      renderTurn({ role: "system", body: "⚠️ error: message not sent (offline)" });
+    });
+  }
+
   function send() {
     var text = input.value;
-    if (!text.trim()) return;
+    if (!text.trim() && !selectedFiles.length) return;
+    if (selectedFiles.length) {
+      sendWithFiles(text);
+      return;
+    }
     input.value = "";
     hideMenu();
     autosize();
@@ -350,6 +415,13 @@
   }
 
   if (form) {
+    if (attachBtn && fileInput) {
+      attachBtn.addEventListener("click", function () { fileInput.click(); });
+      fileInput.addEventListener("change", function () {
+        selectedFiles = Array.prototype.slice.call(fileInput.files || []);
+        renderFileChips();
+      });
+    }
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       hideMenu();

@@ -107,7 +107,7 @@ export WEB_BIND="127.0.0.1"
 
 cleanup() {
   "$WEB_SH" stop >/dev/null 2>&1 || true
-  rm -rf "$FIXTURE" "${M1FIX:-}"
+  rm -rf "$FIXTURE" "${M1FIX:-}" "${M8FIX:-}"
   rm -rf "$BRIDGE_DIR/.cache"
   rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
 }
@@ -411,6 +411,178 @@ else
 fi
 
 "$WEB_SH" stop >/dev/null 2>&1 || true
+
+# ============================================================================
+echo "== M8 attachments (multipart → item dir; /media jail) =="
+
+M8FIX="$(mktemp -d)"
+M8H="$M8FIX/host"
+M8G="$M8H/.gremlin"
+mkdir -p "$M8H"
+cp -a "$GREMLIN_REAL" "$M8G"
+printf 'echo\n' > "$M8G/.model"
+: > "$M8G/transcript.md"
+find "$M8G/.nest/in" -mindepth 1 -delete 2>/dev/null || true
+rm -f "$M8G/.tending.pid"
+rm -rf "$BRIDGE_DIR/.cache"
+
+M8PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+M8URL="http://127.0.0.1:$M8PORT"
+M8ORIGIN="Origin: http://127.0.0.1:$M8PORT"
+
+rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
+export WEB_GREMLIN_DIR="$M8G"
+export WEB_HOST_DIR="$M8H"
+export WEB_TRANSCRIPT="$M8G/transcript.md"
+export WEB_NESTLING="$M8G/.nest/nestling.sh"
+export WEB_PORT="$M8PORT"
+export WEB_BIND="127.0.0.1"
+export WEB_MAX_UPLOAD=4096
+unset WEB_REMOTE_TOKEN
+
+m8_items() { find "$M8G/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
+# Resolve the item a POST created from its response JSON — a name-sort "latest"
+# ties when two items land in the same second (the random hex decides, flakily).
+m8_item_of() { printf '%s' "$1" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin).get("item",""))
+except Exception: print("")'; }
+m8_cache_entries() {
+  if [ -d "$BRIDGE_DIR/.cache" ]; then
+    find "$BRIDGE_DIR/.cache" -mindepth 1 2>/dev/null | wc -l | tr -d ' '
+  else
+    printf '0'
+  fi
+}
+
+if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M8URL/"; then
+  ok "M8 daemon boots against fixture"
+else
+  bad "M8 daemon boots against fixture"
+  cat "$BRIDGE_DIR/web.log" 2>/dev/null | sed 's/^/  /'
+fi
+
+printf 'attachment notes\n' > "$M8FIX/notes.txt"
+resp="$(curl -s -w '\n%{http_code}' -X POST -H "$M8ORIGIN" \
+  -F 'text=see attached' -F "files=@$M8FIX/notes.txt;type=text/plain" "$M8URL/send")"
+code="$(printf '%s' "$resp" | tail -n 1)"
+item="$M8G/.nest/in/$(m8_item_of "$(printf '%s' "$resp" | sed '$d')")"
+legacy_msg="$(printf 'message.%s' md)"
+if [ "$code" = "200" ] && [ "$(m8_items)" = "1" ] && [ -d "$item" ] \
+  && [ -f "$item/notes.txt" ] && [ -f "$item/instructions.md" ] \
+  && grep -q '## attachments' "$item/instructions.md" \
+  && grep -q '`notes.txt` (text/plain)' "$item/instructions.md" \
+  && grep -q 'see attached' "$item/instructions.md" \
+  && [ ! -e "$item/$legacy_msg" ]; then
+  ok "multipart text+file → one web item dir with instructions + attachment"
+else
+  bad "multipart text+file → item dir (code $code, items $(m8_items), item $item)"
+fi
+
+"$M8G/bin/tend-loop.sh" >/dev/null 2>&1 || true
+if poll_until 8 bash -c "curl -fsS '$M8URL/poll?cursor=0' | grep -q '\"role\": \"assistant\"'"; then
+  if curl -fsS "$M8URL/poll?cursor=0" | python3 -c 'import sys,json
+t=json.load(sys.stdin)["turns"]
+sys.exit(0 if any(x["role"]=="user" for x in t) and any(x["role"]=="assistant" for x in t) else 1)'; then
+    ok "attachment tender round-trip → ## user + ## assistant render"
+  else
+    bad "attachment tender round-trip → both turns render"
+  fi
+else
+  bad "attachment tender round-trip → assistant appears within bound"
+fi
+
+before="$(m8_items)"
+printf 'pw bytes\n' > "$M8FIX/passwd-src"
+resp="$(curl -fsS -X POST -H "$M8ORIGIN" -F 'text=bad name' \
+  -F "files=@$M8FIX/passwd-src;filename=../../etc/passwd;type=text/plain" "$M8URL/send")"
+item="$M8G/.nest/in/$(m8_item_of "$resp")"
+if [ "$(m8_items)" = "$((before + 1))" ] && [ -f "$item/passwd" ] \
+  && [ ! -e "$item/../../etc/passwd" ] && [ ! -e "$BRIDGE_DIR/.cache/etc/passwd" ]; then
+  ok "filename traversal sanitized to basename inside item dir"
+else
+  bad "filename traversal sanitized (items $(m8_items), item $item)"
+fi
+
+before="$(m8_items)"
+printf 'uploaded control bytes\n' > "$M8FIX/uploaded-instructions.md"
+resp="$(curl -fsS -X POST -H "$M8ORIGIN" -F 'text=reserved name' \
+  -F "files=@$M8FIX/uploaded-instructions.md;filename=instructions.md;type=text/markdown" "$M8URL/send")"
+item="$M8G/.nest/in/$(m8_item_of "$resp")"
+if [ "$(m8_items)" = "$((before + 1))" ] && [ -f "$item/file.md" ] \
+  && grep -q 'uploaded control bytes' "$item/file.md" \
+  && grep -q '## attachments' "$item/instructions.md" \
+  && ! grep -q 'uploaded control bytes' "$item/instructions.md"; then
+  ok "reserved upload name instructions.md → file.md; control instructions preserved"
+else
+  bad "reserved upload name instructions.md handled"
+fi
+
+before="$(m8_items)"
+python3 -c 'import sys; open(sys.argv[1],"wb").write(b"x"*5000)' "$M8FIX/big.bin"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$M8ORIGIN" \
+  -F 'text=too big' -F "files=@$M8FIX/big.bin;type=application/octet-stream" "$M8URL/send")"
+if [ "$code" = "413" ] && [ "$(m8_items)" = "$before" ] && [ "$(m8_cache_entries)" = "0" ]; then
+  ok "oversize multipart → 413, no item, no cache residue"
+else
+  bad "oversize multipart → 413/no residue (code $code, items $(m8_items), cache $(m8_cache_entries))"
+fi
+
+before="$(m8_items)"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$M8ORIGIN" \
+  -H 'Content-Type: multipart/form-data' --data 'not really multipart' "$M8URL/send")"
+if [ "$code" = "400" ] && [ "$(m8_items)" = "$before" ]; then
+  ok "malformed multipart → 400, no item"
+else
+  bad "malformed multipart → 400, no item (code $code, items $(m8_items))"
+fi
+
+before="$(m8_items)"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: http://evil.example:9999' \
+  -F 'text=nope' -F "files=@$M8FIX/notes.txt;type=text/plain" "$M8URL/send")"
+if [ "$code" = "403" ] && [ "$(m8_items)" = "$before" ]; then
+  ok "cross-origin multipart POST → 403, no item"
+else
+  bad "cross-origin multipart POST → 403, no item (code $code, items $(m8_items))"
+fi
+
+printf 'media bytes\n' > "$M8H/media-ok.txt"
+curl -fsS -D "$M8FIX/media.h" -o "$M8FIX/media.out" "$M8URL/media?path=media-ok.txt"
+if cmp -s "$M8H/media-ok.txt" "$M8FIX/media.out" \
+  && grep -qi '^Content-Disposition:' "$M8FIX/media.h"; then
+  ok "/media?path=<rel> → 200 exact bytes + Content-Disposition"
+else
+  bad "/media?path=<rel> → exact bytes + Content-Disposition"
+fi
+if curl -fsS -H 'Range: bytes=0-4' "$M8URL/media?path=media-ok.txt" | grep -qx 'media'; then
+  ok "/media Range bytes=a-b → 206 body slice"
+else
+  bad "/media Range bytes=a-b → body slice"
+fi
+
+printf 'TOP SECRET\n' > "$M8FIX/secret.txt"
+ln -s ../secret.txt "$M8H/escape.txt"
+for bad_path in "../../etc/passwd" "..%2f..%2fetc%2fpasswd" "escape.txt" "missing.txt"; do
+  body="$(curl -s -o - -w '\n%{http_code}' "$M8URL/media?path=$bad_path")"
+  code="$(printf '%s' "$body" | tail -n 1)"
+  if [ "$code" != "404" ] || printf '%s' "$body" | grep -q 'TOP SECRET'; then
+    bad "/media jail refused $bad_path (got $code)"
+    M8MEDIA_BAD=1
+  fi
+done
+[ -z "${M8MEDIA_BAD:-}" ] && ok "/media traversal, symlink escape, missing path → 404 with no secret bytes"
+
+before="$(m8_items)"
+resp="$(curl -fsS -X POST -H "$M8ORIGIN" -F 'text=text only multipart' "$M8URL/send")"
+item="$M8G/.nest/in/$(m8_item_of "$resp")"
+if [ "$(m8_items)" = "$((before + 1))" ] && [ -f "$item" ] && [ ! -d "$item" ] \
+  && grep -q 'text only multipart' "$item"; then
+  ok "multipart text-only → bare .md item, not a directory"
+else
+  bad "multipart text-only → bare .md item (items $(m8_items), item $item)"
+fi
+
+"$WEB_SH" stop >/dev/null 2>&1 || true
+unset WEB_MAX_UPLOAD
 
 # ============================================================================
 echo "== M2 renderer (render.js, pure) =="
