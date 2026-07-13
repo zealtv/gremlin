@@ -213,6 +213,12 @@ if [ -d "$claimed_path" ] && [ -f "$claimed_path/.model" ]; then
   [ -n "$item_model" ] && export GREMLIN_MODEL="$item_model"
 fi
 
+# Snapshot the inbox before the model runs so the chain guard below can tell
+# whether this turn queued a continuation. Only items carrying continue.sh's
+# `-continue-` name marker count — an unrelated bridge message landing
+# mid-turn must not mask an unqueued chain.
+in_before="$(ls -A "$NEST/in" 2>/dev/null || true)"
+
 # Run the model in its own process group so /stop can signal the whole
 # tree (the preset's curl/jq/SDK children too) with a single kill.
 # `set -m` makes the backgrounded command its own pgid (== pid in bash),
@@ -310,6 +316,62 @@ elif [ -z "${reply//[[:space:]]/}" ]; then
   printf '## system — %s\n⚠️ error: empty model reply\n\n' "$iso" >> "$TRANSCRIPT"
 else
   printf '## assistant — %s\n%s\n\n' "$iso" "$reply" >> "$TRANSCRIPT"
+fi
+
+# Chain guard: a reply that carries an unfinished step counter ("step 2/4"
+# with 2 < 4) is a promise of more work — the long-task protocol requires the
+# next step to already be queued via tools/continue.sh before such a turn
+# ends. Fleet transcripts show tenders narrating the next step without
+# queueing it, stranding the chain until a human nudges. If the promise is
+# broken (counter present, inbox unchanged), say so loudly in the transcript
+# and queue one nudge so the chain resumes on the next tend. A nudge is never
+# generated in response to a nudge item — a tender that stalls twice gets the
+# warning turn only, not a loop.
+names_unfinished_step() {
+  printf '%s\n' "$reply" \
+    | grep -Eio 'step[[:space:]]+[0-9]+[[:space:]]*/[[:space:]]*[0-9]+' \
+    | awk '{ gsub(/[^0-9\/]/, ""); split($0, a, "/"); if (a[1] + 0 < a[2] + 0) found = 1 }
+           END { exit found ? 0 : 1 }'
+}
+
+queued_continuation() {
+  # true if a NEW `-continue-` item (continue.sh's name marker) landed in the
+  # inbox during this turn. Unrelated inbound items don't count.
+  local entry
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    case "$entry" in
+      *-continue-*)
+        printf '%s\n' "$in_before" | grep -Fxq -- "$entry" || return 0
+        ;;
+    esac
+  done < <(ls -A "$NEST/in" 2>/dev/null || true)
+  return 1
+}
+
+if [ "${reply//[[:space:]]/}" != "<silent>" ] && names_unfinished_step; then
+  if ! queued_continuation; then
+    iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    case "$name" in
+      *-nudge-*)
+        printf '## system — %s\n⚠️ chain guard: the reply still names an unfinished step with nothing queued; not nudging again — the chain is stalled until someone re-queues it\n\n' "$iso" >> "$TRANSCRIPT"
+        ;;
+      *)
+        printf '## system — %s\n⚠️ chain guard: the reply names an unfinished step but nothing was queued; nudging once\n\n' "$iso" >> "$TRANSCRIPT"
+        nudge_dir="$(mktemp -d)"
+        cat > "$nudge_dir/instructions.md" <<'NUDGE'
+Chain check: your previous reply reported an unfinished step counter
+("step N/M" with N < M) but queued no continuation — the chain would have
+stalled here. If the task is unfinished, queue the next step now with
+./.gremlin/tools/continue.sh and carry on. If it is actually finished, reply
+with a short done line carrying no step counter, or `<silent>`.
+NUDGE
+        "$NESTLING" ingest "$nudge_dir" "$(date -u +%Y-%m-%dT%H-%M-%SZ)-nudge-$RANDOM" >/dev/null \
+          || echo "tend-loop: chain-guard nudge ingest failed" >&2
+        rm -rf "$nudge_dir"
+        ;;
+    esac
+  fi
 fi
 
 # Archive the inbound item into .nest/out/. The reply is already in the

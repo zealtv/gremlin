@@ -55,6 +55,24 @@ set -uo pipefail
 cat >/dev/null   # drain the assembled prompt
 GDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+if [[ -e "$GDIR/.test-fail" ]]; then
+  exit 1
+fi
+
+if [[ -e "$GDIR/.test-promise" ]]; then
+  # A non-compliant tender: narrates an unfinished step, queues nothing.
+  # With the noise flag, an unrelated inbound item lands mid-turn (as a
+  # bridge message would) — it must not count as the queued continuation.
+  if [[ -e "$GDIR/.test-noise" ]]; then
+    noise="$(mktemp)"
+    echo "unrelated bridge message" > "$noise"
+    "$GDIR/.nest/nestling.sh" ingest "$noise" "zz-unrelated.md" >/dev/null
+    rm -f "$noise" "$GDIR/.test-noise"
+  fi
+  echo "PROMISETURN step 1/3 done; ready for step 2"
+  exit 0
+fi
+
 if [[ ! -e "$GDIR/.test-longtask" ]]; then
   echo "SHORTTURN 4"
   exit 0
@@ -65,7 +83,7 @@ step=0
 case "$step" in
   0) echo "STARTTURN on it — syncing the vendored primitives across three repos; I'll report as I go"
      "$GDIR/tools/continue.sh" "step 1/3: inspect the vendored copies, patch drift" >/dev/null ;;
-  1) echo "PROGRESSTURN inspected and patched the three vendored copies; running tests next"
+  1) echo "PROGRESSTURN step 1/3 done — inspected and patched the vendored copies; running tests next"
      "$GDIR/tools/continue.sh" "step 2/3: run the tests, then commit" >/dev/null ;;
   2) echo "PROGRESSTURN tests green; committing and tying off the loom stitch"
      "$GDIR/tools/continue.sh" "step 3/3: commit and tie off" >/dev/null ;;
@@ -137,6 +155,11 @@ first_assistant="$(line_of "$TRANSCRIPT" '^## assistant —')"
 [ -z "$("$NEST/nestling.sh" list)" ] && ok "chain terminated (inbox empty)" \
   || bad "inbox not empty after final turn"
 
+# A compliant chain — unfinished counters in replies, but every one queued —
+# never trips the chain guard.
+[ "$(count_of "$TRANSCRIPT" 'chain guard')" -eq 0 ] && ok "chain guard silent on a compliant chain" \
+  || bad "chain guard fired on a compliant chain"
+
 # ============================================================================
 echo "== a short task stays a single quiet turn =="
 
@@ -151,6 +174,70 @@ turns="$(count_of "$TRANSCRIPT" '^## assistant —')"
   || bad "short task emitted a long-task start turn"
 [ -z "$("$NEST/nestling.sh" list)" ] && ok "short task did not re-queue itself" \
   || bad "short task left work in the inbox"
+
+# ============================================================================
+echo "== a narrated-but-unqueued step gets one loud nudge, never a loop =="
+
+reset_nest
+rm -f "$GREMLIN/.test-longtask"
+touch "$GREMLIN/.test-promise"
+queue stall-me "please fix the dashboard styles"
+drain
+rm -f "$GREMLIN/.test-promise"
+
+# Tend 1: reply names "step 1/3" with nothing queued -> warn + one nudge item.
+# Tend 2: the nudge is answered with the same stalled reply -> warn only.
+[ "$(count_of "$TRANSCRIPT" 'nudging once')" -eq 1 ] && ok "guard nudged exactly once" \
+  || bad "expected exactly one nudge, got $(count_of "$TRANSCRIPT" 'nudging once')"
+[ "$(count_of "$TRANSCRIPT" 'not nudging again')" -eq 1 ] && ok "second stall warns without a new nudge" \
+  || bad "expected one stalled-again warning, got $(count_of "$TRANSCRIPT" 'not nudging again')"
+[ "$(count_of "$TRANSCRIPT" '^## user — ')" -eq 2 ] && ok "nudge landed as the second inbound item" \
+  || bad "expected 2 user turns (ask + nudge), got $(count_of "$TRANSCRIPT" '^## user — ')"
+[ -z "$("$NEST/nestling.sh" list)" ] && ok "no nudge loop (inbox empty)" \
+  || bad "inbox not empty — nudge loop suspected"
+
+# ============================================================================
+echo "== unrelated mid-turn traffic does not mask a broken promise =="
+
+reset_nest
+touch "$GREMLIN/.test-promise" "$GREMLIN/.test-noise"
+queue stall-me-2 "please fix the dashboard styles"
+"$GREMLIN/bin/tend-loop.sh" >/dev/null 2>&1
+rm -f "$GREMLIN/.test-promise"
+
+[ "$(count_of "$TRANSCRIPT" 'nudging once')" -eq 1 ] && ok "guard nudged despite unrelated inbound item" \
+  || bad "unrelated inbound item masked the broken promise"
+ls "$NEST/in" | grep -q 'zz-unrelated' && ok "unrelated item still queued untouched" \
+  || bad "unrelated item missing from inbox"
+ls "$NEST/in" | grep -q -- '-nudge-' && ok "nudge item queued alongside it" \
+  || bad "no nudge item in inbox"
+reset_nest
+
+# ============================================================================
+echo "== a continuation survives a model failure instead of being dropped =="
+
+reset_nest
+"$GREMLIN/tools/continue.sh" "step 2/3: run the tests, then commit" >/dev/null
+touch "$GREMLIN/.test-fail"
+"$GREMLIN/bin/tend-loop.sh" >/dev/null 2>&1
+rm -f "$GREMLIN/.test-fail"
+
+# The failing tend must re-queue the recoverable continuation, not drop it.
+requeued="$("$NEST/nestling.sh" list)"
+[ -n "$requeued" ] && ok "continuation re-queued after model failure" \
+  || bad "continuation was dropped by a model failure"
+[ -f "$NEST/in/$requeued/.attempts" ] && [ "$(cat "$NEST/in/$requeued/.attempts")" = "1" ] \
+  && ok "retry state recorded (.attempts = 1)" \
+  || bad "missing or wrong .attempts on the re-queued continuation"
+[ "$(count_of "$TRANSCRIPT" '⚠️ error')" -ge 1 ] && ok "failure surfaced loudly in the transcript" \
+  || bad "model failure left no error turn"
+
+# And once the model recovers, the same continuation completes normally.
+"$GREMLIN/bin/tend-loop.sh" >/dev/null 2>&1
+[ -z "$("$NEST/nestling.sh" list)" ] && ok "recovered continuation completed" \
+  || bad "continuation still queued after recovery"
+[ "$(count_of "$TRANSCRIPT" 'SHORTTURN')" -ge 1 ] && ok "recovered tend produced a reply" \
+  || bad "no assistant reply after recovery"
 
 # ============================================================================
 printf '\n%d passed, %d failed\n' "$pass" "$fail"

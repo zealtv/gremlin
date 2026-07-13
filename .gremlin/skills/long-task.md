@@ -72,6 +72,13 @@ quick lookup — just reply. Don't wrap trivia in ceremony.
    step counter (e.g. `3/5`) in the note so you — and anyone watching — can see
    the chain's shape and where it ends.
 
+   **Saying the next step is not queueing it.** Never end a turn whose reply
+   names further work ("ready for step 3", "next I'll rebuild") without having
+   already run `continue.sh` in that turn. The tend loop cross-checks: a reply
+   carrying an unfinished step counter with nothing newly queued gets a loud
+   `## system` warning and a one-shot nudge — don't rely on the net; queue
+   before you speak.
+
 4. **To finish, just reply without calling `continue.sh`.** No re-queue = the
    chain stops. End with a brief done line (a `✅` is fine).
 
