@@ -34,6 +34,28 @@ The host folder is the agent's outside identity and working directory. The
 `.gremlin/` folder defines how that agent behaves, and `bin/run.sh` executes
 the loops from the host folder rather than from inside `.gremlin/`.
 
+## Placement
+
+*A primitive installation is a self-named dotdir bundling its script and its
+data, living at the root of the host directory whose work it records. A thing
+is canonical-delivered **iff** it lives inside `.gremlin/`.* Three tiers:
+
+- **Tier 1 — agent scope.** `.gremlin/` bundles the five primitives (`.loom`,
+  `.lore`, `.glean`, `.nest`, `.groundhog`) as the gremlin's private working
+  set. Delivered by install, overlaid by `/update`; instance data protected by
+  the update exclude list.
+- **Tier 2 — gremlin-produced artifacts.** `.dash/`, `library/`, and similar
+  siblings of `.gremlin` at the host root. Never delivered, never overlaid;
+  the web bridge serves them. Note: `.dash` wears a dotdir like a primitive
+  but is Tier 2 *content*, not a primitive — the false symmetry is a known
+  confusion.
+- **Tier 3 — higher-scope instances.** The same primitive tools installed at
+  broader hosts (a fleet root, a workspace repo). Never inside any
+  `.gremlin/`, so never overlaid.
+
+A primitive dotdir appearing as a *sibling* of `.gremlin` at the gremlin's own
+host dir is drift, not a tier.
+
 ## Prompt Inputs
 
 The tender builds each prompt from:

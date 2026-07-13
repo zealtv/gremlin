@@ -61,9 +61,11 @@ or remote `<img>` **will be blocked**. Two ways to show external media:
 **Location — inside the gremlin.** The tool lives at
 `.gremlin/tools/build-<name>-index.sh`, alongside the gremlin's other tools —
 **not** at a bare host-level `tools/`. The host dir's gremlin-owned state is all
-high-level **dot-dirs** (`.gremlin`, `.lore`, `.dash`) so it never collides with
-the user's own files; a plain `tools/` folder there breaks that pattern and gets
-lost. Only the view and its regenerable cache are host-level (`.dash/<name>/`);
+high-level **dot-dirs** (`.gremlin`, plus gremlin-produced artifact dirs like
+`.dash`) so it never collides with the user's own files; the primitives
+(`.loom`, `.lore`, `.glean`, `.nest`, `.groundhog`) live *inside* `.gremlin/`,
+never at host level (see the Placement section in `docs/protocol.md`). A plain
+`tools/` folder at host level breaks that pattern and gets lost. Only the view and its regenerable cache are host-level (`.dash/<name>/`);
 the tool is gremlin-owned code, so it lives in `.gremlin/tools/`. Bespoke tools
 there survive `/update` (it overlays, never deletes — the gremlin's existing app
 tools prove it).
