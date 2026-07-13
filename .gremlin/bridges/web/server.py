@@ -21,6 +21,7 @@ import queue
 import re
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -900,7 +901,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/identity":
             # The gremlin's identifier is its host directory's name.
             self._send_json({"host": os.path.basename(os.path.realpath(HOST_DIR)),
-                             "path": os.path.realpath(HOST_DIR)})
+                             "path": os.path.realpath(HOST_DIR),
+                             "hostname": socket.gethostname()})
         elif path == "/api/commands":
             self._send_json(build_commands())
         elif path == "/api/primitives":

@@ -73,6 +73,7 @@ pre { max-width: 100%; overflow-x: auto; }
 }
 
 .title { font-weight: 600; font-size: 18px; }
+.title:hover { opacity: 0.75; }
 
 .live {
   display: flex;

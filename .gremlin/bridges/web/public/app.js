@@ -159,34 +159,42 @@
   }
 
   // --- SSE transport (the primary path) ---------------------------------
-  function startSSE() {
-    var es = new EventSource("/events");
-    es.addEventListener("open", function () {
+  // `es` and `pollCursor` live in the outer scope (not just inside
+  // startSSE/startPolling) so the header click-to-refresh handler below can
+  // reopen the connection / rewind the cursor without restructuring either
+  // transport.
+  var es = null;
+  function attachSSEHandlers(conn) {
+    conn.addEventListener("open", function () {
       setLive("up", "live");
     });
-    es.addEventListener("reset", function () {
+    conn.addEventListener("reset", function () {
       // A fresh connection (incl. auto-reconnect) replays the backfill, so
       // clear first to re-render cleanly rather than duplicate.
       clear();
       lastResetAt = Date.now();
     });
-    es.addEventListener("turn", function (e) {
+    conn.addEventListener("turn", function (e) {
       var turn = JSON.parse(e.data);
       renderTurn(turn);
       badgeTurn(turn);
     });
-    es.addEventListener("error", function () {
+    conn.addEventListener("error", function () {
       setLive("down", "reconnecting…");
       // EventSource reconnects on its own; nothing to do.
     });
   }
+  function startSSE() {
+    es = new EventSource("/events");
+    attachSSEHandlers(es);
+  }
 
   // --- short-poll fallback (no EventSource available) -------------------
+  var pollCursor = 0;
   function startPolling() {
-    var cursor = 0;
     var first = true;
     function tick() {
-      fetch("/poll?cursor=" + cursor)
+      fetch("/poll?cursor=" + pollCursor)
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (first) { clear(); first = false; }
@@ -195,7 +203,7 @@
             renderTurn(turn);
             badgeTurn(turn);
           });
-          cursor = data.cursor;
+          pollCursor = data.cursor;
         })
         .catch(function () { setLive("down", "reconnecting…"); })
         .then(function () { setTimeout(tick, 1500); });
@@ -1142,23 +1150,54 @@
     if (a) { e.preventDefault(); openFinding(a.getAttribute("data-id")); }
   });
 
-  // Header title = the gremlin's identifier (its host directory name).
+  // Header title = the gremlin's identifier, name@host (its host directory
+  // name + the machine's hostname; falls back to just the name).
   var hostEl = document.getElementById("host");
-  if (hostEl) {
+  function loadIdentity() {
+    if (!hostEl) return;
     fetch("/api/identity").then(function (r) { return r.json(); })
       .then(function (d) {
         if (d && d.host) {
-          hostEl.textContent = d.host;
+          var label = d.hostname ? d.host + "@" + d.hostname : d.host;
+          hostEl.textContent = label;
           hostEl.title = d.path || "";
-          document.title = d.host;
+          document.title = label;
         }
       }).catch(function () {});
   }
+  loadIdentity();
 
-  if (typeof window.EventSource !== "undefined") {
+  var sseMode = typeof window.EventSource !== "undefined";
+  if (sseMode) {
     startSSE();
   } else {
     startPolling();
+  }
+
+  // Discreet click-to-refresh (stitch 66): the header name is not just a
+  // label, it re-pulls transcript/identity without a full page reload. SSE
+  // mode closes and reopens the connection (the server replays the backfill
+  // after `reset`, which already re-renders cleanly); poll mode rewinds the
+  // cursor and clears the log so the next tick starts fresh.
+  if (hostEl) {
+    hostEl.style.cursor = "pointer";
+    hostEl.setAttribute("role", "button");
+    hostEl.setAttribute("aria-label", "Refresh");
+    hostEl.addEventListener("click", function () {
+      setLive("up", "refreshing…");
+      loadIdentity();
+      if (sseMode) {
+        if (es) es.close();
+        es = new EventSource("/events");
+        attachSSEHandlers(es);
+      } else {
+        pollCursor = 0;
+        clear();
+      }
+      var activeTab = document.querySelector(".tab.active");
+      var dv = activeTab && activeTab.getAttribute("data-view");
+      if (dv && dv !== "chat") showView(dv);
+    });
   }
 
   // Chat is the default view (HTML), but normalize through showView so the
