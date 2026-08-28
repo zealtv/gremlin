@@ -76,6 +76,24 @@ A primitive is missing, not vendored: if a gremlin needs `.loom/` and the host
 has none, `doctor` fails loudly with that primitive's own install command.
 There is no fallback to a private copy.
 
+## The map
+
+`AGENTS.md` at the host root is how a cold agent — of any runtime, not just
+this one — learns the shape of the repository. Its primitives section is
+**derived, not hand-maintained**: `bin/index-primitives.sh` rewrites the block
+between its markers from what is actually installed on disk, and `doctor` runs
+it. Everything outside the markers is hand-written and never touched, so the
+file is a generated index with a human preamble.
+
+`CLAUDE.md` is a symlink to `AGENTS.md`, created only when nothing of that name
+exists. `AGENTS.md` is the runtime-agnostic name and matches the family's
+model-agnostic stance; a real hand-written `CLAUDE.md` is left alone and told
+about, never clobbered. Two copies of a map drift; a symlink cannot.
+
+The same list is written into `.gremlin/PRIMITIVES.md` and broadcast to the
+gremlin through `context/system/primitives.md`, so the tender and the human
+read the same map from the same source.
+
 ## Prompt Inputs
 
 The tender builds each prompt from:

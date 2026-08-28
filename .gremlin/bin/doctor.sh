@@ -55,10 +55,12 @@ for f in "$SYSTEM_DIR"/*.md; do
 done
 
 # Regenerate the primitives map from disk before linking it: generated, so
-# it cannot rot the way hand-written prose does.
+# it cannot rot the way hand-written prose does. This also refreshes the
+# generated block in the host's AGENTS.md — the map a cold agent of any
+# runtime reads to orient. Hand-written prose around the block is untouched.
 if [ -x "$GREMLIN_DIR/bin/index-primitives.sh" ]; then
   "$GREMLIN_DIR/bin/index-primitives.sh" >/dev/null
-  echo "ok PRIMITIVES.md (regenerated)"
+  echo "ok PRIMITIVES.md + AGENTS.md (regenerated)"
 else
   echo "‼️  bin/index-primitives.sh MISSING — run /update to restore it"
 fi

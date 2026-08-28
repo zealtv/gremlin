@@ -53,7 +53,8 @@ Run `/help` for commands.
 
 ```
 your-repo/
-├── AGENTS.md / CLAUDE.md   the map: generated primitives block + preamble
+├── AGENTS.md               the map: generated primitives block + your preamble
+├── CLAUDE.md               symlink to AGENTS.md, for runtimes that look for it
 ├── .nest/                  inbox / claimed / completed items
 ├── .loom/                  finite work: threads and stitches
 ├── .lore/                  durable, dated records
@@ -75,6 +76,19 @@ The five primitives live at the host root, not inside `.gremlin/`. A gremlin
 is the optional tender of a folder: it sits beside them and acts on them, the
 same files a human acts on. A primitive dotdir still inside `.gremlin/` is
 legacy placement — `gremlin doctor` says so.
+
+### The map is generated
+
+`.gremlin/bin/index-primitives.sh` writes the primitives section of the host's
+`AGENTS.md` between markers, from what is installed on disk — a reading order,
+what each dotdir owns, and one line per primitive taken from its own README.
+Prose outside the markers is yours and is never touched. `gremlin doctor` runs
+the generator, so the map cannot rot; it also works on a repository with no
+gremlin at all:
+
+```sh
+.gremlin/bin/index-primitives.sh [host-dir]
+```
 
 ### Migrating an existing gremlin
 
