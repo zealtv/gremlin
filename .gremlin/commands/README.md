@@ -1,8 +1,9 @@
 # commands
 
-System commands for the user — invoked via a bridge with a leading `/`.
-`/foo bar` in the TUI, or `gremlin ask /foo bar` from a script, runs
-`commands/foo.sh bar` and never reaches the LLM.
+System commands for the user. A bridge invokes them with a leading slash
+(`/foo bar`); a shell uses the direct wrapper surface (`gremlin foo bar`). Both
+run `commands/foo.sh bar` and never reach the LLM. `gremlin prompt` does not
+dispatch slash commands: prompt text always remains conversational input.
 
 Parallel to `tools/`, but for a different audience: tools are for the gremlin, commands are for you. Commands run with your shell privileges; they're not allowlist-constrained.
 

@@ -28,11 +28,14 @@ Use the TUI for normal interactive work:
 
 The TUI shows transcript history, sends submitted messages into `.nest/in/`, and renders assistant turns as they land in `transcript.md`.
 
-Use `gremlin ask` for one-shot prompts, shell scripts, and direct slash commands:
+Use `gremlin prompt` for one-shot conversational turns from a shell. Add
+`--read-only` when the current turn must inspect and answer without changing
+files or external state:
 
 ```sh
-./.gremlin/gremlin ask "summarize this folder"
-./.gremlin/gremlin ask /help
+./.gremlin/gremlin prompt "summarize this folder"
+./.gremlin/gremlin prompt --read-only "review this implementation"
+./.gremlin/gremlin help
 ```
 
 Use `/new` at a real session boundary: it starts a clean conversation, files the old one away, and reviews it for anything worth remembering. Use `/discard` for throwaway sessions that should be archived but not reviewed for memory.
@@ -69,13 +72,15 @@ More detail: `bridges/telegram/README.md`.
 ./.gremlin/gremlin wake      # start the loops
 ./.gremlin/gremlin sleep     # stop them
 ./.gremlin/gremlin tend      # work the nest once, now
-./.gremlin/gremlin ask "…"   # you -> gremlin, and wait for the answer
-./.gremlin/gremlin tell "…"  # gremlin -> you, unprompted
+./.gremlin/gremlin prompt "…" # submit one turn and wait for its response
+./.gremlin/gremlin prompt --read-only "…"
 ./.gremlin/gremlin status    # awake or asleep?
 ```
 
-`start`, `stop` and `say` were renamed to `wake`, `sleep` and `ask`. The old
-words are gone rather than aliased, and say so when you use them.
+`start`, `stop`, `say`, `ask`, and `tell` were replaced by `wake`, `sleep`,
+and `prompt`. The old words are gone rather than aliased, and say so when you
+use them. Shell commands use the direct surface (`gremlin model fast`,
+`gremlin update`); slash syntax belongs to interactive bridges.
 
 ## Customize
 
@@ -139,7 +144,7 @@ From a script or shell:
 Keep personal state out of this repo.
 
 - Run and personalize a copy outside the repo.
-- Never run `say` or the TUI against the repo's reference `.gremlin/`.
+- Never run `prompt` or the TUI against the repo's reference `.gremlin/`.
 - Promote personal-copy ideas back by rewriting generic versions in canonical.
 - Use `.nest/README.md` and `.groundhog/README.md` to
   understand the nested protocols.

@@ -21,7 +21,7 @@ exactly why the invocation lives per-preset.
 ## File name = alias
 
 `models/fast.sh` -> alias `fast`. Switch at runtime with
-`/model fast` in the TUI, or `gremlin ask /model fast` from a script.
+`/model fast` in the TUI, or `gremlin model fast` from a script.
 `/model` lists every `*.sh` in this directory,
 marking the active one with `*`.
 

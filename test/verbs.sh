@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verbs.sh — wake, sleep, tend, ask, tell: the verb surface, and the deliberate
+# verbs.sh — wake, sleep, tend, prompt: the verb surface, and the deliberate
 # absence of the ones they replaced.
 #
 # Usage: ./test/verbs.sh
@@ -32,16 +32,19 @@ done
 "$HOST/.glean/glean.sh" index >/dev/null 2>&1
 "$GREMLIN/bin/doctor.sh" >/dev/null 2>&1
 
-# A deterministic model: the reply is the prompt's last line, prefixed.
+# A deterministic model: retain the complete assembled prompt for contract
+# assertions, then return a stable response.
 cat > "$GREMLIN/models/echo.sh" <<'EOF'
 #!/usr/bin/env bash
-tail -n 1
+GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cat > "$GREMLIN_DIR/prompt.seen"
+printf 'model response\n'
 EOF
 chmod +x "$GREMLIN/models/echo.sh"
 echo echo > "$GREMLIN/.model"
 
 # --- the renamed verbs are gone, and say so ---------------------------------
-for pair in "start wake" "stop sleep" "say ask"; do
+for pair in "start wake" "stop sleep" "say prompt" "ask prompt" "tell prompt"; do
   set -- $pair
   out="$("$G" "$1" 2>&1)"; rc=$?
   [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "is now .$2" \
@@ -87,34 +90,57 @@ grep -q 'the item body' "$GREMLIN/transcript.md" \
 [ -z "$(ls -A "$HOST/.nest/in" 2>/dev/null)" ] && ok "tend emptied the inbox" \
   || bad "the item is still queued after tend"
 
-# --- ask: inbound, and waits --------------------------------------------------
-# ask waits for the answer, so someone has to be awake to give it.
+# --- prompt: one conversational turn, and wait -------------------------------
+# prompt waits for the response, so someone has to be awake to give it.
 "$G" wake >/dev/null 2>&1
 sleep 1
-reply="$("$G" ask "a question" 2>/dev/null | tail -n 1)"
-[ -n "$reply" ] && ok "ask returns the answer it waited for" || bad "ask returned nothing"
-"$G" ask "/name" >/dev/null 2>&1 && ok "ask still dispatches slash commands" \
-  || bad "ask broke slash dispatch"
+reply="$("$G" prompt "a question" 2>/dev/null | tail -n 1)"
+[ "$reply" = "model response" ] && ok "prompt returns the response it waited for" \
+  || bad "prompt returned the wrong response: [$reply]"
+grep -q 'a question' "$GREMLIN/prompt.seen" \
+  && ok "prompt reaches the model" || bad "prompt did not reach the model"
+grep -q '^## current-turn contract$' "$GREMLIN/prompt.seen" \
+  && bad "ordinary prompt unexpectedly carried a contract" \
+  || ok "ordinary prompt remains unrestricted"
+
+"$G" prompt --read-only "review this" >/dev/null 2>&1
+grep -q '^## current-turn contract$' "$GREMLIN/prompt.seen" \
+  && grep -q 'This turn is read-only' "$GREMLIN/prompt.seen" \
+  && ok "--read-only reaches the model as a scoped contract" \
+  || bad "--read-only contract did not reach the model"
+grep -q 'gremlin-prompt-contract' "$GREMLIN/transcript.md" \
+  && bad "private prompt metadata leaked into the transcript" \
+  || ok "private prompt metadata stays out of the transcript"
+grep -q 'review this' "$GREMLIN/transcript.md" \
+  && ok "read-only prompt records the human's actual words" \
+  || bad "read-only prompt body is missing from the transcript"
+
+echo "from stdin" | "$G" prompt >/dev/null 2>&1
+grep -q 'from stdin' "$GREMLIN/transcript.md" \
+  && ok "prompt reads stdin" || bad "prompt ignored stdin"
+"$G" prompt "" >/dev/null 2>&1 \
+  && bad "prompt accepted an empty message" || ok "prompt refuses an empty message"
+
+# Slash syntax belongs to interactive bridges; shell commands use the direct
+# wrapper surface and never masquerade as conversational prompts.
+"$G" model echo >/dev/null 2>&1 \
+  && ok "commands dispatch directly from the wrapper" \
+  || bad "direct command dispatch failed"
+"$G" prompt "/name" >/dev/null 2>&1
+grep -q '^/name$' "$GREMLIN/prompt.seen" \
+  && ok "prompt treats slash text as conversation" \
+  || bad "prompt still dispatched slash text as a command"
 "$G" sleep >/dev/null 2>&1
 
-# --- tell: outbound, unprompted ----------------------------------------------
-"$G" tell "the backup finished" >/dev/null
-tail -n 5 "$GREMLIN/transcript.md" | grep -q 'the backup finished' \
-  && ok "tell lands in the transcript" || bad "tell did not reach the transcript"
-tail -n 5 "$GREMLIN/transcript.md" | grep -q '^## assistant — ' \
-  && ok "tell speaks as the assistant, so bridges fan it out" \
-  || bad "tell did not write an assistant turn"
-"$G" tell "" >/dev/null 2>&1 && bad "tell accepted an empty message" \
-  || ok "tell refuses to say nothing"
-echo "from stdin" | "$G" tell >/dev/null
-tail -n 3 "$GREMLIN/transcript.md" | grep -q 'from stdin' && ok "tell reads stdin" \
-  || bad "tell ignored stdin"
+[ ! -e "$GREMLIN/bin/say.sh" ] && [ ! -e "$GREMLIN/bin/tell.sh" ] \
+  && ok "obsolete say/tell implementations are gone" \
+  || bad "an obsolete say/tell implementation remains"
 
 # --- help teaches the new surface --------------------------------------------
 help="$("$G" help 2>&1)"
-printf '%s' "$help" | grep -q 'wake' && printf '%s' "$help" | grep -q 'tell' \
+printf '%s' "$help" | grep -q 'wake' && printf '%s' "$help" | grep -q 'prompt' \
   && ok "help lists the new verbs" || bad "help does not list the new verbs"
-printf '%s' "$help" | grep -qE '^  (start|say)$' \
+printf '%s' "$help" | grep -qE '^  (start|say|ask|tell)$' \
   && bad "help still advertises a removed verb" || ok "help does not advertise removed verbs"
 
 printf '\npassed: %d, failed: %d\n' "$pass" "$fail"

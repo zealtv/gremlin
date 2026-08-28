@@ -144,6 +144,16 @@ else
   body="$(cat "$claimed_path")"
 fi
 
+# `prompt --read-only` prefixes a private transport marker. Remove it before
+# the user turn enters the transcript or memory recall, and retain only the
+# scoped contract that will be appended to the assembled model prompt below.
+prompt_contract=""
+read_only_marker=$'gremlin-prompt-contract: read-only\n\n'
+if [[ "$body" == "$read_only_marker"* ]]; then
+  prompt_contract="read-only"
+  body="${body#"$read_only_marker"}"
+fi
+
 # Tender owns transcript writes for both turns. Bridges only drop into
 # .nest/in/; the user turn lands here at claim time.
 iso_user="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -201,6 +211,15 @@ trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$timeout_flag" "$PIDFILE"'
   if [ -s "$TRANSCRIPT" ]; then
     cat "$TRANSCRIPT"
     echo
+  fi
+  if [ "$prompt_contract" = "read-only" ]; then
+    cat <<'EOF'
+## current-turn contract
+
+This turn is read-only. Answer from information you can inspect, and do not
+modify files or external state. This is an instruction in the prompt, not an
+enforced sandbox; tools may still be technically capable of making changes.
+EOF
   fi
 } > "$prompt_file"
 
@@ -300,7 +319,7 @@ reply="$(cat "$reply_file")"
 iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Transcript format: `## <role> — <iso>` header, body, single blank line.
-# One `>>` per turn so concurrent appends with `say` don't interleave.
+# One `>>` per turn so concurrent transcript appends don't interleave.
 #
 # A reply of exactly `<silent>` is a stated sentinel: the gremlin chose not
 # to speak. Complete the item but write no turn. Checked before the empty

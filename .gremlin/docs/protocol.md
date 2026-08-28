@@ -105,20 +105,23 @@ There is no fallback to a private copy.
 ```
 wake     start the loops                    sleep    stop them
 tend     work the nest once, now            status   awake or asleep?
-ask      you -> gremlin, and wait           tell     gremlin -> you, unprompted
+prompt   submit one turn and wait for its response
 ```
 
 Plus `restart`, `tui`, `help`, every `commands/<name>.sh` as `/name`, and every
 bridge by its own name.
 
-**`ask` and `tell` are a pair, not two conveniences.** `ask` is inbound and
-waits for an answer; `tell` is outbound and expects none. Designing them as a
-symmetric pair is what keeps a moot and a multiplexer tractable later: gremlin
-→ gremlin traffic is the same pair pointed somewhere else, rather than a third
-mechanism. `tell` appends an assistant turn to the transcript and stops there,
-because the transcript is the source of truth and every bridge already fans out
-from it by byte cursor — a `tell` reaches Telegram, the web view and the TUI
-without any of them knowing the verb exists.
+**`prompt` is the one-shot conversational verb.** It accepts either a question
+or an instruction, writes one nest item, waits for the next assistant turn,
+and prints its body. `prompt --read-only` adds a contract at the end of the
+assembled model prompt for that turn: inspect and answer, but do not change
+files or external state. This is prompt guidance, not an enforced sandbox;
+the selected model harness still determines which tools are technically
+available.
+
+Slash commands are not prompts. Interactive bridges dispatch `/name`,
+`/update`, and their peers through `bin/slash.sh`; shell callers use the direct
+wrapper surface (`gremlin name`, `gremlin update`).
 
 **`wake` is the daemon, not a task.** It backgrounds `bin/run.sh` exactly as
 `start` did; `sleep` stops it. The per-task shape the brain dump gestured at —
@@ -127,8 +130,8 @@ the foreground, whether or not the gremlin is awake. Making `tend` addressable
 is the real gain here; it was internal (`bin/tend-loop.sh`) and unreachable
 before.
 
-**The old verbs are gone, not aliased.** `start`, `stop` and `say` fail with
-the new name and a non-zero exit. Deliberately loud rather than silently
+**The old verbs are gone, not aliased.** `start`, `stop`, `say`, `ask`, and
+`tell` fail with the new name and a non-zero exit. Deliberately loud rather than silently
 forwarding, for one concrete reason: `commands/stop.sh` exists — `/stop` aborts
 an in-flight model call — so a `stop` left to fall through to the command
 dispatcher would quietly do something *different* from what muscle memory
@@ -247,8 +250,10 @@ The TUI bridge is the normal interactive surface:
 ./.gremlin/gremlin tui
 ```
 
-`gremlin ask` is the one-shot and scripting surface. It writes one item, waits
-for the next assistant turn, and prints it.
+`gremlin prompt` is the one-shot and scripting surface. It writes one item,
+waits for the next assistant turn, and prints it. It has no reply correlation
+identifier: if concurrent work appends another assistant turn first, that turn
+is what the waiting process sees.
 
 ## Skills And Tools
 

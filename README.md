@@ -35,9 +35,10 @@ Wake it and open the TUI:
 .gremlin/gremlin tui
 ```
 
-The verbs are `wake`, `sleep`, `tend`, `ask`, `tell` — plus `status`,
-`restart` and `tui`. `ask` is you → gremlin and waits for the reply; `tell` is
-the gremlin → you, unprompted.
+The verbs are `wake`, `sleep`, `tend`, and `prompt` — plus `status`, `restart`,
+and `tui`. `prompt` submits one conversational turn and waits for its response;
+`prompt --read-only` asks the model to inspect and answer without changing
+files or external state.
 
 Run `/help` for commands.
 
@@ -56,8 +57,8 @@ Run `/help` for commands.
 - **The agent is a folder.** Copy it, fork it, version it, delete it. There is no hidden state.
 - **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, model presets, transcripts, memory, and queues.
 - **Bring your own model.** A model preset is just `stdin → stdout`. Swap models with `/model <alias>`. Non-LLM scripts work too.
-- **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin ask` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
-- **Ask and tell.** `ask` is you → gremlin and waits; `tell` is gremlin → you, unprompted. One symmetric pair, so gremlin → gremlin traffic is the same shape.
+- **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin prompt` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
+- **One prompt verb.** Questions and instructions use the same one-shot exchange. Read-only intent is an explicit option, not a guess based on conversational wording.
 - **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.nest/in/`.
 - **Scheduled and persistent.** Background tend + tick loops give you reminders, nightly summaries, and self-initiated work without a separate scheduler.
 - **Append-only transcript.** `transcript.md` is the source of truth. Bridges tail it. Debugging is `cat`.

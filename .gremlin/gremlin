@@ -24,8 +24,8 @@ usage:
   ./.gremlin/gremlin status                   awake or asleep?
   ./.gremlin/gremlin restart                  sleep, then wake
   ./.gremlin/gremlin tend                     work the nest once, now
-  ./.gremlin/gremlin ask <message|/command>   you -> gremlin, and wait
-  ./.gremlin/gremlin tell <message>           gremlin -> you, unprompted
+  ./.gremlin/gremlin prompt [--read-only] <message>
+                                               submit a turn and wait
   ./.gremlin/gremlin tui
   ./.gremlin/gremlin <command> [args...]
   ./.gremlin/gremlin <bridge> <verb> [args...]
@@ -133,7 +133,7 @@ cmd_help() {
   usage
   echo
   echo "built-ins:"
-  printf '  %s\n' wake sleep status restart tend ask tell tui help
+  printf '  %s\n' wake sleep status restart tend prompt tui help
 
   echo
   echo "commands:"
@@ -182,15 +182,14 @@ case "$verb" in
   tend)
     cmd_tend "$@"
     ;;
-  ask)
-    exec "$GREMLIN_DIR/bin/say.sh" "$@"
-    ;;
-  tell)
-    exec "$GREMLIN_DIR/bin/tell.sh" "$@"
+  prompt)
+    exec "$GREMLIN_DIR/bin/prompt.sh" "$@"
     ;;
   start)  renamed start wake ;;
   stop)   renamed stop sleep ;;
-  say)    renamed say ask "$*" ;;
+  say)    renamed say prompt "$*" ;;
+  ask)    renamed ask prompt "$*" ;;
+  tell)   renamed tell prompt "$*" ;;
   tui)
     exec "$GREMLIN_DIR/bridges/tui/tui.sh" "$@"
     ;;

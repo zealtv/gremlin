@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# say — local one-shot CLI bridge.
+# prompt — submit one conversational turn and wait for its response.
 #
 # Usage:
-#   ./.gremlin/bin/say.sh "your message"   # send + wait for reply (default)
-#   echo "..." | ./.gremlin/bin/say.sh     # same, message via stdin
-#   ./.gremlin/bin/say.sh /foo bar         # slash dispatch: runs commands/foo.sh bar
+#   ./.gremlin/bin/prompt.sh "your message"
+#   ./.gremlin/bin/prompt.sh --read-only "review this"
+#   echo "..." | ./.gremlin/bin/prompt.sh
 #
-# Send-and-wait writes the message into .nest/in/<ts>.md, then tails
-# transcript.md until the next `## assistant —` turn appears past the
-# submission point and prints its body. Slash messages dispatch directly
-# to commands/<cmd>.sh and bypass both the LLM and the nest.
+# The read-only option is prompt-level guidance, not an enforced sandbox.
+# Slash commands do not dispatch here; shell callers use the gremlin wrapper's
+# direct command surface (`gremlin model fast`, `gremlin update`, and so on).
 
 set -euo pipefail
 
@@ -25,26 +24,41 @@ TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 
 TIMEOUT_SECS=60
 POLL_SECS=0.5
+READ_ONLY_MARKER="gremlin-prompt-contract: read-only"
 
-# --- slash command dispatch --------------------------------------------
-if [ "$#" -gt 0 ] && [ "${1#/}" != "$1" ]; then
-  exec "$GREMLIN_DIR/bin/slash.sh" "$@"
-fi
+usage() {
+  echo "usage: $0 [--read-only] <message>   (or pipe via stdin)" >&2
+}
 
-# --- send + wait (default) ---------------------------------------------
+read_only=0
+case "${1:-}" in
+  --read-only)
+    read_only=1
+    shift
+    ;;
+  --help|-h)
+    usage
+    exit 0
+    ;;
+  --)
+    shift
+    ;;
+esac
+
 if [ "$#" -gt 0 ]; then
   msg="$*"
 else
   msg="$(cat)"
 fi
 
-if [ -z "$msg" ]; then
-  echo "usage: $0 <message>   (or pipe via stdin)" >&2
+if [ -z "${msg//[[:space:]]/}" ]; then
+  usage
   exit 2
 fi
 
-# Snapshot transcript size before submission so we can read only what's
-# appended after this message lands.
+# Snapshot transcript size before submission so we inspect only turns that
+# land after this prompt. The transcript does not currently carry correlation
+# ids, so this remains a first-subsequent-assistant-turn wait.
 if [ -f "$TRANSCRIPT" ]; then
   start_size=$(wc -c < "$TRANSCRIPT" | tr -d ' ')
 else
@@ -54,7 +68,11 @@ fi
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 fname_ts="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
-printf '%s\n' "$msg" > "$tmp"
+if [ "$read_only" -eq 1 ]; then
+  printf '%s\n\n%s\n' "$READ_ONLY_MARKER" "$msg" > "$tmp"
+else
+  printf '%s\n' "$msg" > "$tmp"
+fi
 "$NESTLING" ingest "$tmp" "$fname_ts.md" >/dev/null
 
 deadline=$(( $(date +%s) + TIMEOUT_SECS ))
@@ -77,5 +95,5 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
   sleep "$POLL_SECS"
 done
 
-echo "say: no reply within ${TIMEOUT_SECS}s" >&2
+echo "prompt: no response within ${TIMEOUT_SECS}s" >&2
 exit 1

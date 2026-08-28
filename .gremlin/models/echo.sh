@@ -9,7 +9,7 @@
 # anything else that needs a deterministic reply without a model.
 #
 # Switch to it with `/model echo` in the TUI, or
-# `gremlin ask /model echo` from a script.
+# `gremlin model echo` from a script.
 
 set -euo pipefail
 
