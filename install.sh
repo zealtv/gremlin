@@ -37,8 +37,15 @@ src="$extracted/.gremlin"
 cp -R "$src" "$dest"
 
 if [[ "${GREMLIN_SKIP_PRIMITIVES:-0}" != "1" ]]; then
+  # Which primitives are arriving with this install? Their policy files are
+  # the project's own placeholders, so gremlin's versions replace them; a
+  # primitive that was already here keeps everything it has.
+  fresh=""
+  for name in nest loom lore glean groundhog; do
+    [[ -d "$target/.$name" ]] || fresh="$fresh $name"
+  done
   "$dest/bin/install-primitives.sh" "$target"
-  "$dest/bin/install-host-files.sh" "$target"
+  "$dest/bin/install-host-files.sh" --fresh "$fresh" "$target"
   # Generated indexes: each primitive writes its own, but only once it has been
   # asked to. memory.md is broadcast from .glean/findings/INDEX.md, so a
   # never-indexed glean leaves a dangling context link on the very first tend.
