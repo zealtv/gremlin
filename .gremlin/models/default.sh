@@ -27,8 +27,13 @@
 
 set -euo pipefail
 
+# ~/.local/bin is a fallback for harnesses installed there, APPENDED rather
+# than prepended: a per-user standalone install upgrades separately from a
+# system one, and prepending it silently pins the preset to whichever is older.
+# (Seen live: a stale standalone codex refused a model the system build served
+# fine, and the failure read as "the model is broken".)
 if [ -d "${HOME:-}/.local/bin" ]; then
-  PATH="$HOME/.local/bin:$PATH"
+  PATH="$PATH:$HOME/.local/bin"
 fi
 export PATH
 
