@@ -53,27 +53,18 @@ fi
 # survive untouched.
 excludes=(
   --exclude='transcript*'
-  --exclude='.nest/in/'
-  --exclude='.nest/out/'
-  --exclude='.nest/dropped/'
-  --exclude='.groundhog/out/'
-  --exclude='.groundhog/fired/'
-  --exclude='.groundhog/schedule/'
-  --exclude='.glean/in/'
-  --exclude='.glean/findings/'
-  --exclude='.glean/out/'
-  --exclude='.glean/dropped/'
-  --exclude='.glean/distil.md'
-  # The gremlin's own loom: trays are runtime work (goals, ties, drops,
-  # human-gated self-edit proposals). loom.sh + README ride the overlay.
-  --exclude='.loom/threads/'
-  --exclude='.loom/tied/'
-  --exclude='.loom/dropped/'
-  # Lore: items/ (durable dated records) and the generated INDEX.md are local
-  # state, preserved across updates; lore.sh + README ride the overlay — the
-  # same split as glean's findings/ vs glean.sh.
-  --exclude='.lore/items/'
-  --exclude='.lore/INDEX.md'
+  # The five primitives are the host repository's, not the gremlin's. Excluding
+  # each dir wholesale means /update is structurally incapable of writing into
+  # a nest, loom, lore, glean or groundhog — including through the transition
+  # symlink a migrated host leaves behind (spike 20: --keep-dirlinks would
+  # instead overwrite the host's own installs, and did, downgrading a v2
+  # loom.sh to v1). Until a host is migrated these also protect its vendored
+  # copies; after migration there is nothing under the overlay target to hit.
+  --exclude='.nest/'
+  --exclude='.loom/'
+  --exclude='.lore/'
+  --exclude='.glean/'
+  --exclude='.groundhog/'
   --exclude='context/'
   --exclude='gremlin.md'
   --exclude='.upstream'
