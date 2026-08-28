@@ -12,9 +12,10 @@
 #              .gremlin/.groundhog ->             .groundhog
 #
 # and leaves a relative symlink behind for each, so un-retargeted code keeps
-# working until stitch 50 lands. Spike 20 proved the shim survives /update, but
-# only once update.sh excludes the five primitive dirs wholesale — so this
-# script refuses to migrate a host whose update.sh has not taken that change.
+# working until stitch 50 lands. During the transition, /update had to exclude
+# the five primitive dirs wholesale. The final updater no longer ships those
+# dirs at all, which makes the shim safe without excludes. This script accepts
+# either generation and refuses older updaters that could replace the shims.
 #
 # usage:
 #   ./hoist-primitives.sh [--dry-run] <host-dir>
@@ -111,17 +112,20 @@ fi
 # ------------------------------------------------------------ pre-flight gates
 update_sh="$gd/commands/update.sh"
 [ -f "$update_sh" ] || die "no commands/update.sh in $gd — is this a gremlin?"
-if [ "$(grep -c "exclude='\.loom/'" "$update_sh")" != "1" ]; then
+has_transition_excludes=0
+has_primitive_free_overlay=0
+[ "$(grep -c "exclude='\.loom/'" "$update_sh")" = "1" ] && has_transition_excludes=1
+grep -q "canonical no longer carries them" "$update_sh" && has_primitive_free_overlay=1
+if [ "$has_transition_excludes" = 0 ] && [ "$has_primitive_free_overlay" = 0 ]; then
   cat >&2 <<GATE
-❌ this gremlin's update.sh does not exclude the primitive dirs wholesale.
+❌ this gremlin's update.sh predates the safe sibling-primitive overlay.
 
-   /update overwrites update.sh itself, so a host migrated now would be
-   silently un-migrated by its next update (spike 20, §5). Ship the five
-   wholesale excludes canonically, run /update on this host first, confirm
+   A safe transitional updater excludes the five primitive dirs wholesale;
+   the final updater carries no primitive dirs in its source bundle. This host
+   advertises neither rule, so a later /update could replace migration shims.
 
-     grep -c "exclude='.loom/'" $update_sh
-
-   reads 1, and then migrate.
+   Run /update on this host, verify it received the current update.sh, and
+   then migrate.
 GATE
   exit 1
 fi
