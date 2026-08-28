@@ -1150,17 +1150,19 @@
     if (a) { e.preventDefault(); openFinding(a.getAttribute("data-id")); }
   });
 
-  // Header title = the gremlin's identifier, name@host (its host directory
-  // name + the machine's hostname; falls back to just the name).
+  // Header title = the gremlin's own name @ the machine it runs on. `d.host`
+  // is the repository it tends — shown in the tooltip, not the title, because
+  // the two are different things and conflating them is what names fixed.
   var hostEl = document.getElementById("host");
   function loadIdentity() {
     if (!hostEl) return;
     fetch("/api/identity").then(function (r) { return r.json(); })
       .then(function (d) {
-        if (d && d.host) {
-          var label = d.hostname ? d.host + "@" + d.hostname : d.host;
+        var who = (d && (d.name || d.host)) || "";
+        if (who) {
+          var label = d.hostname ? who + "@" + d.hostname : who;
           hostEl.textContent = label;
-          hostEl.title = d.path || "";
+          hostEl.title = d.path ? (d.host ? "tending " + d.host + " — " + d.path : d.path) : "";
           document.title = label;
         }
       }).catch(function () {});

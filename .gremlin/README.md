@@ -66,6 +66,9 @@ More detail: `bridges/telegram/README.md`.
 ## Customize
 
 - `gremlin.md`: identity, personality, purpose, voice.
+- `/name`: what this gremlin is called — its own name, not its folder's. Rolled
+  from `names/v1.txt` at first start and kept; `/name <new name>` renames it,
+  `/name --roll` rolls another. An update never changes it.
 - `context/`: the always-loaded broadcast surface; `context/system/` is gremlin-managed.
 - `.glean/`: memory workbench for distilled findings; see `.glean/README.md`.
   This and the four primitives below it live at the host root, beside `.gremlin/`

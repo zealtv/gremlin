@@ -64,6 +64,12 @@ excludes=(
   --exclude='transcript*'
   --exclude='context/'
   --exclude='gremlin.md'
+  # The gremlin's own name, and the identity.md doctor generates from it.
+  # Anchored to the transfer root so a file called `name` deeper in the bundle
+  # is unaffected. Rolled once and never re-rolled: an update must not rename
+  # anyone.
+  --exclude='/name'
+  --exclude='/identity.md'
   --exclude='.upstream'
   --exclude='.model'
   --exclude='.paused'

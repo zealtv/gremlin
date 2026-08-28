@@ -1,0 +1,267 @@
+# vocabulary v1 — single-word mythic creatures.
+#
+# Sources, per the owner: Jabberwocky, Brian Froud, the Gremlins films, and
+# folklore and mythology from wherever it is told. Creatures, not deities:
+# a gremlin is named after something that lurks, meddles or tinkers.
+#
+# Rules for adding words:
+#   - one word, lowercase, ASCII, no punctuation (the name doubles as a slug);
+#   - a creature or kind, not a real person and not a sacred figure;
+#   - fun to say out loud, and unmistakable in a sidebar.
+#
+# NEVER edit an existing line in place. A gremlin's name is rolled once and
+# persisted, so changing a word here cannot rename anyone — but keeping the
+# list append-only means v1 stays quotable as v1. Grow it by adding lines, or
+# start names/v2.txt when the character of the list changes.
+
+# --- Jabberwocky
+jabberwock
+bandersnatch
+jubjub
+borogove
+tove
+rath
+mimsy
+snicker
+
+# --- Gremlins
+gizmo
+mogwai
+stripe
+mohawk
+daffy
+lenny
+brain
+
+# --- Froud, Labyrinth, the Dark Crystal
+hoggle
+ludo
+didymus
+fizzgig
+podling
+gelfling
+skeksis
+garthim
+landstrider
+bogie
+
+# --- Britain and Ireland
+boggart
+bogle
+brownie
+bugbear
+barghest
+grindylow
+knucker
+redcap
+spriggan
+piskie
+pixie
+knocker
+hobgoblin
+hobthrush
+gytrash
+padfoot
+shuck
+pooka
+phooka
+puck
+selkie
+kelpie
+nuckelavee
+cusith
+bwca
+gwyllion
+dobby
+wisp
+fetch
+brollachan
+jenny
+boo
+
+# --- Norse and the North
+nisse
+tomte
+huldra
+draugr
+troll
+nokken
+fossegrim
+vittra
+jotun
+mara
+valravn
+nokk
+
+# --- German, Dutch, French, Iberian, Italian
+kobold
+wichtel
+erlking
+alp
+nachtkrapp
+klabauter
+lutin
+korrigan
+matagot
+dahu
+tarasque
+duende
+trasgu
+nuberu
+cuegle
+folletto
+monaciello
+mazzamurello
+
+# --- Slavic and Baltic
+domovoi
+leshy
+kikimora
+rusalka
+vodyanoy
+bannik
+ovinnik
+polevik
+zmey
+alkonost
+sirin
+aitvaras
+kaukas
+laume
+
+# --- Greek and the classical bestiary
+satyr
+faun
+dryad
+naiad
+siren
+harpy
+sphinx
+chimera
+hydra
+cyclops
+empusa
+lamia
+kobalos
+telchine
+basilisk
+griffin
+manticore
+phoenix
+wyvern
+drake
+wyrm
+salamander
+sylph
+undine
+nixie
+gnome
+sprite
+imp
+ogre
+goblin
+elf
+
+# --- Persia, Arabia, the Caucasus
+peri
+simurgh
+div
+marid
+ifrit
+ghoul
+karkadann
+shahmaran
+
+# --- India and the Himalaya
+yaksha
+rakshasa
+kinnara
+vetala
+pisacha
+naga
+garuda
+migoi
+
+# --- Japan
+kitsune
+tanuki
+tengu
+kappa
+oni
+bakeneko
+nekomata
+jorogumo
+nuppeppo
+tsuchinoko
+amikiri
+kodama
+raiju
+baku
+zashiki
+karakasa
+azukiarai
+
+# --- China, Korea, Southeast Asia
+huli
+nian
+qilin
+pixiu
+dokkaebi
+gumiho
+tikbalang
+kapre
+duwende
+aswang
+diwata
+nuno
+penanggalan
+toyol
+orangbunian
+
+# --- Africa
+tokoloshe
+adze
+impundulu
+mmoatia
+asanbosam
+grootslang
+popobawa
+abada
+eloko
+
+# --- Australia and the Pacific
+bunyip
+yowie
+quinkin
+mimi
+taniwha
+patupaiarehe
+menehune
+ponaturi
+
+# --- The Americas
+curupira
+saci
+caipora
+boitata
+chaneque
+alux
+chupacabra
+sisimito
+duendecito
+
+# --- Fearsome critters, and other tall tales
+squonk
+hodag
+snallygaster
+hidebehind
+agropelter
+splintercat
+teakettler
+gumberoo
+jackalope
+wampus
+glawackus
+hoopsnake
+sidehill
+whirligig

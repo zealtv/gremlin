@@ -54,6 +54,40 @@ for f in "$SYSTEM_DIR"/*.md; do
   echo "skipped (real file) context/system/$(basename "$f")"
 done
 
+# The gremlin's name. Rolled once, here, so a fresh install has one without
+# being asked and every later run is a no-op. identity.md is generated from it
+# and broadcast through context/system, because a gremlin that cannot say its
+# own name has not really got one.
+if [ -x "$GREMLIN_DIR/bin/name.sh" ]; then
+  gremlin_name="$("$GREMLIN_DIR/bin/name.sh")"
+  gremlin_name_source="$("$GREMLIN_DIR/bin/name.sh" source)"
+  identity="$GREMLIN_DIR/identity.md"
+  identity_tmp="$identity.tmp"
+  {
+    echo "# identity"
+    echo
+    echo "Your name is **$gremlin_name**. It is yours, not this folder's: the"
+    echo "repository you tend has its own name, and the two are different things."
+    echo "Answer to it, sign with it, and use it when you speak to another gremlin."
+    echo
+    if [ "$gremlin_name_source" = "custom" ]; then
+      echo "A human chose it for you."
+    else
+      echo "It was rolled for you when you were first started. A human can change"
+      echo "it with \`/name <new name>\`, and you should not rename yourself."
+    fi
+  } > "$identity_tmp"
+  if [ -f "$identity" ] && cmp -s "$identity_tmp" "$identity"; then
+    rm -f "$identity_tmp"
+    echo "ok name ($gremlin_name)"
+  else
+    mv "$identity_tmp" "$identity"
+    echo "ok name ($gremlin_name, identity.md written)"
+  fi
+else
+  echo "‼️  bin/name.sh MISSING — run /update to restore it"
+fi
+
 # Regenerate the primitives map from disk before linking it: generated, so
 # it cannot rot the way hand-written prose does. This also refreshes the
 # generated block in the host's AGENTS.md — the map a cold agent of any
@@ -71,6 +105,7 @@ repair_link "memory.md" "../../../.glean/findings/INDEX.md"
 repair_link "turntaking.md" "../../docs/turntaking.md"
 repair_link "media-embeds.md" "../../docs/media-embeds.md"
 repair_link "primitives.md" "../../PRIMITIVES.md"
+repair_link "identity.md" "../../identity.md"
 
 # The host's loom: ensure its trays exist. The loom belongs to the repository,
 # not to the gremlin, but a missing tray breaks a tie weeks later and nothing

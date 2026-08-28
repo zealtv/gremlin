@@ -100,6 +100,40 @@ A primitive is missing, not vendored: if a gremlin needs `.loom/` and the host
 has none, `doctor` fails loudly with that primitive's own install command.
 There is no fallback to a private copy.
 
+## Names
+
+A gremlin has a name of its own, held in `.gremlin/name`:
+
+```
+name=snallygaster
+source=generated        # or custom, once a human has named it
+vocabulary=1            # which names/vN.txt it was drawn from
+```
+
+It is **rolled once, at first `doctor` run, and persisted** — never derived
+from the host path. Deriving would rename a gremlin the moment it was moved,
+and a gremlin is a folder you can `mv`. `/name <new name>` changes it and
+records `source=custom`, so a later roll cannot quietly undo a human's choice.
+`/update` excludes `/name` and `/identity.md`: an update must never rename
+anyone.
+
+The deliberate consequence of persisting rather than deriving: **`cp -r`
+produces a twin with the same name.** The copy is the same gremlin until you
+say otherwise — right when you meant to clone one, and fixed with
+`/name --roll` when you meant to make a new one.
+
+`doctor` generates `identity.md` from the name and broadcasts it through
+`context/system/identity.md`, so the gremlin knows what it is called and can
+sign with it. The web bridge's header is now the gremlin's name and the machine
+it runs on; the repository it tends moved to the tooltip, because those are two
+different things — before names, `name@host` was really `folder@machine`.
+
+The vocabulary is `names/v1.txt`, a pinned local wordlist of single-word mythic
+creatures, not a dependency: an external name package could rename an
+installation when it updated. Add to it freely; never edit a line in place, and
+start `v2.txt` when the character of the list changes. Because names are
+persisted, growing the vocabulary can never rename an existing gremlin.
+
 ## Facts and policy
 
 A gremlin may generate **facts** about its host. It does not author **policy**

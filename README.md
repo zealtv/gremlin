@@ -45,6 +45,10 @@ Run `/help` for commands.
 
 ## Features
 
+- **It has a name.** Rolled at first start from a pinned list of mythic
+  creatures and kept for good — the gremlin's own name, not its folder's, so
+  "the gremlin" and "the repo it tends" stop being the same word. `/name` to
+  change it.
 - **The agent is a folder.** Copy it, fork it, version it, delete it. There is no hidden state.
 - **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, model presets, transcripts, memory, and queues.
 - **Bring your own model.** A model preset is just `stdin → stdout`. Swap models with `/model <alias>`. Non-LLM scripts work too.

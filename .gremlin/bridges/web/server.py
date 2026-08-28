@@ -39,6 +39,21 @@ CURSOR_FILE = os.environ["WEB_CURSOR"]
 PUBLIC_DIR = os.environ["WEB_PUBLIC_DIR"]
 GREMLIN_DIR = os.environ.get("WEB_GREMLIN_DIR") or os.path.dirname(os.path.abspath(TRANSCRIPT))
 HOST_DIR = os.environ.get("WEB_HOST_DIR") or os.path.dirname(GREMLIN_DIR)
+
+
+def read_name():
+    """The gremlin's name, from .gremlin/name (key=value). Falls back to the
+    host directory's name for a gremlin that predates names."""
+    try:
+        with open(os.path.join(GREMLIN_DIR, "name"), "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("name="):
+                    value = line.split("=", 1)[1].strip()
+                    if value:
+                        return value
+    except OSError:
+        pass
+    return os.path.basename(os.path.realpath(HOST_DIR))
 NESTLING = os.environ.get("WEB_NESTLING", "")
 CACHE_DIR = os.environ.get(
     "WEB_CACHE_DIR",
@@ -899,8 +914,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/media":
             self._serve_media(parse_qs(parsed.query))
         elif path == "/api/identity":
-            # The gremlin's identifier is its host directory's name.
-            self._send_json({"host": os.path.basename(os.path.realpath(HOST_DIR)),
+            # The gremlin's name is its own (.gremlin/name); `host` remains the
+            # repository it tends, which is a different thing and is still
+            # worth showing. Before names existed the header's "name@host" was
+            # really folder@machine.
+            self._send_json({"name": read_name(),
+                             "host": os.path.basename(os.path.realpath(HOST_DIR)),
                              "path": os.path.realpath(HOST_DIR),
                              "hostname": socket.gethostname()})
         elif path == "/api/commands":
