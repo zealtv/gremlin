@@ -42,7 +42,7 @@ Run `/help` for commands.
 - **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, model presets, transcripts, memory, and queues.
 - **Bring your own model.** A model preset is just `stdin → stdout`. Swap models with `/model <alias>`. Non-LLM scripts work too.
 - **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin say` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
-- **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.gremlin/.nest/in/`.
+- **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.nest/in/`.
 - **Scheduled and persistent.** Background tend + tick loops give you reminders, nightly summaries, and self-initiated work without a separate scheduler.
 - **Append-only transcript.** `transcript.md` is the source of truth. Bridges tail it. Debugging is `cat`.
 - **Memory you control.** Glean stores findings as flat markdown; the catalog is broadcast by default, bodies are fetched on demand, and selected findings can be promoted into full context with a symlink.
@@ -52,22 +52,29 @@ Run `/help` for commands.
 ## Layout
 
 ```
-your-folder/
-└── .gremlin/
-    ├── gremlin.md           identity, personality, voice
-    ├── context/             always-loaded context, including managed system/ links
-    ├── skills/              markdown procedures with triggers
-    ├── tools/               bash tools the gremlin can run
-    ├── models/              stdin → stdout model presets
-    ├── commands/            slash commands
-    ├── bridges/             TUI, Telegram, …
-    ├── .nest/               inbox / claimed / completed items
-    ├── .groundhog/          scheduled work
-    ├── .glean/              memory workbench
-    ├── .lore/               durable, dated records
-    ├── transcript.md        append-only conversation log
-    └── gremlin              the executable
+your-repo/
+├── AGENTS.md / CLAUDE.md   the map: generated primitives block + preamble
+├── .nest/                  inbox / claimed / completed items
+├── .loom/                  finite work: threads and stitches
+├── .lore/                  durable, dated records
+├── .glean/                 memory workbench
+├── .groundhog/             scheduled work
+└── .gremlin/               the optional tender
+    ├── gremlin.md          identity, personality, voice
+    ├── context/            always-loaded context, including managed system/ links
+    ├── skills/             markdown procedures with triggers
+    ├── tools/              bash tools the gremlin can run
+    ├── models/             stdin → stdout model presets
+    ├── commands/           slash commands
+    ├── bridges/            TUI, Telegram, web
+    ├── transcript.md       append-only conversation log — private
+    └── gremlin             the executable
 ```
+
+The five primitives live at the host root, not inside `.gremlin/`. A gremlin
+is the optional tender of a folder: it sits beside them and acts on them, the
+same files a human acts on. A primitive dotdir still inside `.gremlin/` is
+legacy placement — `gremlin doctor` says so.
 
 ## More
 
@@ -77,7 +84,8 @@ User-facing docs live inside the installed gremlin:
 - `.gremlin/docs/protocol.md` — loops, transcript, dispatch, models
 - `.gremlin/docs/composition.md` — multiple gremlins, delegation, sandboxing
 
-The underlying file-based protocols are vendored and documented on their own:
+The underlying file-based protocols are separate installs, siblings of
+`.gremlin/` rather than parts of it, and documented on their own:
 
 - 🪺 [nestlings](https://github.com/zealtv/nestlings) — queueing and actioning work
 - 🦫 [groundhog](https://github.com/zealtv/groundhog) — scheduling recurring tasks

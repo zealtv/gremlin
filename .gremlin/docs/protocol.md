@@ -12,49 +12,69 @@ Gremlin contains several nested protocols worth reading directly:
 ## Layout
 
 ```text
-.gremlin/
-  gremlin.md            # identity: personality, purpose, voice
-  context/              # always-loaded broadcast surface
-  gremlin               # user-facing wrapper
-  transcript.md         # append-only conversation log
-  transcript-archive/   # rotated transcripts
-  bin/                  # runner scripts and one-shot bridge implementation
-  bridges/              # long-running user/channel bridges
-  commands/             # slash commands
-  tools/                # bash tools the gremlin can call
-  skills/               # markdown procedures
-  models/               # model runner presets
-  .glean/               # memory workbench: inbox, findings, out, dropped
-  .lore/                # durable, dated records: items, generated INDEX
-  .nest/                # inbound/completed item protocol
-  .groundhog/           # scheduled work protocol
+your-repo/
+  AGENTS.md / CLAUDE.md   # the map: generated primitives block + preamble
+  .nest/                  # inbound/completed item protocol
+  .loom/                  # finite work: threads and stitches
+  .lore/                  # durable, dated records: items, generated INDEX
+  .glean/                 # memory workbench: inbox, findings, out, dropped
+  .groundhog/             # scheduled work protocol
+  .gremlin/               # the optional tender
+    gremlin.md            # identity: personality, purpose, voice
+    context/              # always-loaded broadcast surface
+    gremlin               # user-facing wrapper
+    transcript.md         # append-only conversation log — private
+    transcript-archive/   # rotated transcripts
+    bin/                  # runner scripts and one-shot bridge implementation
+    bridges/              # long-running user/channel bridges
+    commands/             # slash commands
+    tools/                # bash tools the gremlin can call
+    skills/               # markdown procedures
+    models/               # model runner presets
 ```
 
 The host folder is the agent's outside identity and working directory. The
 `.gremlin/` folder defines how that agent behaves, and `bin/run.sh` executes
 the loops from the host folder rather than from inside `.gremlin/`.
 
+The five primitives are **not** inside `.gremlin/`. They belong to the host
+folder, and a human acts on exactly the same files the gremlin does.
+
 ## Placement
 
 *A primitive installation is a self-named dotdir bundling its script and its
-data, living at the root of the host directory whose work it records. A thing
-is canonical-delivered **iff** it lives inside `.gremlin/`.* Three tiers:
+data, living at the root of the host directory whose work it records.*
+**`.gremlin/` is one of them.**
 
-- **Tier 1 — agent scope.** `.gremlin/` bundles the five primitives (`.loom`,
-  `.lore`, `.glean`, `.nest`, `.groundhog`) as the gremlin's private working
-  set. Delivered by install, overlaid by `/update`; instance data protected by
-  the update exclude list.
-- **Tier 2 — gremlin-produced artifacts.** `.dash/`, `library/`, and similar
-  siblings of `.gremlin` at the host root. Never delivered, never overlaid;
-  the web bridge serves them. Note: `.dash` wears a dotdir like a primitive
-  but is Tier 2 *content*, not a primitive — the false symmetry is a known
-  confusion.
-- **Tier 3 — higher-scope instances.** The same primitive tools installed at
-  broader hosts (a fleet root, a workspace repo). Never inside any
-  `.gremlin/`, so never overlaid.
+A gremlin is the optional tender of a host directory. It sits beside `.nest/`,
+`.loom/`, `.lore/`, `.glean/` and `.groundhog/` and acts on them. It does not
+contain them, deliver them, or own their data — humans and other tools act on
+exactly the same files.
 
-A primitive dotdir appearing as a *sibling* of `.gremlin` at the gremlin's own
-host dir is drift, not a tier.
+A primitive dotdir found *inside* `.gremlin/` is **legacy placement**: the
+shape gremlin shipped before the sibling inversion. `doctor` reports it; the
+fix is to hoist it to the host root.
+
+There are no tiers. The three-tier model this replaces said a thing was
+canonical-delivered *iff* it lived inside `.gremlin/`, and called a sibling
+primitive drift. Both statements are withdrawn:
+
+- The old **Tier 1** (`.gremlin/` bundling the five primitives as a private
+  working set) is exactly the legacy placement described above. Primitives are
+  installed by their own `install.sh`, not delivered by gremlin, and `/update`
+  never overlays them because they are no longer inside its target.
+- The old **Tier 2** (`.dash/`, `library/` and similar gremlin-produced
+  artifacts at the host root) is unchanged in behaviour and no longer a tier —
+  those dirs were already host-root siblings and now simply sit among peers.
+  `.dash` is still content rather than a primitive: it carries no script.
+- The old **Tier 3** (the same primitive tools installed at a broader host)
+  disappears, because there is no higher scope to distinguish. A gremlin whose
+  host dir is a fleet root or a workspace repo is just a gremlin; its
+  primitives are its host's primitives, like anyone else's.
+
+A primitive is missing, not vendored: if a gremlin needs `.loom/` and the host
+has none, `doctor` fails loudly with that primitive's own install command.
+There is no fallback to a private copy.
 
 ## Prompt Inputs
 
