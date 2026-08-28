@@ -35,7 +35,7 @@ HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 # continue using absolute paths under GREMLIN_DIR.
 cd "$HOST_DIR"
 
-NEST="$GREMLIN_DIR/.nest"
+NEST="$HOST_DIR/.nest"
 NESTLING="$NEST/nestling.sh"
 LLM="$GREMLIN_DIR/bin/llm.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
@@ -176,7 +176,7 @@ trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$timeout_flag" "$PIDFILE"'
   # memory is used deterministically instead of only when the agent chooses to
   # search. Promoted findings already arrive through context/ above; skip those
   # by basename to avoid loading them twice. Capped to keep context lean.
-  if [ -x "$GREMLIN_DIR/.glean/glean.sh" ]; then
+  if [ -x "$HOST_DIR/.glean/glean.sh" ]; then
     recalled=0
     while IFS= read -r finding; do
       [ -n "$finding" ] || continue
@@ -192,7 +192,7 @@ trap 'rm -f "$prompt_file" "$reply_file" "$err_file" "$timeout_flag" "$PIDFILE"'
       echo
       recalled=$((recalled + 1))
       if [ "$recalled" -ge 5 ]; then break; fi
-    done < <(printf '%s' "$body" | "$GREMLIN_DIR/.glean/glean.sh" recall 2>/dev/null)
+    done < <(printf '%s' "$body" | "$HOST_DIR/.glean/glean.sh" recall 2>/dev/null)
   fi
   # The current turn is already the tail of the transcript (appended at claim
   # time above), so dumping the transcript presents it exactly once — headed and

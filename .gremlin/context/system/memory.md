@@ -1,1 +1,1 @@
-../../.glean/findings/INDEX.md
+../../../.glean/findings/INDEX.md

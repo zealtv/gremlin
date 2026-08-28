@@ -14,14 +14,14 @@ your own, but you may never silently rewrite your *executable self*.
 ## The trust split
 
 **Tier A — memory (autonomous).** You may write your own inert memory: Glean
-findings under `.gremlin/.glean/findings/`. This is already how memory works, so
+findings under `.glean/findings/`. This is already how memory works, so
 reflect just leans on it. Findings are text a future you reads; they change no
 behavior on their own.
 
 **Tier B — executable self (proposed, never applied).** Any change to how you
 actually *behave* — a skill, a tool, `gremlin.md`, a `context/` symlink, a
 preset, a schedule — is only ever **proposed**. You stage it as a
-`self-edit-<slug>.waiting/` thread on your loom (`.gremlin/.loom/`) for a human to
+`self-edit-<slug>.waiting/` thread on your loom (`.loom/`) for a human to
 review and apply. You never edit a live executable file from this skill. `git
 diff` is the approval surface; the human applies a proposal by tying the thread —
 moving its contents into place — or drops it.
@@ -33,7 +33,7 @@ loom integration it depends on:
 
 - this skill (`skills/reflect.md`),
 - whatever schedule runs it (e.g. a `reflect/run.sh` groundhog item),
-- the loom tool and its usage skill (`.gremlin/.loom/loom.sh`, `skills/loom.md`) —
+- the loom tool and its usage skill (`.loom/loom.sh`, `skills/loom.md`) —
   the staging mechanism below leans on these, so you may not propose rewriting them.
 
 You do not get to rewrite your own guardrails. If you believe one of these needs
@@ -43,15 +43,15 @@ not stage it.
 ## A reflection cycle
 
 1. **Read recent work.** `transcript.md`, the newest files under
-   `transcript-archive/`, and `.gremlin/.glean/findings/INDEX.md`. Look for what
+   `transcript-archive/`, and `.glean/findings/INDEX.md`. Look for what
    actually happened: friction, repeated corrections, things you got wrong,
    workflows that worked.
 
 2. **Tier A — distil memory (autonomous).** Turn durable lessons into Glean
    findings. This is exactly the `distil` skill's job, so follow it: search
-   before writing (`.gremlin/.glean/glean.sh fetch <terms...>`), prefer revising
+   before writing (`.glean/glean.sh fetch <terms...>`), prefer revising
    an existing finding, write a `## Triggers` section, and refresh the index
-   (`.gremlin/.glean/glean.sh index`). Prefer "nothing earned" over weak
+   (`.glean/glean.sh index`). Prefer "nothing earned" over weak
    findings.
 
 3. **Tier B — propose a behavior change (only if warranted).** If a lesson
@@ -59,8 +59,8 @@ not stage it.
    **not** touch the live file:
 
    - Create the thread:
-     `./.gremlin/.loom/loom.sh new self-edit-<slug>` then mark it blocked on the
-     human with `./.gremlin/.loom/loom.sh wait self-edit-<slug>`. The `.waiting`
+     `./.loom/loom.sh new self-edit-<slug>` then mark it blocked on the
+     human with `./.loom/loom.sh wait self-edit-<slug>`. The `.waiting`
      suffix says *blocked on human approval* — it stays off the gremlin's own
      loose ends, because applying it is the human's gesture, not yours.
    - In the stitch's `instructions.md`: what should change, *which exact file*,

@@ -8,7 +8,7 @@ triggers:
 # distil
 
 Use this skill for explicit memory work: reviewing a transcript archive,
-distilling a raw packet in `.gremlin/.glean/in/`, revising findings, or handling
+distilling a raw packet in `.glean/in/`, revising findings, or handling
 a direct user ask to remember or consolidate something.
 
 Do not treat reviewed material as permanent memory by default. Distillation is a
@@ -16,11 +16,11 @@ judgment pass. Prefer "nothing earned" over weak findings.
 
 ## Load The Brief
 
-1. Read `.gremlin/.glean/distil.md`.
-2. Inspect `.gremlin/.glean/findings/INDEX.md` if it exists.
+1. Read `.glean/distil.md`.
+2. Inspect `.glean/findings/INDEX.md` if it exists.
 3. If the task points at an archived transcript, read that archive. Do not copy
    the whole transcript into `.glean/in/`.
-4. If the task points at an item in `.gremlin/.glean/in/`, read that item and
+4. If the task points at an item in `.glean/in/`, read that item and
    plan to close it with `complete` after considering it.
 
 ## Decide
@@ -36,8 +36,8 @@ Look for durable carry-forward value:
 Before creating a new finding, search for related findings:
 
 ```sh
-.gremlin/.glean/glean.sh fetch <terms...>
-.gremlin/.glean/glean.sh fetch --all <terms...>
+.glean/glean.sh fetch <terms...>
+.glean/glean.sh fetch --all <terms...>
 ```
 
 Prefer revising an existing finding when it already covers the ground. Create a
@@ -67,7 +67,7 @@ Every finding must include a non-empty `## Triggers` section. If you cannot
 list at least one trigger term, the material is not yet ready to be a
 finding — leave it for a later pass or record it under a clearer angle.
 
-Findings are flat markdown files under `.gremlin/.glean/findings/`:
+Findings are flat markdown files under `.glean/findings/`:
 
 ```markdown
 # Title
@@ -96,19 +96,19 @@ Compact examples or references.
 When an existing finding is stale or wrong, retire it with a reason:
 
 ```sh
-.gremlin/.glean/glean.sh drop <id> "reason"
+.glean/glean.sh drop <id> "reason"
 ```
 
-When you handled a deliberate raw packet from `.gremlin/.glean/in/`, close it:
+When you handled a deliberate raw packet from `.glean/in/`, close it:
 
 ```sh
-.gremlin/.glean/glean.sh complete <in-id>
+.glean/glean.sh complete <in-id>
 ```
 
 After creating, revising, or dropping findings, refresh the index:
 
 ```sh
-.gremlin/.glean/glean.sh index
+.glean/glean.sh index
 ```
 
 ## Promotion
@@ -136,8 +136,8 @@ When the gate is met, **do the promotion yourself** — create the symlink, then
 refresh the index:
 
 ```sh
-ln -s ../.glean/findings/<id>.md .gremlin/context/<id>.md
-.gremlin/.glean/glean.sh index
+ln -s ../../.glean/findings/<id>.md .gremlin/context/<id>.md
+.glean/glean.sh index
 ```
 
 Report in your reply what you promoted and the reason triggers fell short; do

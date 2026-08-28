@@ -13,7 +13,7 @@ fi
 BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GREMLIN_DIR="$(cd "$BRIDGE_DIR/../.." && pwd)"
 HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
-NESTLING="$GREMLIN_DIR/.nest/nestling.sh"
+NESTLING="$HOST_DIR/.nest/nestling.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 COMMANDS="$GREMLIN_DIR/commands"
 
@@ -336,7 +336,7 @@ unique_item_name() {
   base="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
   candidate="$base.md"
   n=1
-  while [ -e "$GREMLIN_DIR/.nest/in/$candidate" ] || [ -e "$GREMLIN_DIR/.nest/in/$candidate.landing" ]; do
+  while [ -e "$HOST_DIR/.nest/in/$candidate" ] || [ -e "$HOST_DIR/.nest/in/$candidate.landing" ]; do
     candidate="$base-$n.md"
     n=$((n + 1))
   done

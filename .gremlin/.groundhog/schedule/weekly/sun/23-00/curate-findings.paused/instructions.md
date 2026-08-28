@@ -3,7 +3,7 @@
 Run a deliberate, corpus-wide curate pass on Glean findings.
 
 Use the `curate` skill (`.gremlin/skills/curate.md`) and the local brief at
-`.gremlin/.glean/distil.md`.
+`.glean/distil.md`.
 
 Bound the pass. Pick one cluster or theme you have not curated recently —
 do not try to sweep the whole corpus in one go. Three or four good moves

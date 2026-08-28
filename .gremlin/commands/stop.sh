@@ -3,9 +3,10 @@
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 PIDFILE="$GREMLIN_DIR/.tending.pid"
-NEST_IN="$GREMLIN_DIR/.nest/in"
-NESTLING="$GREMLIN_DIR/.nest/nestling.sh"
+NEST_IN="$HOST_DIR/.nest/in"
+NESTLING="$HOST_DIR/.nest/nestling.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 
 iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }

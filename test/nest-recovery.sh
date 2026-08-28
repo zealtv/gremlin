@@ -14,7 +14,14 @@ HOST="$TMP/host"
 mkdir -p "$HOST"
 cp -R "$ROOT/.gremlin" "$HOST/.gremlin"
 GREMLIN="$HOST/.gremlin"
-NEST="$GREMLIN/.nest"
+# The primitives are siblings of .gremlin at the host root, not inside it.
+for prim in "$ROOT"/.gremlin/.*/; do
+  base="$(basename "$prim")"
+  case "$base" in .|..) continue ;; esac
+  cp -R "$prim" "$HOST/$base"
+  rm -rf "${GREMLIN:?}/$base"
+done
+NEST="$HOST/.nest"
 rm -rf "$NEST/in" "$NEST/out" "$NEST/dropped"
 mkdir -p "$NEST/in" "$NEST/out" "$NEST/dropped"
 : > "$GREMLIN/transcript.md"

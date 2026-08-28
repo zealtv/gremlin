@@ -68,6 +68,8 @@ More detail: `bridges/telegram/README.md`.
 - `gremlin.md`: identity, personality, purpose, voice.
 - `context/`: the always-loaded broadcast surface; `context/system/` is gremlin-managed.
 - `.glean/`: memory workbench for distilled findings; see `.glean/README.md`.
+  This and the four primitives below it live at the host root, beside `.gremlin/`
+  rather than inside it — they are the repository's, and the gremlin acts on them.
 - `.lore/`: durable, dated records kept whole — the library beside Glean's memory; see `.lore/README.md`.
 - `.loom/`: durable goals that outlive a turn and human-gated self-edit proposals; see `.loom/README.md`.
 - `skills/*.md`: procedures the gremlin can follow.
@@ -79,12 +81,12 @@ Run `./.gremlin/gremlin restart` after editing skills so `skills/INDEX.md` is re
 
 ## Memory
 
-`.gremlin/.glean/` is the local memory workbench: it keeps distilled findings as flat markdown. See `.glean/README.md` for the full layout.
+`.glean/` is the host repository's memory workbench, a sibling of `.gremlin/`: it keeps distilled findings as flat markdown. See `.glean/README.md` for the full layout.
 
 The generated finding catalog is broadcast by default through `context/system/memory.md`. Search or fetch finding bodies when they are relevant, then promote only the small set that should always be fully broadcast by symlinking them into `.gremlin/context/`:
 
 ```sh
-ln -s ../.glean/findings/<id>.md ./.gremlin/context/<id>.md
+ln -s ../../.glean/findings/<id>.md ./.gremlin/context/<id>.md
 ```
 
 `models/memory.sh` is the default review model alias for memory-review work. It is intentionally a thin wrapper around `models/default.sh`, so a fresh gremlin inherits the configured default model unless you choose to specialize memory review later.
@@ -115,16 +117,16 @@ Keep personal state out of this repo.
 - Run and personalize a copy outside the repo.
 - Never run `say` or the TUI against the repo's reference `.gremlin/`.
 - Promote personal-copy ideas back by rewriting generic versions in canonical.
-- Use `.gremlin/.nest/README.md` and `.gremlin/.groundhog/README.md` to
+- Use `.nest/README.md` and `.groundhog/README.md` to
   understand the nested protocols.
 
 Before pushing:
 
 - `git status` shows only intended changes.
 - `.gremlin/transcript.md` is empty.
-- `.gremlin/.nest/in/`, `.gremlin/.groundhog/out/`, and `.gremlin/.groundhog/fired/` contain only
+- `.nest/in/`, `.groundhog/out/`, and `.groundhog/fired/` contain only
   placeholder files.
-- `.gremlin/.loom/threads/`, `.gremlin/.loom/tied/`, and `.gremlin/.loom/dropped/` contain
+- `.loom/threads/`, `.loom/tied/`, and `.loom/dropped/` contain
   only placeholder files.
 - `.gremlin/context/` contains no personal facts.
 - `.gremlin/gremlin.md` is generic.

@@ -43,7 +43,7 @@ PUBLIC_DIR="$BRIDGE_DIR/public"
 CACHE_DIR="$BRIDGE_DIR/.cache"
 SERVER="$BRIDGE_DIR/server.py"
 TRANSCRIPT="${WEB_TRANSCRIPT:-$GREMLIN_DIR/transcript.md}"
-NESTLING="${WEB_NESTLING:-$GREMLIN_DIR/.nest/nestling.sh}"
+NESTLING="${WEB_NESTLING:-$HOST_DIR/.nest/nestling.sh}"
 STOP_TIMEOUT="${WEB_STOP_TIMEOUT:-15}"
 
 # Defaults; config (if present) and the environment may override these.

@@ -16,7 +16,7 @@ that happen to share a filesystem.
 Delegation is a file move into another gremlin's inbox:
 
 ```sh
-mv request.md ../admin/.gremlin/.nest/in/
+mv request.md ../admin/.nest/in/
 ```
 
 The receiver picks it up on its next tend pass.
@@ -24,7 +24,7 @@ The receiver picks it up on its next tend pass.
 For repeated delegation, make the reach visible with a symlink:
 
 ```text
-research/.gremlin/peers/admin -> ../../admin/.gremlin/.nest/in/
+research/.gremlin/peers/admin -> ../../admin/.nest/in/
 ```
 
 A skill can write an item into `peers/admin/`, and the sibling gremlin will tend
@@ -53,7 +53,7 @@ A future peer-gremlin directory could follow the same shape: generate a
 `peers/INDEX.md` summary and symlink it into `context/system/peers.md` so it is
 broadcast every turn. That is only a described shape in this stage, not an
 implemented feature. Delegation today is still the inbox symlink described
-above, such as `peers/<name> -> ../../other/.gremlin/.nest/in/`.
+above, such as `peers/<name> -> ../../other/.nest/in/`.
 
 ## Sandboxing
 

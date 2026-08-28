@@ -8,11 +8,12 @@
 set -uo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 
 [ -e "$GREMLIN_DIR/.paused" ] && exit 0
 
-GH="$GREMLIN_DIR/.groundhog"
-NEST_IN="$GREMLIN_DIR/.nest/in"
+GH="$HOST_DIR/.groundhog"
+NEST_IN="$HOST_DIR/.nest/in"
 
 "$GH/groundhog.sh" tick
 

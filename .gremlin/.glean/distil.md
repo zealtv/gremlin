@@ -100,7 +100,7 @@ yourself** rather than asking the user to — the symlink lives in the host's
 `context/`, not in Glean's protocol:
 
 ```sh
-ln -s ../.glean/findings/<id>.md .gremlin/context/<id>.md
+ln -s ../../.glean/findings/<id>.md .gremlin/context/<id>.md
 ```
 
 Demote by removing the symlink from `context/`; the finding remains in Glean.

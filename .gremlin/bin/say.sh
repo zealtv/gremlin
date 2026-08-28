@@ -18,7 +18,8 @@ if [ "${LC_ALL:-}" = "C.UTF-8" ]; then
 fi
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NEST="$GREMLIN_DIR/.nest"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
+NEST="$HOST_DIR/.nest"
 NESTLING="$NEST/nestling.sh"
 TRANSCRIPT="$GREMLIN_DIR/transcript.md"
 

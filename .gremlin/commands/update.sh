@@ -117,6 +117,19 @@ if [ -n "$revert_path" ]; then
   fi
   dst_file="$GREMLIN_DIR/$revert_path"
   mkdir -p "$(dirname "$dst_file")"
+  # Containment: the relative-path check above rejects `/…` and `..`, but a
+  # path inside .gremlin/ can still resolve outside it through a symlink — the
+  # transition shims point at the host's own primitives, and a revert through
+  # one would overwrite an install this gremlin does not own (proven: it
+  # downgraded a host's loom.sh from v2 to v1). Compare resolved parents.
+  dst_parent="$(cd "$(dirname "$dst_file")" && pwd -P)"
+  gremlin_real="$(cd "$GREMLIN_DIR" && pwd -P)"
+  case "$dst_parent/" in
+    "$gremlin_real"/*) ;;
+    *) echo "--revert target resolves outside the gremlin: $dst_parent" >&2
+       echo "that path is not this gremlin's to write — refusing" >&2
+       exit 2 ;;
+  esac
   cp -p "$src_file" "$dst_file"
   echo "↩️  reverted $revert_path to canonical"
   exit 0
@@ -163,12 +176,10 @@ count=0
 
 echo "✨ updated: $count file(s)"
 
-# A gremlin that just gained the lore primitive needs an initialised store so
-# its INDEX.md exists (the overlay ships lore.sh + README but not INDEX.md).
-# init is idempotent — it never clobbers existing items or a populated INDEX.
-if [ -x "$GREMLIN_DIR/.lore/lore.sh" ]; then
-  "$GREMLIN_DIR/.lore/lore.sh" init >/dev/null 2>&1 || true
-fi
+# Note what is deliberately absent: /update does not initialise, install or
+# repair a primitive. The primitives are the repository's, installed once
+# beside .gremlin/ and owned by whoever owns the repo. doctor reports a
+# missing one with its install command; update never reaches for it.
 
 echo "🩺 doctor:"
 "$GREMLIN_DIR/bin/doctor.sh" | sed 's/^/  /'

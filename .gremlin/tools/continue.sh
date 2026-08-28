@@ -15,7 +15,8 @@
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NESTLING="$GREMLIN_DIR/.nest/nestling.sh"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
+NESTLING="$HOST_DIR/.nest/nestling.sh"
 
 if [ "$#" -gt 0 ]; then
   msg="$*"

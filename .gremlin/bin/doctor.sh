@@ -3,6 +3,7 @@
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 SYSTEM_DIR="$GREMLIN_DIR/context/system"
 
 mkdir -p "$SYSTEM_DIR"
@@ -64,15 +65,16 @@ fi
 
 repair_link "skills.md" "../../skills/INDEX.md"
 repair_link "tools.md" "../../tools/README.md"
-repair_link "memory.md" "../../.glean/findings/INDEX.md"
+repair_link "memory.md" "../../../.glean/findings/INDEX.md"
 repair_link "turntaking.md" "../../docs/turntaking.md"
 repair_link "media-embeds.md" "../../docs/media-embeds.md"
 repair_link "primitives.md" "../../PRIMITIVES.md"
 
-# The gremlin's own loom: ensure its trays exist. loom.sh + README ride
-# /update, but the runtime trays are excluded from the overlay, so a fresh
-# install (or a deleted tray) needs them seeded. loom.sh init is idempotent.
-LOOM_DIR="$GREMLIN_DIR/.loom"
+# The host's loom: ensure its trays exist. The loom belongs to the repository,
+# not to the gremlin, but a missing tray breaks a tie weeks later and nothing
+# notices — so doctor seeds them. loom.sh init is idempotent and never touches
+# existing threads.
+LOOM_DIR="$HOST_DIR/.loom"
 if [ -x "$LOOM_DIR/loom.sh" ]; then
   if [ -d "$LOOM_DIR/threads" ] && [ -d "$LOOM_DIR/tied" ] && [ -d "$LOOM_DIR/dropped" ]; then
     echo "ok .loom trays"
@@ -80,34 +82,42 @@ if [ -x "$LOOM_DIR/loom.sh" ]; then
     "$LOOM_DIR/loom.sh" init >/dev/null
     echo "initialized .loom trays"
   fi
-else
-  echo "‼️  .loom/loom.sh MISSING — run /update to restore the loom tool"
 fi
 
-# Placement drift (docs/protocol.md "Placement"): primitives live INSIDE
-# .gremlin/. One appearing as a sibling of .gremlin at the host dir is drift —
-# unless it is a complete self-named installation (carries its own script),
-# which marks a deliberate higher-scope (Tier 3) instance sharing the host dir
-# (e.g. a workspace root). Tier 2 artifact dirs (.dash) are noted, not failed.
-HOST_DIR="$(dirname "$GREMLIN_DIR")"
-check_sibling() {
-  local prim="$1"
-  local script="$2"
+# Placement (docs/protocol.md "Placement"): the five primitives are SIBLINGS of
+# .gremlin at the host root. The gremlin acts on them; it is not composed of
+# them. Two things are worth saying out loud:
+#   - a missing sibling fails loud, naming its install one-liner. There is no
+#     fallback to a vendored copy: a gremlin with no nest cannot be tended, and
+#     quietly inventing one hides the real problem.
+#   - a primitive dotdir still INSIDE .gremlin/ is legacy placement from before
+#     the primitives moved out. Name the migration rather than guessing.
+INSTALL_BASE="https://raw.githubusercontent.com/zealtv"
+check_primitive() {
+  local prim="$1" script="$2" repo="$3"
   local sib="$HOST_DIR/.$prim"
-  [ -d "$sib" ] || return 0
-  if [ -e "$sib/$script" ]; then
-    echo "note .$prim is a sibling of .gremlin with its own $script — a higher-scope (Tier 3) install, not this gremlin's"
+  if [ -d "$sib" ] && [ -e "$sib/$script" ]; then
+    echo "ok .$prim"
+  elif [ -d "$sib" ]; then
+    echo "‼️  .$prim exists at the host root but has no $script — incomplete install"
   else
-    echo "‼️  .$prim is a SIBLING of .gremlin — placement drift: primitives live inside .gremlin/ (docs/protocol.md, Placement)"
+    echo "‼️  .$prim MISSING at the host root — install it beside .gremlin/:"
+    echo "     curl -fsSL $INSTALL_BASE/$repo/main/install.sh | bash -s"
+  fi
+  # Legacy placement: the same primitive still vendored inside .gremlin/.
+  # A symlink there is the transition shim, not drift.
+  if [ -d "$GREMLIN_DIR/.$prim" ] && [ ! -L "$GREMLIN_DIR/.$prim" ]; then
+    echo "‼️  .gremlin/.$prim is LEGACY placement — primitives live at the host root."
+    echo "     migrate with: <gremlin-repo>/hoist-primitives.sh $HOST_DIR"
   fi
 }
-check_sibling "loom" "loom.sh"
-check_sibling "lore" "lore.sh"
-check_sibling "nest" "nestling.sh"
-check_sibling "glean" "glean.sh"
-check_sibling "groundhog" "groundhog.sh"
+check_primitive "nest" "nestling.sh" "nestlings"
+check_primitive "loom" "loom.sh" "loom"
+check_primitive "lore" "lore.sh" "lore"
+check_primitive "glean" "glean.sh" "glean"
+check_primitive "groundhog" "groundhog.sh" "groundhog"
 if [ -d "$HOST_DIR/.dash" ]; then
-  echo "note .dash present at host level — Tier 2 gremlin-produced content (correct placement)"
+  echo "note .dash present at the host root — gremlin-produced content (correct placement)"
 fi
 
 check_preset() {

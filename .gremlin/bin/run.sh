@@ -22,8 +22,8 @@ if ! "$GREMLIN_DIR/bin/index-skills.sh"; then
   echo "warning: skills index refresh failed" >&2
 fi
 
-if [ -d "$GREMLIN_DIR/.glean" ]; then
-  if ! "$GREMLIN_DIR/.glean/glean.sh" index; then
+if [ -d "$HOST_DIR/.glean" ]; then
+  if ! "$HOST_DIR/.glean/glean.sh" index; then
     echo "warning: glean index refresh failed" >&2
   fi
 fi

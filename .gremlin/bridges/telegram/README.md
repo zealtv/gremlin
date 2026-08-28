@@ -76,7 +76,7 @@ To verify proactive outbound, ask for a short reminder:
 remind me in 1 minute to test telegram
 ```
 
-The reminder should land under `.gremlin/.groundhog/`, appear in the transcript
+The reminder should land under `.groundhog/`, appear in the transcript
 when fired, and then push to Telegram.
 
 ## Loops

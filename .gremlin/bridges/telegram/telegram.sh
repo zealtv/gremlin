@@ -19,7 +19,7 @@ LOG="$BRIDGE_DIR/telegram.log"
 PIDFILE="$BRIDGE_DIR/telegram.pid"
 CURSOR="$BRIDGE_DIR/.cursor"
 UPDATE_OFFSET="$BRIDGE_DIR/.update-offset"
-NESTLING="${TELEGRAM_NESTLING:-$GREMLIN_DIR/.nest/nestling.sh}"
+NESTLING="${TELEGRAM_NESTLING:-$HOST_DIR/.nest/nestling.sh}"
 TRANSCRIPT="${TELEGRAM_TRANSCRIPT:-$GREMLIN_DIR/transcript.md}"
 POLL_TIMEOUT="${TELEGRAM_POLL_TIMEOUT:-30}"
 POLL_SLEEP="${TELEGRAM_POLL_SLEEP:-1}"
@@ -1547,8 +1547,8 @@ outbound_loop() {
 
 pulser_loop() {
   while :; do
-    if compgen -G "$GREMLIN_DIR/.nest/in/*-telegram-*.md" >/dev/null \
-      || find "$GREMLIN_DIR/.nest/in" -maxdepth 1 -type d -name '*-telegram-*' ! -name '*.tending' | read -r _ \
+    if compgen -G "$HOST_DIR/.nest/in/*-telegram-*.md" >/dev/null \
+      || find "$HOST_DIR/.nest/in" -maxdepth 1 -type d -name '*-telegram-*' ! -name '*.tending' | read -r _ \
       || { [ -s "$GREMLIN_DIR/.tending.pid" ] && kill -0 "$(sed -n '1p' "$GREMLIN_DIR/.tending.pid")" 2>/dev/null; }; then
       send_chat_action typing || true
     fi

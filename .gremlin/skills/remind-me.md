@@ -7,7 +7,7 @@ triggers:
 
 # remind-me
 
-When the user asks to be reminded, schedule it by creating a file under `.gremlin/.groundhog/`. Do not confirm in prose only — actually create the file, and never guess the current time.
+When the user asks to be reminded, schedule it by creating a file under `.groundhog/`. Do not confirm in prose only — actually create the file, and never guess the current time.
 
 Groundhog reads **local time**, and the user thinks in local time. Use local dates and times throughout: in the path, in the body, and in your confirmation reply.
 
@@ -26,8 +26,8 @@ Groundhog reads **local time**, and the user thinks in local time. Use local dat
    - **With a time of day** (e.g. "9am", "14:30", "in 5 minutes"): use minute resolution. Format `HH-MM` (24-hour, dash, two digits).
 
      ```bash
-     mkdir -p .gremlin/.groundhog/schedule/once/<YYYY-MM-DD>/<HH-MM>/<slug>
-     cat > .gremlin/.groundhog/schedule/once/<YYYY-MM-DD>/<HH-MM>/<slug>/message.md <<'EOF'
+     mkdir -p .groundhog/schedule/once/<YYYY-MM-DD>/<HH-MM>/<slug>
+     cat > .groundhog/schedule/once/<YYYY-MM-DD>/<HH-MM>/<slug>/message.md <<'EOF'
      <reminder body>
      EOF
      ```
@@ -35,8 +35,8 @@ Groundhog reads **local time**, and the user thinks in local time. Use local dat
    - **Without a time of day** (just "tomorrow", "next Friday"): per-day resolution; fires on the next tick after midnight local on that date.
 
      ```bash
-     mkdir -p .gremlin/.groundhog/schedule/once/<YYYY-MM-DD>/<slug>
-     cat > .gremlin/.groundhog/schedule/once/<YYYY-MM-DD>/<slug>/message.md <<'EOF'
+     mkdir -p .groundhog/schedule/once/<YYYY-MM-DD>/<slug>
+     cat > .groundhog/schedule/once/<YYYY-MM-DD>/<slug>/message.md <<'EOF'
      <reminder body>
      EOF
      ```

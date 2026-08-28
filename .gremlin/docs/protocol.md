@@ -158,7 +158,7 @@ Memory review items use the same mechanism by writing `memory` into `.model`.
 
 ## Memory
 
-`.gremlin/.glean/` is a vendored Glean workbench:
+`.glean/` is the host repository’s Glean workbench, which the gremlin reads and writes but does not own:
 
 - `in/` receives deliberate raw packets for distillation.
 - `findings/` holds flat markdown findings and generated `INDEX.md`.

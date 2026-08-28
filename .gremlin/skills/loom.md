@@ -8,7 +8,7 @@ triggers:
 
 # loom
 
-Your loom (`.gremlin/.loom/`) holds work that has **shape and outlives a turn**:
+Your loom (`.loom/`) holds work that has **shape and outlives a turn**:
 durable goals you pursue across many tends, and human-gated proposals waiting to
 be applied. It is your own loom.
 
@@ -26,20 +26,20 @@ belongs on the loom. If it's just the next thing to do, it's nest.
 
 ## Working it
 
-`.gremlin/.loom/loom.sh` is the tool; it operates on the loom it lives in.
+`.loom/loom.sh` is the tool; it operates on the loom it lives in.
 
 ```sh
-./.gremlin/.loom/loom.sh status        # what's on the loom
-./.gremlin/.loom/loom.sh next          # a loose end ready to work
-./.gremlin/.loom/loom.sh new <id> [parent]
-./.gremlin/.loom/loom.sh claim <id> / wait <id> / tie <id> / drop <id> <reason>
+./.loom/loom.sh status        # what's on the loom
+./.loom/loom.sh next          # a loose end ready to work
+./.loom/loom.sh new <id> [parent]
+./.loom/loom.sh claim <id> / wait <id> / tie <id> / drop <id> <reason>
 ```
 
 A **stitch** is one small intention (a dir with `instructions.md`). A **thread**
 is a goal and its decomposition. A childless stitch is a **loose end** — work
 ready now. Claim a loose end, do it, tie it off; when all children resolve, the
 parent becomes a loose end in turn. Blocked on something external (a build, a
-human)? Mark it `wait`. Read `.gremlin/.loom/README.md` for the full protocol —
+human)? Mark it `wait`. Read `.loom/README.md` for the full protocol —
 don't restate it, follow it.
 
 ## Staged self-edits live here

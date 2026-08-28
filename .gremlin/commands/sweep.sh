@@ -9,6 +9,7 @@ unset GREMLIN_BASH_TRAMPOLINE
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 days="${1:-14}"
 
 if [ "$#" -gt 1 ]; then
@@ -16,5 +17,5 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
-"$GREMLIN_DIR/.nest/nestling.sh" sweep "$days"
-"$GREMLIN_DIR/.groundhog/groundhog.sh" sweep "$days"
+"$HOST_DIR/.nest/nestling.sh" sweep "$days"
+"$HOST_DIR/.groundhog/groundhog.sh" sweep "$days"

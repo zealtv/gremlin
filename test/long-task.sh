@@ -35,7 +35,14 @@ HOST="$TMP/host"
 mkdir -p "$HOST"
 cp -R "$ROOT/.gremlin" "$HOST/.gremlin"
 GREMLIN="$HOST/.gremlin"
-NEST="$GREMLIN/.nest"
+# The primitives are siblings of .gremlin at the host root, not inside it.
+for prim in "$ROOT"/.gremlin/.*/; do
+  base="$(basename "$prim")"
+  case "$base" in .|..) continue ;; esac
+  cp -R "$prim" "$HOST/$base"
+  rm -rf "${GREMLIN:?}/$base"
+done
+NEST="$HOST/.nest"
 TRANSCRIPT="$GREMLIN/transcript.md"
 
 reset_nest() {
@@ -66,7 +73,7 @@ if [[ -e "$GDIR/.test-promise" ]]; then
   if [[ -e "$GDIR/.test-noise" ]]; then
     noise="$(mktemp)"
     echo "unrelated bridge message" > "$noise"
-    "$GDIR/.nest/nestling.sh" ingest "$noise" "zz-unrelated.md" >/dev/null
+    "$GDIR/../.nest/nestling.sh" ingest "$noise" "zz-unrelated.md" >/dev/null
     rm -f "$noise" "$GDIR/.test-noise"
   fi
   echo "PROMISETURN step 1/3 done; ready for step 2"

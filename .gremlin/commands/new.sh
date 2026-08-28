@@ -3,6 +3,7 @@
 set -euo pipefail
 
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 
 archive_output="$("$GREMLIN_DIR/bin/archive.sh")"
 printf '%s\n' "$archive_output"
@@ -16,7 +17,7 @@ fi
 
 archive_id="$(basename "$archive_path" .md)"
 item_id="memory-review-$archive_id"
-nest_in="$GREMLIN_DIR/.nest/in"
+nest_in="$HOST_DIR/.nest/in"
 item="$nest_in/$item_id"
 landing="$item.landing"
 
@@ -41,15 +42,15 @@ Review the archived transcript at:
 $archive_path
 \`\`\`
 
-Use the distil skill and the local brief at \`.gremlin/.glean/distil.md\`.
+Use the distil skill and the local brief at \`.glean/distil.md\`.
 
 Decide whether this ended session earned durable memory. You may create or
-revise findings under \`.gremlin/.glean/findings/\`, retire stale findings with
-\`.gremlin/.glean/glean.sh drop\`, or do nothing when nothing durable was
+revise findings under \`.glean/findings/\`, retire stale findings with
+\`.glean/glean.sh drop\`, or do nothing when nothing durable was
 earned.
 
-Do not copy the whole transcript into \`.gremlin/.glean/in/\`. If findings
-change, run \`.gremlin/.glean/glean.sh index\`. In your reply, report the brief
+Do not copy the whole transcript into \`.glean/in/\`. If findings
+change, run \`.glean/glean.sh index\`. In your reply, report the brief
 memory-review outcome and any finding ids affected.
 EOF_REVIEW
 

@@ -26,9 +26,9 @@ shallowly.
 
 ## Load The Corpus
 
-1. Read `.gremlin/.glean/distil.md` for the local distillation brief — the
+1. Read `.glean/distil.md` for the local distillation brief — the
    same brief shapes what counts as a good finding.
-2. Read `.gremlin/.glean/findings/INDEX.md` end to end. This is the whole
+2. Read `.glean/findings/INDEX.md` end to end. This is the whole
    corpus in one glance.
 3. If the user gave a scope ("curate the testing findings", "look at
    everything about the loom"), narrow to that. If they did not, pick a
@@ -54,8 +54,8 @@ Before changing anything, write down (to yourself, not to disk) what you see:
 Use fetch to confirm overlaps before merging:
 
 ```sh
-.gremlin/.glean/glean.sh fetch <terms...>
-.gremlin/.glean/glean.sh fetch --all <terms...>
+.glean/glean.sh fetch <terms...>
+.glean/glean.sh fetch --all <terms...>
 ```
 
 ## Act, sparingly
@@ -70,7 +70,7 @@ that improve the corpus is a better outcome than fifteen that churn it.
 - drop the redundant one with a reason naming the merge target.
 
 ```sh
-.gremlin/.glean/glean.sh drop <id> "merged into <other-id>"
+.glean/glean.sh drop <id> "merged into <other-id>"
 ```
 
 **Split** when a finding clearly covers two distinct ideas:
@@ -81,13 +81,13 @@ that improve the corpus is a better outcome than fifteen that churn it.
   reply and let the user decide.
 
 ```sh
-.gremlin/.glean/glean.sh drop <id> "split into <a-id> and <b-id>"
+.glean/glean.sh drop <id> "split into <a-id> and <b-id>"
 ```
 
 **Retire** a stale finding:
 
 ```sh
-.gremlin/.glean/glean.sh drop <id> "<why it no longer earns a place>"
+.glean/glean.sh drop <id> "<why it no longer earns a place>"
 ```
 
 A drop reason is not optional. The `dropped/` tray is a durable reflection
@@ -105,7 +105,7 @@ drawer; future-you will want to know what was retired and why.
 After any create, revise, or drop, refresh the index:
 
 ```sh
-.gremlin/.glean/glean.sh index
+.glean/glean.sh index
 ```
 
 ## Promotion review
@@ -132,7 +132,7 @@ For findings not currently in `context/`, apply the same criteria from the
 without reminding — and **suggest promotion** with a ready-to-paste command:
 
 ```sh
-ln -s ../.glean/findings/<id>.md .gremlin/context/<id>.md
+ln -s ../../.glean/findings/<id>.md .gremlin/context/<id>.md
 ```
 
 Never promote or demote autonomously unless the user explicitly asked.
