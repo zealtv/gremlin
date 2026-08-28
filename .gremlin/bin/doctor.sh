@@ -144,12 +144,12 @@ check_policy ".glean/distil.md" \
   "This is the local brief for distillation in this glean." \
   "say what THIS repository considers worth remembering; the mechanics are already in .gremlin/skills/distil.md"
 
-# The gremlin's own contributions to the host's primitives — its scheduled
-# jobs, the tend brief, the distillation brief. Reported, never installed here:
-# a job you deleted stays deleted, and doctor is not an installer.
+# The gremlin's own contributions to the host's primitives: its scheduled work.
+# Reported, never installed here — a job you deleted stays deleted, and doctor
+# is not an installer.
 if [ -x "$GREMLIN_DIR/bin/install-host-files.sh" ]; then
   if missing="$("$GREMLIN_DIR/bin/install-host-files.sh" --check "$HOST_DIR" 2>/dev/null)"; then
-    echo "ok host files (jobs, tend.md, distil.md)"
+    echo "ok host files (scheduled jobs)"
   else
     printf '%s\n' "$missing" | sed 's/^missing /note not installed at the host: /'
     echo "     install with: $GREMLIN_DIR/bin/install-host-files.sh"
