@@ -127,7 +127,7 @@ GATE
 fi
 
 if [ "$dry_run" = 0 ] && pgrep -f "$gd/bin/run.sh" >/dev/null 2>&1; then
-  die "the gremlin is running — stop it first: $gd/gremlin stop && pkill -f $gd/bin/run.sh"
+  die "the gremlin is running — stop it first: $gd/gremlin sleep && pkill -f $gd/bin/run.sh"
 fi
 
 if [ -f "$manifest" ]; then

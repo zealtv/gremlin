@@ -13,7 +13,7 @@ A preset is just an executable that reads the prompt on stdin and writes a reply
 Start the gremlin runner from the host folder:
 
 ```sh
-./.gremlin/gremlin start
+./.gremlin/gremlin wake
 ```
 
 The runner backgrounds the tend and schedule loops. Leave it running while you interact with the gremlin.
@@ -28,11 +28,11 @@ Use the TUI for normal interactive work:
 
 The TUI shows transcript history, sends submitted messages into `.nest/in/`, and renders assistant turns as they land in `transcript.md`.
 
-Use `gremlin say` for one-shot prompts, shell scripts, and direct slash commands:
+Use `gremlin ask` for one-shot prompts, shell scripts, and direct slash commands:
 
 ```sh
-./.gremlin/gremlin say "summarize this folder"
-./.gremlin/gremlin say /help
+./.gremlin/gremlin ask "summarize this folder"
+./.gremlin/gremlin ask /help
 ```
 
 Use `/new` at a real session boundary: it starts a clean conversation, files the old one away, and reviews it for anything worth remembering. Use `/discard` for throwaway sessions that should be archived but not reviewed for memory.
@@ -54,7 +54,7 @@ chmod 600 ./.gremlin/bridges/telegram/config
 5. Start the runner and bridge:
 
 ```sh
-./.gremlin/gremlin start
+./.gremlin/gremlin wake
 ./.gremlin/gremlin telegram start
 ./.gremlin/gremlin telegram status
 ```
@@ -62,6 +62,20 @@ chmod 600 ./.gremlin/bridges/telegram/config
 Telegram's `/start` message is passed through as normal text; the gremlin may reply that it does not recognize it. Send a regular message after setup.
 
 More detail: `bridges/telegram/README.md`.
+
+## Verbs
+
+```sh
+./.gremlin/gremlin wake      # start the loops
+./.gremlin/gremlin sleep     # stop them
+./.gremlin/gremlin tend      # work the nest once, now
+./.gremlin/gremlin ask "…"   # you -> gremlin, and wait for the answer
+./.gremlin/gremlin tell "…"  # gremlin -> you, unprompted
+./.gremlin/gremlin status    # awake or asleep?
+```
+
+`start`, `stop` and `say` were renamed to `wake`, `sleep` and `ask`. The old
+words are gone rather than aliased, and say so when you use them.
 
 ## Customize
 

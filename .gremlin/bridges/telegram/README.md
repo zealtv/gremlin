@@ -60,7 +60,7 @@ These files are ignored by git.
 Start the runner and bridge:
 
 ```sh
-./.gremlin/gremlin start
+./.gremlin/gremlin wake
 ./.gremlin/gremlin telegram start
 ./.gremlin/gremlin telegram status
 ```

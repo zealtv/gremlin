@@ -5,7 +5,7 @@ Terminal bridge for a gremlin.
 Run it beside the gremlin runner:
 
 ```sh
-./.gremlin/gremlin start
+./.gremlin/gremlin wake
 ./.gremlin/gremlin tui
 ```
 

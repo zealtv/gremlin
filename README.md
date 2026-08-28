@@ -28,12 +28,16 @@ Point it at a model. `.gremlin/models/default.sh` is just an executable that rea
 exec claude -p --model claude-sonnet-4-6 --allowedTools "Bash"
 ```
 
-Start the runner and open the TUI:
+Wake it and open the TUI:
 
 ```sh
-.gremlin/gremlin start
+.gremlin/gremlin wake
 .gremlin/gremlin tui
 ```
+
+The verbs are `wake`, `sleep`, `tend`, `ask`, `tell` — plus `status`,
+`restart` and `tui`. `ask` is you → gremlin and waits for the reply; `tell` is
+the gremlin → you, unprompted.
 
 Run `/help` for commands.
 
@@ -52,7 +56,8 @@ Run `/help` for commands.
 - **The agent is a folder.** Copy it, fork it, version it, delete it. There is no hidden state.
 - **Almost no dependencies.** Bash, coreutils, and whatever CLI talks to your model. Updating is `/update` — an overlay that preserves your identity, model presets, transcripts, memory, and queues.
 - **Bring your own model.** A model preset is just `stdin → stdout`. Swap models with `/model <alias>`. Non-LLM scripts work too.
-- **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin say` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
+- **One inbox, many sources.** TUI, Telegram, scheduled ticks, peer gremlins, and `gremlin ask` all funnel through `.nest/in/`. One tender loop, one dispatch rule.
+- **Ask and tell.** `ask` is you → gremlin and waits; `tell` is gremlin → you, unprompted. One symmetric pair, so gremlin → gremlin traffic is the same shape.
 - **Composition is adjacency.** Multiple gremlins = multiple folders. Delegation is `mv item ../other/.nest/in/`.
 - **Scheduled and persistent.** Background tend + tick loops give you reminders, nightly summaries, and self-initiated work without a separate scheduler.
 - **Append-only transcript.** `transcript.md` is the source of truth. Bridges tail it. Debugging is `cat`.

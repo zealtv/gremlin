@@ -100,6 +100,40 @@ A primitive is missing, not vendored: if a gremlin needs `.loom/` and the host
 has none, `doctor` fails loudly with that primitive's own install command.
 There is no fallback to a private copy.
 
+## Verbs
+
+```
+wake     start the loops                    sleep    stop them
+tend     work the nest once, now            status   awake or asleep?
+ask      you -> gremlin, and wait           tell     gremlin -> you, unprompted
+```
+
+Plus `restart`, `tui`, `help`, every `commands/<name>.sh` as `/name`, and every
+bridge by its own name.
+
+**`ask` and `tell` are a pair, not two conveniences.** `ask` is inbound and
+waits for an answer; `tell` is outbound and expects none. Designing them as a
+symmetric pair is what keeps a moot and a multiplexer tractable later: gremlin
+→ gremlin traffic is the same pair pointed somewhere else, rather than a third
+mechanism. `tell` appends an assistant turn to the transcript and stops there,
+because the transcript is the source of truth and every bridge already fans out
+from it by byte cursor — a `tell` reaches Telegram, the web view and the TUI
+without any of them knowing the verb exists.
+
+**`wake` is the daemon, not a task.** It backgrounds `bin/run.sh` exactly as
+`start` did; `sleep` stops it. The per-task shape the brain dump gestured at —
+wake, do the thing, sleep — is `tend`: one pass over `.nest/in/` right now, in
+the foreground, whether or not the gremlin is awake. Making `tend` addressable
+is the real gain here; it was internal (`bin/tend-loop.sh`) and unreachable
+before.
+
+**The old verbs are gone, not aliased.** `start`, `stop` and `say` fail with
+the new name and a non-zero exit. Deliberately loud rather than silently
+forwarding, for one concrete reason: `commands/stop.sh` exists — `/stop` aborts
+an in-flight model call — so a `stop` left to fall through to the command
+dispatcher would quietly do something *different* from what muscle memory
+expects. A verb that changed meaning is worse than a verb that is gone.
+
 ## Names
 
 A gremlin has a name of its own, held in `.gremlin/name`:
@@ -213,7 +247,7 @@ The TUI bridge is the normal interactive surface:
 ./.gremlin/gremlin tui
 ```
 
-`gremlin say` is the one-shot and scripting surface. It writes one item, waits
+`gremlin ask` is the one-shot and scripting surface. It writes one item, waits
 for the next assistant turn, and prints it.
 
 ## Skills And Tools
@@ -277,7 +311,7 @@ demote it by removing the symlink while leaving the finding in Glean.
 
 ## Loops
 
-`gremlin start` backgrounds `bin/run.sh`, which starts two loops:
+`gremlin wake` backgrounds `bin/run.sh`, which starts two loops:
 
 - `bin/tend-loop.sh`: claims items from `.nest/in/`, appends the user turn,
   calls the model, appends the assistant turn, and completes the item into

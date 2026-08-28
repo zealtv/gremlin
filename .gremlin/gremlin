@@ -19,11 +19,13 @@ LOG="$GREMLIN_DIR/run.log"
 usage() {
   cat <<'USAGE'
 usage:
-  ./.gremlin/gremlin start
-  ./.gremlin/gremlin stop
-  ./.gremlin/gremlin status
-  ./.gremlin/gremlin restart
-  ./.gremlin/gremlin say <message|/command>
+  ./.gremlin/gremlin wake                     start the loops
+  ./.gremlin/gremlin sleep                    stop them
+  ./.gremlin/gremlin status                   awake or asleep?
+  ./.gremlin/gremlin restart                  sleep, then wake
+  ./.gremlin/gremlin tend                     work the nest once, now
+  ./.gremlin/gremlin ask <message|/command>   you -> gremlin, and wait
+  ./.gremlin/gremlin tell <message>           gremlin -> you, unprompted
   ./.gremlin/gremlin tui
   ./.gremlin/gremlin <command> [args...]
   ./.gremlin/gremlin <bridge> <verb> [args...]
@@ -31,8 +33,38 @@ usage:
 USAGE
 }
 
+# The verbs that were renamed. Kept as explicit refusals rather than aliases,
+# for one specific reason: `commands/stop.sh` exists (the /stop slash command
+# aborts an in-flight model call), so a removed `stop` would fall through to
+# the command dispatcher below and silently do something *different* from what
+# muscle memory expects. Fail loud, name the new verb, exit non-zero.
+renamed() {
+  echo "\`$1\` is now \`$2\`" >&2
+  echo "  ./.gremlin/gremlin $2${3:+ $3}" >&2
+  exit 2
+}
+
 runner_pids() {
   pgrep -f "$RUNNER" 2>/dev/null || true
+}
+
+# Who is this? Falls back to a bare noun for a gremlin that predates names or
+# whose name.sh is missing — this is chatter, never load-bearing.
+gremlin_name() {
+  if [ -x "$GREMLIN_DIR/bin/name.sh" ]; then
+    "$GREMLIN_DIR/bin/name.sh" 2>/dev/null || echo "this gremlin"
+  else
+    echo "this gremlin"
+  fi
+}
+
+cmd_tend() {
+  local runner="$GREMLIN_DIR/bin/tend-loop.sh"
+  [ -x "$runner" ] || { echo "tend loop not executable: $runner" >&2; exit 1; }
+  if [ -n "$(runner_pids)" ]; then
+    echo "note: $(gremlin_name) is awake and already tending every few seconds" >&2
+  fi
+  exec "$runner" "$@"
 }
 
 require_runner() {
@@ -42,12 +74,12 @@ require_runner() {
   }
 }
 
-cmd_start() {
+cmd_wake() {
   require_runner
   local pids
   pids="$(runner_pids)"
   if [ -n "$pids" ]; then
-    echo "gremlin already running:"
+    echo "$(gremlin_name) is already awake:"
     printf '%s\n' "$pids"
     exit 1
   fi
@@ -55,7 +87,7 @@ cmd_start() {
   nohup "$RUNNER" >> "$LOG" 2>&1 &
   local pid="$!"
   disown "$pid" 2>/dev/null || true
-  echo "started gremlin: $pid"
+  echo "$(gremlin_name) is awake: $pid"
   echo "log: $LOG"
 }
 
@@ -63,18 +95,18 @@ cmd_status() {
   local pids
   pids="$(runner_pids)"
   if [ -n "$pids" ]; then
-    echo "gremlin running:"
+    echo "$(gremlin_name) is awake:"
     printf '%s\n' "$pids"
   else
-    echo "gremlin not running"
+    echo "$(gremlin_name) is asleep"
   fi
 }
 
-cmd_stop() {
+cmd_sleep() {
   local pids pid deadline
   pids="$(runner_pids)"
   if [ -z "$pids" ]; then
-    echo "gremlin not running"
+    echo "$(gremlin_name) is already asleep"
     return 0
   fi
 
@@ -86,13 +118,13 @@ cmd_stop() {
   deadline=$(( $(date +%s) + 5 ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
     [ -z "$(runner_pids)" ] && {
-      echo "stopped gremlin"
+      echo "$(gremlin_name) is asleep"
       return 0
     }
     sleep 0.2
   done
 
-  echo "sent stop signal, but runner still appears active:" >&2
+  echo "sent the signal, but the runner still appears active:" >&2
   runner_pids >&2
   exit 1
 }
@@ -101,7 +133,7 @@ cmd_help() {
   usage
   echo
   echo "built-ins:"
-  printf '  %s\n' start stop status restart say tui help
+  printf '  %s\n' wake sleep status restart tend ask tell tui help
 
   echo
   echo "commands:"
@@ -134,22 +166,31 @@ verb="$1"
 shift
 
 case "$verb" in
-  start)
-    cmd_start "$@"
+  wake)
+    cmd_wake "$@"
     ;;
-  stop)
-    cmd_stop "$@"
+  sleep)
+    cmd_sleep "$@"
     ;;
   status)
     cmd_status "$@"
     ;;
   restart)
-    cmd_stop
-    cmd_start
+    cmd_sleep
+    cmd_wake
     ;;
-  say)
+  tend)
+    cmd_tend "$@"
+    ;;
+  ask)
     exec "$GREMLIN_DIR/bin/say.sh" "$@"
     ;;
+  tell)
+    exec "$GREMLIN_DIR/bin/tell.sh" "$@"
+    ;;
+  start)  renamed start wake ;;
+  stop)   renamed stop sleep ;;
+  say)    renamed say ask "$*" ;;
   tui)
     exec "$GREMLIN_DIR/bridges/tui/tui.sh" "$@"
     ;;
