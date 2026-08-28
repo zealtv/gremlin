@@ -57,9 +57,7 @@ fi
 # context/ is skipped as local state; bin/doctor.sh restores managed
 # context/system symlinks after the overlay.
 # No --delete: user-created files (custom skills, tools, commands, presets)
-# survive untouched. An un-migrated gremlin's vendored primitives survive for
-# the same reason: canonical no longer carries them, so there is no source to
-# copy over them.
+# survive untouched.
 excludes=(
   --exclude='transcript*'
   --exclude='context/'
@@ -121,10 +119,9 @@ if [ -n "$revert_path" ]; then
   dst_file="$GREMLIN_DIR/$revert_path"
   mkdir -p "$(dirname "$dst_file")"
   # Containment: the relative-path check above rejects `/…` and `..`, but a
-  # path inside .gremlin/ can still resolve outside it through a symlink — the
-  # transition shims point at the host's own primitives, and a revert through
-  # one would overwrite an install this gremlin does not own (proven: it
-  # downgraded a host's loom.sh from v2 to v1). Compare resolved parents.
+  # path inside .gremlin/ can still resolve outside it through an arbitrary
+  # symlink. A revert through one would overwrite files this gremlin does not
+  # own, so compare resolved parents.
   dst_parent="$(cd "$(dirname "$dst_file")" && pwd -P)"
   gremlin_real="$(cd "$GREMLIN_DIR" && pwd -P)"
   case "$dst_parent/" in

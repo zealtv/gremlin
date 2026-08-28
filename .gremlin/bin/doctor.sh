@@ -127,8 +127,8 @@ fi
 #   - a missing sibling fails loud, naming its install one-liner. There is no
 #     fallback to a vendored copy: a gremlin with no nest cannot be tended, and
 #     quietly inventing one hides the real problem.
-#   - a primitive dotdir still INSIDE .gremlin/ is legacy placement from before
-#     the primitives moved out. Name the migration rather than guessing.
+#   - a primitive dotdir still INSIDE .gremlin/ is legacy placement. There is
+#     one supported shape, so report regular directories and symlinks alike.
 INSTALL_BASE="https://raw.githubusercontent.com/zealtv"
 check_primitive() {
   local prim="$1" script="$2" repo="$3"
@@ -141,11 +141,10 @@ check_primitive() {
     echo "‼️  .$prim MISSING at the host root — install it beside .gremlin/:"
     echo "     curl -fsSL $INSTALL_BASE/$repo/main/install.sh | bash -s"
   fi
-  # Legacy placement: the same primitive still vendored inside .gremlin/.
-  # A symlink there is the transition shim, not drift.
-  if [ -d "$GREMLIN_DIR/.$prim" ] && [ ! -L "$GREMLIN_DIR/.$prim" ]; then
+  # Legacy placement: any entry for the primitive still inside .gremlin/.
+  # -L catches a broken symlink, for which -e is false.
+  if [ -e "$GREMLIN_DIR/.$prim" ] || [ -L "$GREMLIN_DIR/.$prim" ]; then
     echo "‼️  .gremlin/.$prim is LEGACY placement — primitives live at the host root."
-    echo "     migrate with: <gremlin-repo>/hoist-primitives.sh $HOST_DIR"
   fi
 }
 check_primitive "nest" "nestling.sh" "nestlings"

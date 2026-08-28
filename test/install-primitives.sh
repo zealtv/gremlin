@@ -103,8 +103,11 @@ cp -R "$ROOT/.gremlin/bin" "$LEGACY/.gremlin/bin"
 out="$("$LEGACY/.gremlin/bin/doctor.sh" 2>&1)"
 printf '%s' "$out" | grep -q 'LEGACY placement' && ok "doctor names legacy placement" \
   || bad "doctor missed a vendored primitive"
-printf '%s' "$out" | grep -q 'hoist-primitives.sh' && ok "doctor names the migration" \
-  || bad "doctor did not name hoist-primitives.sh"
+rm -rf "$LEGACY/.gremlin/.nest"
+ln -s ../.nest "$LEGACY/.gremlin/.nest"
+out="$("$LEGACY/.gremlin/bin/doctor.sh" 2>&1)"
+printf '%s' "$out" | grep -q 'LEGACY placement' && ok "doctor rejects a legacy symlink" \
+  || bad "doctor missed a legacy symlink"
 
 printf '\npassed: %d, failed: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || { echo "not ok - fresh install produces the sibling shape" >&2; exit 1; }

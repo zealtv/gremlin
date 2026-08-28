@@ -107,29 +107,6 @@ gremlin at all:
 .gremlin/bin/index-primitives.sh [host-dir]
 ```
 
-### Migrating an existing gremlin
-
-A gremlin installed before the primitives moved out carries them inside
-`.gremlin/`. `hoist-primitives.sh` moves them to the host root, data intact,
-and leaves a relative symlink behind so nothing breaks mid-migration:
-
-```sh
-./hoist-primitives.sh --dry-run <host-dir>   # print exactly what would move
-./hoist-primitives.sh          <host-dir>    # move it
-./hoist-primitives.sh --revert <host-dir>    # put it all back
-```
-
-It merges rather than clobbers when the host root already has a primitive of
-its own, and refuses the whole run — moving nothing — if the two sides hold
-different files at the same path. Where the host is a git repository it moves
-with `git mv`, so history follows.
-
-The script is a one-time migration, so it ships beside `install.sh` rather
-than inside the delivered bundle: it never rides `/update`. Run `/update` on
-the host **first** — a gremlin whose `update.sh` predates the wholesale
-primitive excludes would be silently un-migrated by its next update, and the
-script refuses to touch one.
-
 ## More
 
 User-facing docs live inside the installed gremlin:
