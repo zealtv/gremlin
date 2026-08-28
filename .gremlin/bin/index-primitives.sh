@@ -127,7 +127,16 @@ block() {
   echo "One arrival may earn several routes — evidence in lore, a current"
   echo "constraint in glean, an action on the loom. Those are different"
   echo "consequences of one thing, not competing copies of it."
-  echo
+  if has nest || has glean; then
+    echo
+    echo "**This section is the only part of this repository a gremlin maintains.**"
+    echo "It is generated *facts*: what is installed, and where to start reading."
+    echo "The policy is yours to write —"
+    has nest  && echo "\`.nest/tend.md\` says how arrivals here should be routed;"
+    has glean && echo "\`.glean/distil.md\` says what this repository considers worth remembering."
+    echo "A gremlin reads those; it does not write them."
+  fi
+
   echo "$END_MARK"
 }
 

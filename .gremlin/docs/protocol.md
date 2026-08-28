@@ -60,10 +60,9 @@ The gremlin's own scheduled work (`weekly reflect`, its dead-man's switch, a
 paused weekly curate pass) lives on the **host's** `.groundhog/schedule/`, not
 on a private one. Visibility is the point: a human can see the gremlin's
 self-care and pause it by renaming the job, like any other. Two host-local
-policy files travel the same way — `.nest/tend.md` (how to build a prompt for
-this gremlin) and `.glean/distil.md` (what deserves memory here). Both are
-copied only when absent, so an edited one is never overwritten:
-`bin/install-host-files.sh` fills gaps and nothing else.
+policy files do **not** travel that way, or at all — see "Facts and policy"
+below. `bin/install-host-files.sh` installs the jobs, fills gaps and nothing
+else.
 
 ## Placement
 
@@ -100,6 +99,34 @@ primitive drift. Both statements are withdrawn:
 A primitive is missing, not vendored: if a gremlin needs `.loom/` and the host
 has none, `doctor` fails loudly with that primitive's own install command.
 There is no fallback to a private copy.
+
+## Facts and policy
+
+A gremlin may generate **facts** about its host. It does not author **policy**
+for it.
+
+- *Facts* are things true of the folder that can be read off disk: which
+  primitives are installed, where to start reading. `AGENTS.md`'s generated
+  block is facts, which is why gremlin maintains it and regenerates it on every
+  `doctor` run.
+- *Policy* is what this repository wants: how arrivals should be routed
+  (`.nest/tend.md`), what is worth remembering (`.glean/distil.md`). Both files
+  belong to whoever owns the repository. Each primitive ships its own neutral
+  starting point; gremlin ships neither, overwrites neither, and reads both.
+
+`doctor` reports when one of those files is still its primitive's untouched
+starting point, and says what a gremlin would like to find there. That is the
+whole of gremlin's involvement: noticing, not writing.
+
+This is the placement law applied to file *contents* rather than file
+locations, and it settles a question the vendored layout used to hide. When
+`.nest/` lived inside `.gremlin/`, gremlin authoring `tend.md` was
+unremarkable — it was writing in its own folder. At the host root it is writing
+in someone else's. Two symptoms made the case: the shipped `tend.md` was a
+prose description of `bin/tend-loop.sh`, kept in a second file that nothing
+verified and that could only ever be redundant or wrong; and the shipped
+`distil.md` was mostly generic glean mechanics, which belong in
+`skills/distil.md` where the model already reads them.
 
 ## The map
 

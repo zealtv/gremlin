@@ -45,26 +45,43 @@ for name in nest loom lore glean groundhog; do
     || ok ".$name is not inside .gremlin/"
 done
 
-# The gremlin's own contributions: scheduled jobs and the two policy briefs.
+# The gremlin's own contributions: scheduled work, and nothing else.
 "$GREMLIN/bin/install-host-files.sh" "$HOST" >/dev/null 2>&1
 [ -x "$HOST/.groundhog/schedule/weekly/sun/22-00/reflect/run.sh" ] \
   && ok "the weekly reflect job is on the host's shared schedule" \
   || bad "reflect job missing from the host schedule"
 [ -e "$HOST/.groundhog/schedule/weekly/sun/23-00/curate-findings.paused" ] \
   && ok "the curate job ships paused" || bad "paused curate job missing"
-[ -f "$HOST/.nest/tend.md" ] && ok "tend.md is at the host nest" || bad "tend.md missing"
-[ -f "$HOST/.glean/distil.md" ] && ok "distil.md is at the host glean" || bad "distil.md missing"
 
-# Never overwrites: a paused job and an edited brief survive a second run.
+# Facts, not policy: the host's own policy files are the primitives' and stay
+# that way. gremlin must not ship, install or overwrite either.
+[ -e "$GREMLIN/host/.nest/tend.md" ] && bad "gremlin ships a tend.md" \
+  || ok "gremlin ships no tend.md"
+[ -e "$GREMLIN/host/.glean/distil.md" ] && bad "gremlin ships a distil.md" \
+  || ok "gremlin ships no distil.md"
+grep -qF "Replace the prompts below" "$HOST/.nest/tend.md" \
+  && ok "the nest keeps nestlings' own tend.md" \
+  || bad "something overwrote the host's tend.md"
+grep -qF "the local brief for distillation in this glean" "$HOST/.glean/distil.md" \
+  && ok "the glean keeps its own distil.md" \
+  || bad "something overwrote the host's distil.md"
+out="$("$GREMLIN/bin/doctor.sh" 2>&1)"
+printf '%s' "$out" | grep -q 'tend.md is still its primitive' \
+  && ok "doctor notices an untouched tend.md" || bad "doctor said nothing about tend.md"
+printf '%s' "$out" | grep -q 'distil.md is still its primitive' \
+  && ok "doctor notices an untouched distil.md" || bad "doctor said nothing about distil.md"
+echo "# this repo's actual policy" > "$HOST/.nest/tend.md"
+printf '%s' "$("$GREMLIN/bin/doctor.sh" 2>&1)" | grep -q 'tend.md is still its primitive' \
+  && bad "doctor still nags about a written tend.md" \
+  || ok "doctor goes quiet once the host writes its own policy"
+
+# Never overwrites: a paused job survives a second run.
 mv "$HOST/.groundhog/schedule/weekly/sun/22-00/reflect" \
    "$HOST/.groundhog/schedule/weekly/sun/22-00/reflect.paused"
-echo "local edit" >> "$HOST/.nest/tend.md"
 "$GREMLIN/bin/install-host-files.sh" "$HOST" >/dev/null 2>&1
 [ ! -e "$HOST/.groundhog/schedule/weekly/sun/22-00/reflect" ] \
   && ok "a paused job is not reinstalled beside itself" \
   || bad "reinstalled a job the human had paused"
-grep -q 'local edit' "$HOST/.nest/tend.md" && ok "an edited tend.md is left alone" \
-  || bad "clobbered an edited tend.md"
 
 # doctor is quiet about correct placement and loud about a missing primitive.
 out="$("$GREMLIN/bin/doctor.sh" 2>&1)"

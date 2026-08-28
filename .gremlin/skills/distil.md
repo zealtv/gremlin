@@ -14,9 +14,27 @@ a direct user ask to remember or consolidate something.
 Do not treat reviewed material as permanent memory by default. Distillation is a
 judgment pass. Prefer "nothing earned" over weak findings.
 
+## Posture
+
+Keep memory small, useful, transparent, and correctable. Memory should improve
+future judgment; if a finding would only make the corpus larger, leave it
+behind.
+
+- Prefer revising an existing finding over creating a near-duplicate.
+- Do not remember temporary, sensitive, or incidental details.
+- Do not infer a durable preference from a single ambiguous moment.
+- Do not copy transcript chunks forward when a short finding would do.
+- Record **why** the memory was earned, so a future reader can inspect it.
+- It is valid to remember nothing.
+
+That is how *you* handle memory anywhere. What **this repository** considers
+worth remembering is the host's own call, and it says so in `.glean/distil.md`
+— read that before deciding, and treat it as the more specific instruction
+wherever the two differ. You do not write that file.
+
 ## Load The Brief
 
-1. Read `.glean/distil.md`.
+1. Read `.glean/distil.md` — the host's brief, not yours.
 2. Inspect `.glean/findings/INDEX.md` if it exists.
 3. If the task points at an archived transcript, read that archive. Do not copy
    the whole transcript into `.glean/in/`.

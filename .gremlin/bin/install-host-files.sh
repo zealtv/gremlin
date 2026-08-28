@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # install-host-files.sh — place this gremlin's contributions to its host's
-# primitives: its own scheduled jobs, and the host-local policy files the
-# primitives leave to whoever tends the folder (`.nest/tend.md`,
-# `.glean/distil.md`).
+# primitives: its own scheduled work, and nothing else. Everything under
+# `host/` mirrors the host root, so
+# `host/.groundhog/schedule/weekly/sun/22-00/reflect/` lands at
+# `<host>/.groundhog/schedule/weekly/sun/22-00/reflect/`.
 #
-# Everything under `host/` mirrors the host root, so `host/.nest/tend.md` lands
-# at `<host>/.nest/tend.md`.
+# It ships no policy files. A gremlin may generate facts about its host; it
+# does not author policy for it — `.nest/tend.md` and `.glean/distil.md` belong
+# to whoever owns the repository, and doctor reports when one is still the
+# primitive's untouched default.
 #
 # The gremlin's self-care runs on the repository's SHARED schedule, not a
 # private one. Visibility is the point of the placement law: a human reading
@@ -17,26 +20,12 @@
 # you tuned — all stay yours. The installer only fills gaps, so re-running it
 # is safe.
 #
-# usage: install-host-files.sh [--check] [--fresh "<names>"] [host-dir]
+# usage: install-host-files.sh [--check] [host-dir]
 #   --check reports what is missing and writes nothing (exit 1 if anything is).
-#   --fresh names primitives that were just installed from scratch, so their
-#     placeholder policy files are the primitive's own defaults rather than
-#     anyone's work. nestlings ships a tend.md that says "replace the prompts
-#     below with the host folder's policy", and glean ships a generic
-#     distil.md; on a primitive installed seconds ago, gremlin's versions are
-#     that policy and should land. On a primitive that was already there, they
-#     never touch it.
 set -euo pipefail
 
 check_only=0
-fresh=""
-while [ "$#" -gt 0 ]; do
-  case "${1:-}" in
-    --check) check_only=1; shift ;;
-    --fresh) fresh="${2:-}"; shift 2 ;;
-    *) break ;;
-  esac
-done
+if [ "${1:-}" = "--check" ]; then check_only=1; shift; fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GREMLIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -66,14 +55,6 @@ while IFS= read -r src; do
   # renamed to pause or un-pause it (`reflect` <-> `reflect.paused`) — a human
   # renaming a job must not cause the original to be reinstalled beside it.
   parent="$(dirname "$dst")"
-  is_fresh=0
-  case " $fresh " in *" ${prim#.} "*) is_fresh=1 ;; esac
-  if [ "$is_fresh" = 1 ] && [ -f "$dst" ] && [ "$check_only" = 0 ]; then
-    cp -p "$src" "$dst"
-    echo "installed $rel (over a just-installed primitive's default)"
-    installed=$((installed + 1))
-    continue
-  fi
   if [ -e "$dst" ] || [ -e "${parent%.paused}" ] || [ -e "$parent.paused" ]; then
     [ "$check_only" = 1 ] || echo "ok $rel already present"
     skipped=$((skipped + 1))

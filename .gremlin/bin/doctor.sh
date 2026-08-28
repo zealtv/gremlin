@@ -122,6 +122,28 @@ if [ -d "$HOST_DIR/.dash" ]; then
   echo "note .dash present at the host root — gremlin-produced content (correct placement)"
 fi
 
+# Host policy files. gremlin ships neither: a gremlin may generate facts about
+# its host (AGENTS.md), it does not author policy for it. What it can do is
+# notice that a primitive's own starting point is still sitting there untouched
+# and say what a gremlin would like to find in it. Detection is a marker phrase
+# from each primitive's shipped default — if upstream rewords its template this
+# check simply stops firing, which is the quiet failure worth accepting for a
+# note that is never load-bearing.
+check_policy() {
+  local file="$1" marker="$2" advice="$3"
+  local path="$HOST_DIR/$file"
+  [ -f "$path" ] || return 0
+  if grep -qF -- "$marker" "$path"; then
+    echo "note $file is still its primitive's starting point — $advice"
+  fi
+}
+check_policy ".nest/tend.md" \
+  "Replace the prompts below with the host folder's policy." \
+  "this nest is tended by the gremlin beside it (.gremlin/bin/tend-loop.sh, described in .gremlin/docs/protocol.md); write the routing policy you want here"
+check_policy ".glean/distil.md" \
+  "This is the local brief for distillation in this glean." \
+  "say what THIS repository considers worth remembering; the mechanics are already in .gremlin/skills/distil.md"
+
 # The gremlin's own contributions to the host's primitives — its scheduled
 # jobs, the tend brief, the distillation brief. Reported, never installed here:
 # a job you deleted stays deleted, and doctor is not an installer.
