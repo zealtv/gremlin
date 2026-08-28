@@ -14,6 +14,13 @@ Install into the current directory:
 curl -fsSL https://raw.githubusercontent.com/zealtv/gremlin/main/install.sh | bash -s
 ```
 
+That lays down `.gremlin/` and, because a gremlin with no nest cannot be
+tended, installs any of the five primitives you are missing by running each
+project's own installer — once, at install time. After that gremlin never
+touches them: `/update` overlays `.gremlin/` alone, and `doctor` reports a
+missing primitive rather than reaching for a private copy. Add
+`GREMLIN_SKIP_PRIMITIVES=1` to install the tender by itself.
+
 Point it at a model. `.gremlin/models/default.sh` is just an executable that reads a prompt on stdin and writes a reply on stdout — edit it for whichever CLI you use (Claude Code, Codex, Open Code, a local model, anything):
 
 ```sh

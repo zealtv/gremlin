@@ -14,13 +14,30 @@ HOST="$TMP/host"
 mkdir -p "$HOST"
 cp -R "$ROOT/.gremlin" "$HOST/.gremlin"
 GREMLIN="$HOST/.gremlin"
-# The primitives are siblings of .gremlin at the host root, not inside it.
-for prim in "$ROOT"/.gremlin/.*/; do
-  base="$(basename "$prim")"
-  case "$base" in .|..) continue ;; esac
-  cp -R "$prim" "$HOST/$base"
-  rm -rf "${GREMLIN:?}/$base"
-done
+
+# The primitives are siblings of .gremlin at the host root, and gremlin no
+# longer carries a copy of any of them — so the test has to install one, the
+# same way a real host does. Prefer a sibling checkout of the primitive's repo
+# (offline, and it tests what is actually on this machine); fall back to the
+# canonical installer, which needs the network.
+PRIMITIVE_REPOS="${PRIMITIVE_REPOS:-$(cd "$ROOT/.." && pwd)}"
+install_primitive() {
+  local name="$1" repo="$2"
+  if [ -x "$PRIMITIVE_REPOS/$repo/install.sh" ]; then
+    "$PRIMITIVE_REPOS/$repo/install.sh" "$HOST" >/dev/null
+  elif "$GREMLIN/bin/install-primitives.sh" "$HOST" "$name" >/dev/null 2>&1; then
+    :
+  else
+    echo "not ok - cannot install .$name: no $PRIMITIVE_REPOS/$repo checkout and no network" >&2
+    exit 1
+  fi
+}
+install_primitive nest nestlings
+install_primitive glean glean
+install_primitive groundhog groundhog
+"$GREMLIN/bin/install-host-files.sh" "$HOST" >/dev/null
+"$HOST/.glean/glean.sh" index >/dev/null
+
 NEST="$HOST/.nest"
 rm -rf "$NEST/in" "$NEST/out" "$NEST/dropped"
 mkdir -p "$NEST/in" "$NEST/out" "$NEST/dropped"

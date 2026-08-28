@@ -46,25 +46,22 @@ if [ -z "$url" ]; then
   exit 1
 fi
 
-# Excludes: runtime queues, personal context, identity, per-install state.
+# Excludes: identity, personal context, per-install state.
+#
+# This list is short because the overlay target no longer contains anything of
+# the user's but these. The five primitives and their data live at the host
+# root, outside .gremlin/ entirely, so /update is structurally incapable of
+# touching a nest, a loom, a lore, a glean or a groundhog. That is a property
+# of the layout, not of this list — there is nothing here to get wrong.
+#
 # context/ is skipped as local state; bin/doctor.sh restores managed
 # context/system symlinks after the overlay.
 # No --delete: user-created files (custom skills, tools, commands, presets)
-# survive untouched.
+# survive untouched. An un-migrated gremlin's vendored primitives survive for
+# the same reason: canonical no longer carries them, so there is no source to
+# copy over them.
 excludes=(
   --exclude='transcript*'
-  # The five primitives are the host repository's, not the gremlin's. Excluding
-  # each dir wholesale means /update is structurally incapable of writing into
-  # a nest, loom, lore, glean or groundhog — including through the transition
-  # symlink a migrated host leaves behind (spike 20: --keep-dirlinks would
-  # instead overwrite the host's own installs, and did, downgrading a v2
-  # loom.sh to v1). Until a host is migrated these also protect its vendored
-  # copies; after migration there is nothing under the overlay target to hit.
-  --exclude='.nest/'
-  --exclude='.loom/'
-  --exclude='.lore/'
-  --exclude='.glean/'
-  --exclude='.groundhog/'
   --exclude='context/'
   --exclude='gremlin.md'
   --exclude='.upstream'

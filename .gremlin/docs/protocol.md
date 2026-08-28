@@ -31,6 +31,8 @@ your-repo/
     tools/                # bash tools the gremlin can call
     skills/               # markdown procedures
     models/               # model runner presets
+    host/                 # what this gremlin contributes to the host's
+                          #   primitives: its scheduled jobs, tend.md, distil.md
 ```
 
 The host folder is the agent's outside identity and working directory. The
@@ -39,6 +41,29 @@ the loops from the host folder rather than from inside `.gremlin/`.
 
 The five primitives are **not** inside `.gremlin/`. They belong to the host
 folder, and a human acts on exactly the same files the gremlin does.
+
+## Installation and delivery
+
+`install.sh` lays down `.gremlin/`, then — as a convenience, once — installs
+any missing primitive by fetching its repo and running **its own**
+`install.sh`, and copies `host/` into place. `GREMLIN_SKIP_PRIMITIVES=1`
+installs the tender alone.
+
+After that, gremlin never installs anything. `/update` overlays `.gremlin/`
+only; it does not initialise, repair or reach for a primitive, and its exclude
+list is down to identity files because there is nothing else of the user's
+under the overlay target. A missing primitive is reported by `doctor`, loudly,
+with that project's install command, and there is no fallback to a private
+copy.
+
+The gremlin's own scheduled work (`weekly reflect`, its dead-man's switch, a
+paused weekly curate pass) lives on the **host's** `.groundhog/schedule/`, not
+on a private one. Visibility is the point: a human can see the gremlin's
+self-care and pause it by renaming the job, like any other. Two host-local
+policy files travel the same way — `.nest/tend.md` (how to build a prompt for
+this gremlin) and `.glean/distil.md` (what deserves memory here). Both are
+copied only when absent, so an edited one is never overwritten:
+`bin/install-host-files.sh` fills gaps and nothing else.
 
 ## Placement
 

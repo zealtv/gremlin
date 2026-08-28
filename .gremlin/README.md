@@ -95,6 +95,13 @@ ln -s ../../.glean/findings/<id>.md ./.gremlin/context/<id>.md
 
 `.gremlin/.upstream` stores the tarball URL used by `/update`.
 
+`/update` overlays `.gremlin/` and nothing else. The primitives at the host
+root are outside its target entirely, so an update cannot touch your nest,
+loom, lore, glean or groundhog — that is a property of where they live, not of
+an exclude list. It does not install or repair a primitive either; `doctor`
+reports a missing one with that project's install command, and
+`bin/install-primitives.sh` is there if you want it done for you.
+
 From the TUI, run:
 
 ```text

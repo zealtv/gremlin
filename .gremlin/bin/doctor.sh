@@ -122,6 +122,18 @@ if [ -d "$HOST_DIR/.dash" ]; then
   echo "note .dash present at the host root — gremlin-produced content (correct placement)"
 fi
 
+# The gremlin's own contributions to the host's primitives — its scheduled
+# jobs, the tend brief, the distillation brief. Reported, never installed here:
+# a job you deleted stays deleted, and doctor is not an installer.
+if [ -x "$GREMLIN_DIR/bin/install-host-files.sh" ]; then
+  if missing="$("$GREMLIN_DIR/bin/install-host-files.sh" --check "$HOST_DIR" 2>/dev/null)"; then
+    echo "ok host files (jobs, tend.md, distil.md)"
+  else
+    printf '%s\n' "$missing" | sed 's/^missing /note not installed at the host: /'
+    echo "     install with: $GREMLIN_DIR/bin/install-host-files.sh"
+  fi
+fi
+
 check_preset() {
   local alias="$1"
   local path="$GREMLIN_DIR/models/$alias.sh"
