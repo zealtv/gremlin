@@ -426,7 +426,7 @@ def build_status():
                   "fields": {"present": present, "alive": alive,
                              "stale": present and not alive}})
 
-    in_dir = os.path.join(GREMLIN_DIR, ".nest", "in")
+    in_dir = os.path.join(HOST_DIR, ".nest", "in")
     claimed = 0
     if os.path.isdir(in_dir):
         claimed = sum(1 for n in os.listdir(in_dir) if n.endswith(".tending"))
@@ -492,8 +492,8 @@ def list_tray(path):
 
 
 def build_groundhog():
-    gh = os.path.join(GREMLIN_DIR, ".groundhog", "groundhog.sh")
-    root = os.path.join(GREMLIN_DIR, ".groundhog")
+    gh = os.path.join(HOST_DIR, ".groundhog", "groundhog.sh")
+    root = os.path.join(HOST_DIR, ".groundhog")
     items = []
 
     # The schedule tree, verbatim from `list` ([paused] already tagged) — the
@@ -630,8 +630,8 @@ def build_loom():
     with no child dirs, .waiting excluded) is subtle, so never re-derive it. The
     verbatim `status` tree is shown; NEXT TO TEND = loose-ends; counts parsed
     only from the script's own summary line."""
-    loom = os.path.join(GREMLIN_DIR, ".loom", "loom.sh")
-    root = os.path.join(GREMLIN_DIR, ".loom")
+    loom = os.path.join(HOST_DIR, ".loom", "loom.sh")
+    root = os.path.join(HOST_DIR, ".loom")
     items = []
 
     raw, rc = run_readonly([loom, "status"])
@@ -662,7 +662,7 @@ def build_loom():
 
 # --- Glean inspector (index-first: INDEX.md only; bodies on demand) ----------
 
-GLEAN_DIR = os.path.join(GREMLIN_DIR, ".glean")
+GLEAN_DIR = os.path.join(HOST_DIR, ".glean")
 FINDINGS_DIR = os.path.join(GLEAN_DIR, "findings")
 INDEX_LINE = re.compile(r"^- \[\[([^\]]+)\]\] — (.*)$")
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")

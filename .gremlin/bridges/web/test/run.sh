@@ -236,18 +236,68 @@ else
   bad "gremlin web stop → port freed"
 fi
 
+# Current sibling layout regression: with no root overrides, the bridge derives
+# HOST/.gremlin and HOST from its own fixed ancestry. The old `.nest` walk made
+# GREMLIN_DIR=HOST and exposed HOST's parent instead.
+echo "== current HOST/.gremlin + HOST/.nest root resolution =="
+ROOTFIX="$(mktemp -d)"
+ROOTHOST="$ROOTFIX/current-host"
+ROOTGREM="$ROOTHOST/.gremlin"
+mkdir -p "$ROOTGREM/bridges" "$ROOTHOST/.nest/in"
+cp -a "$BRIDGE_DIR" "$ROOTGREM/bridges/web"
+: > "$ROOTGREM/transcript.md"
+printf '#!/bin/sh\nexit 0\n' > "$ROOTHOST/.nest/nestling.sh"
+chmod +x "$ROOTHOST/.nest/nestling.sh"
+ROOTPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
+ROOTURL="http://127.0.0.1:$ROOTPORT"
+ROOTWEB="$ROOTGREM/bridges/web/web.sh"
+unset WEB_GREMLIN_DIR WEB_HOST_DIR WEB_TRANSCRIPT WEB_NESTLING WEB_PUBLIC_DIR WEB_CACHE_DIR
+export WEB_PORT="$ROOTPORT" WEB_BIND="127.0.0.1"
+
+if "$ROOTWEB" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$ROOTURL/"; then
+  root_identity="$(curl -fsS "$ROOTURL/api/identity")"
+  touch "$ROOTHOST/.nest/in/root-resolution.tending"
+  root_status="$(curl -fsS "$ROOTURL/api/status")"
+  if printf '%s' "$root_identity" | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+sys.exit(0 if d["host"]=="current-host" and d["path"]==sys.argv[1] else 1)' "$ROOTHOST" \
+    && printf '%s' "$root_status" | python3 -c 'import json,sys
+i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="in-progress"][0]
+sys.exit(0 if i["fields"]["tending"]==1 else 1)'; then
+    ok "bridge ancestry resolves its own host root (not the parent folder)"
+  else
+    bad "bridge ancestry resolves its own host root: $root_identity"
+  fi
+else
+  bad "current sibling-layout daemon boots without root overrides"
+fi
+"$ROOTWEB" stop >/dev/null 2>&1 || true
+
+mv "$ROOTHOST/.nest" "$ROOTHOST/.nest.missing"
+if root_error="$("$ROOTWEB" status 2>&1)"; then
+  bad "missing sibling .nest fails loud"
+elif printf '%s' "$root_error" | grep -q 'sibling layout mismatch'; then
+  ok "missing sibling .nest fails loud with the expected path"
+else
+  bad "missing sibling .nest failure was not diagnostic: $root_error"
+fi
+rm -rf "$ROOTFIX"
+
 # ============================================================================
 echo "== M1 send (the chat round-trip) =="
 
-# A full fixture: a self-contained copy of this .gremlin so the real tender can
-# run against it with the deterministic `echo` preset, touching no real state.
+# A full current-layout fixture: this .gremlin plus a sibling Nest, so the real
+# tender can run with the deterministic `echo` preset, touching no real state.
 GREMLIN_REAL="$(cd "$BRIDGE_DIR/../.." && pwd)"
 M1FIX="$(mktemp -d)"
 cp -a "$GREMLIN_REAL" "$M1FIX/.gremlin"
 M1GREM="$M1FIX/.gremlin"
+"/home/bob/repos/nestlings/install.sh" "$M1FIX" >/dev/null 2>&1
+mkdir -p "$M1FIX/.glean/findings"
+: > "$M1FIX/.glean/findings/INDEX.md"
 printf 'echo\n' > "$M1GREM/.model"          # deterministic, no network
 : > "$M1GREM/transcript.md"                   # start clean
-find "$M1GREM/.nest/in" -mindepth 1 -delete 2>/dev/null || true
+find "$M1FIX/.nest/in" -mindepth 1 -delete 2>/dev/null || true
 rm -f "$M1GREM/.tending.pid"
 
 M1PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
@@ -257,10 +307,10 @@ ORIGIN="Origin: http://127.0.0.1:$M1PORT"
 rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
 export WEB_GREMLIN_DIR="$M1GREM"
 export WEB_TRANSCRIPT="$M1GREM/transcript.md"
-export WEB_NESTLING="$M1GREM/.nest/nestling.sh"
+export WEB_NESTLING="$M1FIX/.nest/nestling.sh"
 export WEB_PORT="$M1PORT"
 
-web_items() { find "$M1GREM/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
+web_items() { find "$M1FIX/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
 
 if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M1URL/"; then
   ok "M1 daemon boots against fixture"
@@ -397,7 +447,7 @@ fi
 # Activity indicator (stitch 29) data contract: a claimed .nest/in item surfaces
 # as in-progress>0 in /api/status (the second honest signal; the first — a live
 # .tending.pid ⇒ "thinking" — is covered in the M3 status tests).
-touch "$M1GREM/.nest/in/zzz-claim.tending"
+touch "$M1FIX/.nest/in/zzz-claim.tending"
 if curl -fsS "$M1URL/api/status" | python3 -c 'import sys,json
 i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="in-progress"][0]
 sys.exit(0 if i["fields"]["tending"]>=1 else 1)'; then
@@ -405,7 +455,7 @@ sys.exit(0 if i["fields"]["tending"]>=1 else 1)'; then
 else
   bad "in-progress claim not reflected in /api/status (stitch 29)"
 fi
-rm -f "$M1GREM/.nest/in/zzz-claim.tending"
+rm -f "$M1FIX/.nest/in/zzz-claim.tending"
 
 # A message that is NOT a slash command is still ingested as a nest item.
 before_norm="$(web_items)"
@@ -427,9 +477,12 @@ M8H="$M8FIX/host"
 M8G="$M8H/.gremlin"
 mkdir -p "$M8H"
 cp -a "$GREMLIN_REAL" "$M8G"
+"/home/bob/repos/nestlings/install.sh" "$M8H" >/dev/null 2>&1
+mkdir -p "$M8H/.glean/findings"
+: > "$M8H/.glean/findings/INDEX.md"
 printf 'echo\n' > "$M8G/.model"
 : > "$M8G/transcript.md"
-find "$M8G/.nest/in" -mindepth 1 -delete 2>/dev/null || true
+find "$M8H/.nest/in" -mindepth 1 -delete 2>/dev/null || true
 rm -f "$M8G/.tending.pid"
 rm -rf "$BRIDGE_DIR/.cache"
 
@@ -441,13 +494,13 @@ rm -f "$BRIDGE_DIR/.cursor" "$BRIDGE_DIR/web.pid" "$BRIDGE_DIR/web.log"
 export WEB_GREMLIN_DIR="$M8G"
 export WEB_HOST_DIR="$M8H"
 export WEB_TRANSCRIPT="$M8G/transcript.md"
-export WEB_NESTLING="$M8G/.nest/nestling.sh"
+export WEB_NESTLING="$M8H/.nest/nestling.sh"
 export WEB_PORT="$M8PORT"
 export WEB_BIND="127.0.0.1"
 export WEB_MAX_UPLOAD=4096
 unset WEB_REMOTE_TOKEN
 
-m8_items() { find "$M8G/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
+m8_items() { find "$M8H/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
 # Resolve the item a POST created from its response JSON — a name-sort "latest"
 # ties when two items land in the same second (the random hex decides, flakily).
 m8_item_of() { printf '%s' "$1" | python3 -c 'import sys,json
@@ -472,7 +525,7 @@ printf 'attachment notes\n' > "$M8FIX/notes.txt"
 resp="$(curl -s -w '\n%{http_code}' -X POST -H "$M8ORIGIN" \
   -F 'text=see attached' -F "files=@$M8FIX/notes.txt;type=text/plain" "$M8URL/send")"
 code="$(printf '%s' "$resp" | tail -n 1)"
-item="$M8G/.nest/in/$(m8_item_of "$(printf '%s' "$resp" | sed '$d')")"
+item="$M8H/.nest/in/$(m8_item_of "$(printf '%s' "$resp" | sed '$d')")"
 legacy_msg="$(printf 'message.%s' md)"
 if [ "$code" = "200" ] && [ "$(m8_items)" = "1" ] && [ -d "$item" ] \
   && [ -f "$item/notes.txt" ] && [ -f "$item/instructions.md" ] \
@@ -502,7 +555,7 @@ before="$(m8_items)"
 printf 'pw bytes\n' > "$M8FIX/passwd-src"
 resp="$(curl -fsS -X POST -H "$M8ORIGIN" -F 'text=bad name' \
   -F "files=@$M8FIX/passwd-src;filename=../../etc/passwd;type=text/plain" "$M8URL/send")"
-item="$M8G/.nest/in/$(m8_item_of "$resp")"
+item="$M8H/.nest/in/$(m8_item_of "$resp")"
 if [ "$(m8_items)" = "$((before + 1))" ] && [ -f "$item/passwd" ] \
   && [ ! -e "$item/../../etc/passwd" ] && [ ! -e "$BRIDGE_DIR/.cache/etc/passwd" ]; then
   ok "filename traversal sanitized to basename inside item dir"
@@ -514,7 +567,7 @@ before="$(m8_items)"
 printf 'uploaded control bytes\n' > "$M8FIX/uploaded-instructions.md"
 resp="$(curl -fsS -X POST -H "$M8ORIGIN" -F 'text=reserved name' \
   -F "files=@$M8FIX/uploaded-instructions.md;filename=instructions.md;type=text/markdown" "$M8URL/send")"
-item="$M8G/.nest/in/$(m8_item_of "$resp")"
+item="$M8H/.nest/in/$(m8_item_of "$resp")"
 if [ "$(m8_items)" = "$((before + 1))" ] && [ -f "$item/file.md" ] \
   && grep -q 'uploaded control bytes' "$item/file.md" \
   && grep -q '## attachments' "$item/instructions.md" \
@@ -580,7 +633,7 @@ done
 
 before="$(m8_items)"
 resp="$(curl -fsS -X POST -H "$M8ORIGIN" -F 'text=text only multipart' "$M8URL/send")"
-item="$M8G/.nest/in/$(m8_item_of "$resp")"
+item="$M8H/.nest/in/$(m8_item_of "$resp")"
 if [ "$(m8_items)" = "$((before + 1))" ] && [ -f "$item" ] && [ ! -d "$item" ] \
   && grep -q 'text only multipart' "$item"; then
   ok "multipart text-only → bare .md item, not a directory"
@@ -696,9 +749,9 @@ echo "== M5 inspector: glean (index-first) =="
 
 GFIX="$(mktemp -d)"
 GG="$GFIX/.gremlin"
-mkdir -p "$GG/.glean/findings" "$GG/.glean/in" "$GG/.glean/out" "$GG/.glean/dropped" "$GG/context"
+mkdir -p "$GFIX/.glean/findings" "$GFIX/.glean/in" "$GFIX/.glean/out" "$GFIX/.glean/dropped" "$GG/context"
 : > "$GG/transcript.md"
-cat > "$GG/.glean/findings/commit-style.md" <<'EOF'
+cat > "$GFIX/.glean/findings/commit-style.md" <<'EOF'
 # Commit message convention
 Emoji only in the first -m subject; prose body in a second -m.
 
@@ -707,13 +760,13 @@ Emoji only in the first -m subject; prose body in a second -m.
 ## Associations
 - [[loom-tracker]]
 EOF
-cat > "$GG/.glean/findings/loom-tracker.md" <<'EOF'
+cat > "$GFIX/.glean/findings/loom-tracker.md" <<'EOF'
 # Loom action tracker
 Uses .loom/ for durable intentions.
 EOF
-printf -- '- [[commit-style]] — Commit message convention — Emoji only in the first -m subject; prose body in a second -m.\n- [[loom-tracker]] — Loom action tracker — Uses .loom/ for durable intentions.\n' > "$GG/.glean/findings/INDEX.md"
-ln -s ../.glean/findings/commit-style.md "$GG/context/commit-style.md"  # promote
-echo "raw" > "$GG/.glean/in/note-1.md"
+printf -- '- [[commit-style]] — Commit message convention — Emoji only in the first -m subject; prose body in a second -m.\n- [[loom-tracker]] — Loom action tracker — Uses .loom/ for durable intentions.\n' > "$GFIX/.glean/findings/INDEX.md"
+ln -s ../../.glean/findings/commit-style.md "$GG/context/commit-style.md"  # promote
+echo "raw" > "$GFIX/.glean/in/note-1.md"
 
 GPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
 GURL="http://127.0.0.1:$GPORT"
@@ -789,15 +842,16 @@ echo "== M4 inspector: groundhog (shell out to list/due) =="
 
 HFIX="$(mktemp -d)"
 HG="$HFIX/.gremlin"
-# A self-contained gremlin so groundhog.sh resolves its own root.
+# A gremlin plus sibling Groundhog, matching the current host layout.
 cp -a /home/bob/repos/gremlin/.gremlin "$HG"
+"/home/bob/repos/groundhog/install.sh" "$HFIX" >/dev/null 2>&1
 : > "$HG/transcript.md"
 rm -f "$HG/bridges/web/.cursor" "$HG/bridges/web/web.pid" "$HG/bridges/web/web.log"
 rm -rf "$HG/bridges/web/__pycache__" "$HG/bridges/web/.cache"
 # seed schedule: a paused weekly entry + a fired-today marker + an out/ entry
-mkdir -p "$HG/.groundhog/schedule/weekly/sun/09-00/standup.paused"
-mkdir -p "$HG/.groundhog/fired/$(date +%Y-%m-%d)/weekly/sun/09-00/standup"
-mkdir -p "$HG/.groundhog/out/standup-$(date +%Y-%m-%d)"
+mkdir -p "$HFIX/.groundhog/schedule/weekly/sun/09-00/standup.paused"
+mkdir -p "$HFIX/.groundhog/fired/$(date +%Y-%m-%d)/weekly/sun/09-00/standup"
+mkdir -p "$HFIX/.groundhog/out/standup-$(date +%Y-%m-%d)"
 
 HPORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
 HURL="http://127.0.0.1:$HPORT"
@@ -849,11 +903,12 @@ echo "== M6 inspector: loom (reuse loom.sh, preserve tree) =="
 LMFIX="$(mktemp -d)"
 LMG="$LMFIX/.gremlin"
 cp -a /home/bob/repos/gremlin/.gremlin "$LMG"
+"/home/bob/repos/loom/install.sh" "$LMFIX" >/dev/null 2>&1
 : > "$LMG/transcript.md"
 rm -f "$LMG/bridges/web/.cursor" "$LMG/bridges/web/web.pid" "$LMG/bridges/web/web.log"
 rm -rf "$LMG/bridges/web/__pycache__" "$LMG/bridges/web/.cache"
 # seed the gremlin's own loom: one ready loose end + one waiting leaf
-LOOM="$LMG/.loom/loom.sh"
+LOOM="$LMFIX/.loom/loom.sh"
 "$LOOM" new ship-thing >/dev/null 2>&1 || true
 "$LOOM" new parked-thing >/dev/null 2>&1 || true
 "$LOOM" wait parked-thing >/dev/null 2>&1 || true

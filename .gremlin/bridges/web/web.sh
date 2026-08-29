@@ -11,30 +11,30 @@ set -euo pipefail
 
 BRIDGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resolve GREMLIN_DIR by walking up to the directory that contains `.nest`
-# (depth-independent; works from a groundhog-materialized location), not by
-# counting `../`. A test may override the whole root via WEB_GREMLIN_DIR.
-find_gremlin_dir() {
-  if [ -n "${WEB_GREMLIN_DIR:-}" ]; then
-    (cd "$WEB_GREMLIN_DIR" && pwd)
-    return 0
+# The bridge has one canonical location: HOST/.gremlin/bridges/web. Resolve
+# both roots from that fixed ancestry; `.nest` is a sibling primitive and must
+# never be mistaken for the gremlin root. Tests may override GREMLIN_DIR; its
+# host is still derived as the parent so the two roots cannot disagree.
+if [ -n "${WEB_GREMLIN_DIR:-}" ]; then
+  GREMLIN_DIR="$(cd "$WEB_GREMLIN_DIR" && pwd)" || {
+    echo "web: no such WEB_GREMLIN_DIR: $WEB_GREMLIN_DIR" >&2
+    exit 1
+  }
+  HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
+else
+  GREMLIN_DIR="$(cd "$BRIDGE_DIR/../.." && pwd)"
+  HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
+  expected_bridge="$GREMLIN_DIR/bridges/web"
+  if [ "$(basename "$GREMLIN_DIR")" != ".gremlin" ] \
+    || [ "$BRIDGE_DIR" != "$expected_bridge" ]; then
+    echo "web: bridge layout mismatch: expected HOST/.gremlin/bridges/web, got $BRIDGE_DIR" >&2
+    exit 1
   fi
-  local dir="$BRIDGE_DIR"
-  while [ "$dir" != "/" ]; do
-    if [ -e "$dir/.nest" ]; then
-      printf '%s\n' "$dir"
-      return 0
-    fi
-    dir="$(dirname "$dir")"
-  done
-  return 1
-}
-
-GREMLIN_DIR="$(find_gremlin_dir)" || {
-  echo "web: could not find the host folder (no .nest above $BRIDGE_DIR)" >&2
-  exit 1
-}
-HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
+  if [ ! -x "$HOST_DIR/.nest/nestling.sh" ]; then
+    echo "web: sibling layout mismatch: expected executable $HOST_DIR/.nest/nestling.sh" >&2
+    exit 1
+  fi
+fi
 CONFIG="$BRIDGE_DIR/config"
 LOG="$BRIDGE_DIR/web.log"
 PIDFILE="$BRIDGE_DIR/web.pid"
