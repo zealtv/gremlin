@@ -40,6 +40,31 @@ files or external state:
 
 Use `/new` at a real session boundary: it starts a clean conversation, files the old one away, and reviews it for anything worth remembering. Use `/discard` for throwaway sessions that should be archived but not reviewed for memory.
 
+### Tell it something without asking it to think
+
+Both routes above cost a tend and a model call, because both are asking for a
+reply. When there is news rather than a request, queue a `message.md` item
+instead. The tender writes the body straight into `transcript.md` as a system
+turn and archives the item — no model runs, and bridges push it on like any
+other turn:
+
+```sh
+d=$(mktemp -d)
+cat > "$d/message.md" <<'EOF'
+The nightly index rebuilt; it is 40% smaller.
+EOF
+./.nest/nestling.sh ingest "$d" "index-rebuilt"
+```
+
+This is the shape to reach for when a script, a scheduled job, a peer gremlin,
+or an agent working in another repository has an outcome to report. Getting it
+wrong is quiet rather than loud: a bare file, or a directory holding
+`instructions.md`, is a *request*, so a status report sent that way spends a
+model call reading itself and produces an assistant turn nobody needed.
+
+The same directory under `.groundhog/schedule/` is a reminder — see the
+`remind-me` skill. Full dispatch table: `docs/protocol.md`.
+
 ## Telegram
 
 The Telegram bridge lets a single Telegram chat talk to the gremlin.
