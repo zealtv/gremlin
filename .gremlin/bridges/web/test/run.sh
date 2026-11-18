@@ -22,6 +22,18 @@ ok()   { printf '  ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad()  { printf '  FAIL %s\n' "$1"; fail=$((fail + 1)); }
 check() { if "$@"; then return 0; else return 1; fi; }
 
+# Sibling primitive checkouts (nestlings, groundhog, loom) are looked up the
+# same way test/nest-recovery.sh does: PRIMITIVE_REPOS, defaulting to this
+# checkout's parent directory. A section that needs one is skipped, with a
+# message, when it is missing.
+GREMLIN_REAL="$(cd "$BRIDGE_DIR/../.." && pwd)"
+PRIMITIVE_REPOS="${PRIMITIVE_REPOS:-$(cd "$GREMLIN_REAL/../.." && pwd)}"
+have_primitive() {  # $1=repo name  $2=what is skipped without it
+  [ -x "$PRIMITIVE_REPOS/$1/install.sh" ] && return 0
+  printf '  skip %s (no %s checkout in %s)\n' "$2" "$1" "$PRIMITIVE_REPOS"
+  return 1
+}
+
 # --- the two invariant predicates (also reused to prove they have teeth) ------
 
 # A transcript-write betrayal: opening transcript.md for write/append, in Python
@@ -83,12 +95,12 @@ PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); p
 URL="http://127.0.0.1:$PORT"
 
 # A seeded transcript exercising all three roles + verbatim system bodies.
-cat > "$FIXTURE/transcript.md" <<'EOF'
+cat > "$FIXTURE/transcript.md" <<EOF
 ## user — 2026-06-29T10:00:00Z
 what repos exist?
 
 ## assistant — 2026-06-29T10:00:03Z
-Host pwd: /home/bob/repos
+Host pwd: $FIXTURE
 
 ## system — 2026-06-29T10:00:05Z
 💌 message: nightly backup ok
@@ -139,7 +151,7 @@ fi
 
 # The transcript endpoint returns the seeded turns.
 poll_json="$(curl -fsS "$URL/poll?cursor=0")"
-if printf '%s' "$poll_json" | grep -q 'Host pwd: /home/bob/repos'; then
+if printf '%s' "$poll_json" | grep -qF "Host pwd: $FIXTURE"; then
   ok "GET /poll → seeded turns present"
 else
   bad "GET /poll → seeded turns present"
@@ -240,7 +252,7 @@ fi
 # HOST/.gremlin and HOST from its own fixed ancestry. The old `.nest` walk made
 # GREMLIN_DIR=HOST and exposed HOST's parent instead.
 echo "== current HOST/.gremlin + HOST/.nest root resolution =="
-ROOTFIX="$(mktemp -d)"
+ROOTFIX="$(cd "$(mktemp -d)" && pwd -P)"   # physical path: macOS /var is a symlink to /private/var
 ROOTHOST="$ROOTFIX/current-host"
 ROOTGREM="$ROOTHOST/.gremlin"
 mkdir -p "$ROOTGREM/bridges" "$ROOTHOST/.nest/in"
@@ -285,14 +297,14 @@ rm -rf "$ROOTFIX"
 
 # ============================================================================
 echo "== M1 send (the chat round-trip) =="
+if have_primitive nestlings "M1 send"; then
 
 # A full current-layout fixture: this .gremlin plus a sibling Nest, so the real
 # tender can run with the deterministic `echo` preset, touching no real state.
-GREMLIN_REAL="$(cd "$BRIDGE_DIR/../.." && pwd)"
 M1FIX="$(mktemp -d)"
 cp -a "$GREMLIN_REAL" "$M1FIX/.gremlin"
 M1GREM="$M1FIX/.gremlin"
-"/home/bob/repos/nestlings/install.sh" "$M1FIX" >/dev/null 2>&1
+"$PRIMITIVE_REPOS/nestlings/install.sh" "$M1FIX" >/dev/null 2>&1
 mkdir -p "$M1FIX/.glean/findings"
 : > "$M1FIX/.glean/findings/INDEX.md"
 printf 'echo\n' > "$M1GREM/.model"          # deterministic, no network
@@ -469,15 +481,18 @@ fi
 
 "$WEB_SH" stop >/dev/null 2>&1 || true
 
+fi
+
 # ============================================================================
 echo "== M8 attachments (multipart → item dir; /media jail) =="
+if have_primitive nestlings "M8 attachments"; then
 
 M8FIX="$(mktemp -d)"
 M8H="$M8FIX/host"
 M8G="$M8H/.gremlin"
 mkdir -p "$M8H"
 cp -a "$GREMLIN_REAL" "$M8G"
-"/home/bob/repos/nestlings/install.sh" "$M8H" >/dev/null 2>&1
+"$PRIMITIVE_REPOS/nestlings/install.sh" "$M8H" >/dev/null 2>&1
 mkdir -p "$M8H/.glean/findings"
 : > "$M8H/.glean/findings/INDEX.md"
 printf 'echo\n' > "$M8G/.model"
@@ -643,6 +658,8 @@ fi
 
 "$WEB_SH" stop >/dev/null 2>&1 || true
 unset WEB_MAX_UPLOAD
+
+fi
 
 # ============================================================================
 echo "== M2 renderer (render.js, pure) =="
@@ -839,12 +856,13 @@ gcleanup
 
 # ============================================================================
 echo "== M4 inspector: groundhog (shell out to list/due) =="
+if have_primitive groundhog "M4 groundhog inspector"; then
 
 HFIX="$(mktemp -d)"
 HG="$HFIX/.gremlin"
 # A gremlin plus sibling Groundhog, matching the current host layout.
-cp -a /home/bob/repos/gremlin/.gremlin "$HG"
-"/home/bob/repos/groundhog/install.sh" "$HFIX" >/dev/null 2>&1
+cp -a "$GREMLIN_REAL" "$HG"
+"$PRIMITIVE_REPOS/groundhog/install.sh" "$HFIX" >/dev/null 2>&1
 : > "$HG/transcript.md"
 rm -f "$HG/bridges/web/.cursor" "$HG/bridges/web/web.pid" "$HG/bridges/web/web.log"
 rm -rf "$HG/bridges/web/__pycache__" "$HG/bridges/web/.cache"
@@ -897,13 +915,16 @@ fi
 
 hcleanup
 
+fi
+
 # ============================================================================
 echo "== M6 inspector: loom (reuse loom.sh, preserve tree) =="
+if have_primitive loom "M6 loom inspector"; then
 
 LMFIX="$(mktemp -d)"
 LMG="$LMFIX/.gremlin"
-cp -a /home/bob/repos/gremlin/.gremlin "$LMG"
-"/home/bob/repos/loom/install.sh" "$LMFIX" >/dev/null 2>&1
+cp -a "$GREMLIN_REAL" "$LMG"
+"$PRIMITIVE_REPOS/loom/install.sh" "$LMFIX" >/dev/null 2>&1
 : > "$LMG/transcript.md"
 rm -f "$LMG/bridges/web/.cursor" "$LMG/bridges/web/web.pid" "$LMG/bridges/web/web.log"
 rm -rf "$LMG/bridges/web/__pycache__" "$LMG/bridges/web/.cache"
@@ -949,6 +970,8 @@ else
 fi
 
 lmcleanup
+
+fi
 
 # ============================================================================
 echo "== M7 inspector: lore (durable, dated; content download) =="
@@ -1069,6 +1092,10 @@ tbcleanup
 # ============================================================================
 echo "== 95 remote bind (token-gated, off by default) =="
 
+# The remote-bind checks need a loopback-range address other than 127.0.0.1
+# (127.0.0.2). Linux has it by default; macOS needs an alias, so skip without it.
+if python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.2",0))' 2>/dev/null; then
+
 RFIX="$(mktemp -d)"
 RG="$RFIX/.gremlin"
 mkdir -p "$RG"
@@ -1134,6 +1161,10 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' "$RURL/?t
 [ "$code" = "403" ] && ok "disallowed Host → 403 even with token" || bad "disallowed Host → 403 with token (got $code)"
 
 rcleanup
+
+else
+  echo "  skip 95 remote bind (127.0.0.2 is not bindable on this host)"
+fi
 
 # Loopback default is unaffected: no token required.
 LFIX="$(mktemp -d)"; : > "$LFIX/transcript.md"
