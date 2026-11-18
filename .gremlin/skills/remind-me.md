@@ -13,13 +13,13 @@ Groundhog reads **local time**, and the user thinks in local time. Use local dat
 
 ## Steps
 
-1. **Run `./.gremlin/tools/now.sh` first.** Always. It returns the current local time with offset (e.g. `2026-05-01T21:15:00+1000`). The LLM does not know the current time; skipping this and inferring "tomorrow" from training data will give the user a wrong date.
+1. **Run `./.gremlin/tools/now.sh` first.** Always. It returns the current local time with offset (e.g. `2026-05-01T21:15:00+0000`). The LLM does not know the current time; skipping this and inferring "tomorrow" from training data will give the user a wrong date.
 
 2. Resolve the reminder's fire date in local time, using the timestamp from step 1 as the anchor. "Tomorrow" = day after that timestamp's date; "in three days" = +3 days; "next Monday" = next occurrence of Monday; etc. If the user gives an absolute date, use it as stated.
 
-3. Pick a kebab-case slug summarising the reminder (e.g. `buy-milk`, `call-jess`, `submit-invoice`).
+3. Pick a kebab-case slug summarising the reminder (e.g. `buy-milk`, `call-alice`, `submit-invoice`).
 
-4. Compose the reminder body — the message to deliver when the reminder fires. Write it in the user's voice (e.g. "buy milk", "call jess").
+4. Compose the reminder body — the message to deliver when the reminder fires. Write it in the user's voice (e.g. "buy milk", "call alice").
 
 5. Create the file with bash. The path encodes the time:
 
