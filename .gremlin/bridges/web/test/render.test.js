@@ -28,9 +28,9 @@ h = R.renderBodyHTML("📎 [the export](out/data.csv)");
 check("file embed → download chip", h.indexOf("embed-file") !== -1 && h.indexOf("the export") !== -1);
 check("local file src routed via /media", h.indexOf("/media?path=out%2Fdata.csv") !== -1);
 
-// 🔊 (tts:) is deferred in M2 → left as literal text, not an audio element.
+// 🔊 (tts:) is not rendered as audio → left as literal text, not an audio element.
 h = R.renderBodyHTML("🔊 [say hi](tts:)");
-check("voice embed left as text in M2", h.indexOf("🔊") !== -1 && h.indexOf("<audio") === -1);
+check("voice embed left as text", h.indexOf("🔊") !== -1 && h.indexOf("<audio") === -1);
 
 // Markdown subset.
 check("bold", R.renderBodyHTML("**x**").indexOf("<strong>x</strong>") !== -1);
