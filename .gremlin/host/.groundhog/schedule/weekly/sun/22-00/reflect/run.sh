@@ -28,7 +28,7 @@ GREMLIN_DIR="$HOST_DIR/.gremlin"
 # discarded after the tend. The host may have moved the job to another time
 # slot, so find it by name, as `groundhog drop` does; the shipped slot is only
 # the fallback (a run by hand, with no scheduled job to find).
-JOB="$(find "$HOST_DIR/.groundhog/schedule" -type d -name reflect 2>/dev/null | head -n 1)"
+JOB="$(find "$HOST_DIR/.groundhog/schedule" -type d -name reflect 2>/dev/null | head -n 1 || true)"
 [ -n "$JOB" ] || JOB="$HOST_DIR/.groundhog/schedule/weekly/sun/22-00/reflect"
 STATE="$JOB/cursor"
 THRESHOLD="${REFLECT_THRESHOLD:-4000}"   # bytes of new transcript before reflecting is worth it

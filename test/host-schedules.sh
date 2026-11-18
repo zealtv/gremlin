@@ -147,6 +147,34 @@ printf '%s' "$lint" | grep -q "exists at 2 schedule paths" \
   && ok "the moved job can still be dropped by name (the expiry's route)" \
   || bad "drop reflect failed on the moved job"
 
+# 8. The reflect gate counts transcript-archive/ (BSD find has no -printf, and
+# a failing size count under pipefail once ended the job on every tick).
+# A stub tools/continue.sh records whether the gate escalated.
+reflect_gate() {  # reflect_gate <bytes per archive file|none> — prints fired, quiet or exit-nonzero
+  local h="$TMP/gate" n="$1"
+  rm -rf "${h:?}"
+  mkdir -p "$h/.nest/in/reflect" "$h/.gremlin/tools"
+  : > "$h/.gremlin/transcript.md"
+  printf '#!/bin/sh\necho fired > "%s/fired"\n' "$h" > "$h/.gremlin/tools/continue.sh"
+  chmod +x "$h/.gremlin/tools/continue.sh"
+  cp "$ROOT/.gremlin/host/$JOB/run.sh" "$h/.nest/in/reflect/run.sh"
+  if [ "$n" != none ]; then
+    mkdir -p "$h/.gremlin/transcript-archive/2030/01"
+    head -c "$n" /dev/zero | tr '\0' x > "$h/.gremlin/transcript-archive/2030/01/a.md"
+    head -c "$n" /dev/zero | tr '\0' x > "$h/.gremlin/transcript-archive/b.md"
+  fi
+  bash "$h/.nest/in/reflect/run.sh" >/dev/null 2>&1 || { echo exit-nonzero; return; }
+  [ -e "$h/fired" ] && echo fired || echo quiet
+}
+[ "$(reflect_gate 3000)" = fired ] \
+  && ok "reflect: a 6000-byte archive alone passes the threshold" \
+  || bad "reflect: a 6000-byte archive was not counted"
+[ "$(reflect_gate 100)" = quiet ] \
+  && ok "reflect: a small archive stays quiet" || bad "reflect: a small archive did not stay quiet"
+[ "$(reflect_gate none)" = quiet ] \
+  && ok "reflect: a missing transcript-archive/ is a quiet tick, not a failure" \
+  || bad "reflect: a missing transcript-archive/ ended the job"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
