@@ -41,9 +41,9 @@ If a preset has no label line, `/model` shows just the filename.
 ## Adding a preset
 
 Drop a new file in this directory, make it executable, give it a
-label. Three presets ship as starting points:
+label. These presets ship as starting points:
 
-- `default.sh` — canonical LLM example with commented starter
+- `default.sh` — the main LLM example, with commented starter
   invocations for several agent CLIs.
 - `memory.sh` — conventional alias for memory-review work. It delegates to
   `default.sh` unless you specialize it.
