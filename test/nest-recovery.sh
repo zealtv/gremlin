@@ -3,7 +3,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+
+# Time limit: a stuck step fails the test instead of hanging the run.
+TEST_TIMEOUT="${NEST_RECOVERY_TEST_TIMEOUT:-120}"
+(
+  trap 'kill "$sleep_pid" 2>/dev/null; exit 0' TERM
+  sleep "$TEST_TIMEOUT" & sleep_pid=$!
+  wait "$sleep_pid"
+  echo "not ok - nest-recovery test exceeded ${TEST_TIMEOUT}s" >&2
+  kill -TERM $$ 2>/dev/null
+) &
+TIMER_PID=$!
+trap 'kill "$TIMER_PID" 2>/dev/null; rm -rf "$TMP"' EXIT
 
 fail() { echo "not ok - $*" >&2; exit 1; }
 assert_exists() { [[ -e "$1" ]] || fail "missing $1"; }
@@ -77,6 +88,12 @@ rm -f "$GREMLIN/.tending.pid"
 "$GREMLIN/bin/tend-loop.sh"
 assert_exists "$NEST/out/live-guard/.recovery.md"
 assert_contains "$NEST/out/live-guard/.recovery.md" "attempt: 1/3"
+
+# The watchdog must retire its sleep with the turn: a leftover sleep holds the
+# caller's stdout open, so a piped run (| tail) would wait out the full timeout.
+queue_recoverable no-leftover-sleep
+GREMLIN_MODEL_TIMEOUT=777 "$GREMLIN/bin/tend-loop.sh" | cat >/dev/null
+pgrep -f 'sleep 777' >/dev/null && { pkill -f 'sleep 777'; fail "watchdog left a sleep running"; }
 
 # Model failures hand the claim to canonical resolve and stop at the cap.
 queue_recoverable model-failure

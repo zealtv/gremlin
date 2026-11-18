@@ -258,7 +258,12 @@ case "$timeout_secs" in ''|*[!0-9]*) timeout_secs=0 ;; esac
 watchdog_pid=""
 if [ "$timeout_secs" -gt 0 ]; then
   (
-    sleep "$timeout_secs"
+    # Kill our own sleep when retired, or it outlives the turn and holds the
+    # caller's stdout open until it expires.
+    trap 'kill "$sleep_pid" 2>/dev/null; exit 0' TERM
+    sleep "$timeout_secs" &
+    sleep_pid=$!
+    wait "$sleep_pid"
     kill -0 "$llm_pid" 2>/dev/null || exit 0
     printf 'timeout\n' > "$timeout_flag"
     kill -TERM -- "-$llm_pid" 2>/dev/null || true
@@ -271,8 +276,8 @@ fi
 rc=0
 wait "$llm_pid" || rc=$?
 
-# Model settled (finished or was killed) — retire the watchdog so its sleep
-# doesn't outlive the turn.
+# Model settled (finished or was killed) — retire the watchdog (and, via its
+# TERM trap, its sleep) so nothing outlives the turn.
 if [ -n "$watchdog_pid" ]; then
   kill "$watchdog_pid" 2>/dev/null || true
   wait "$watchdog_pid" 2>/dev/null || true
