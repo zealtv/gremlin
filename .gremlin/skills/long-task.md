@@ -44,13 +44,13 @@ quick lookup — just reply. Don't wrap trivia in ceremony.
 
 1. **Announce first — as its own turn.** The first thing you do on a long task
    is *say you're starting*, then end the turn. One line in your normal voice:
-   what you're doing and its shape if you know it ("on it — syncing the vendored
-   primitives across the three repos; I'll report as I go"). Do **not** do the
+   what you're doing and its shape if you know it ("on it — renaming the config
+   key across the three modules; I'll report as I go"). Do **not** do the
    real work in this turn — its whole job is to give observers an immediate "on
    it" before anything blocks. Then re-queue into the first real step:
 
    ```bash
-   ./.gremlin/tools/continue.sh "step 1/3: inspect the vendored copies, patch drift"
+   ./.gremlin/tools/continue.sh "step 1/3: find every use of the old key, patch them"
    ```
 
    If you only realised *mid-task* that the work is large, this same first spoken
@@ -94,19 +94,19 @@ announcement — after that, earn each line on a real milestone.
 ## When a step can't be split: announce before you block
 
 Some steps are one indivisible span you can't interrupt — a fan-out of parallel
-sub-agents (an `Agent` call), a long build, a council of experts. `continue.sh`
+sub-agents (an `Agent` call), a long build, a full test run. `continue.sh`
 can't speak from *inside* a blocking call: while it runs, the turn is busy and
 nothing reaches the user until it returns. The only seam is *before* you start.
 
 So when your next step is a long blocking span — including **invoking a skill or
 command that will spawn sub-agents or run for minutes** — make the announcement
 its own turn first. Reply with what you're about to do and roughly how long
-("running the council now — 5 experts + judge, ~8 min; I'll report when the
-judgment's in"), then `continue.sh` into a follow-up step that actually launches
+("running the full test suite now, ~8 min; I'll report when the results are
+in"), then `continue.sh` into a follow-up step that actually launches
 it:
 
 ```bash
-./.gremlin/tools/continue.sh "run the council: 5 experts + judge, write to <dir>"
+./.gremlin/tools/continue.sh "run the full test suite, write results to <dir>"
 ```
 
 The next tend does the blocking work and reports when it returns. One opaque
@@ -124,10 +124,9 @@ burns money forever. So:
 - `/stop` and pausing are the human's backstop, not yours. Owning the off-switch
   is yours.
 
-## Clock-paced goals (later)
+## Clock-paced goals
 
 For work that should wake on a schedule rather than continue immediately (watch a
-deploy, check every 15m), a self-disarming groundhog `every/` goal is the right
-shape, paired with a `once/<date>` dead-man's switch and an optional per-goal
-`state.md` for memory across ticks. That machinery isn't wired up yet — for now,
-`continue.sh` handles immediate step-by-step continuation.
+deploy, check every 15m), use a self-disarming groundhog `every/` goal with a
+`once/<date>` dead-man's switch, as described in `docs/protocol.md` ("Work That
+Outlives A Turn"). `continue.sh` handles immediate step-by-step continuation.
