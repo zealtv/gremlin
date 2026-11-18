@@ -28,9 +28,9 @@ cp -R "$ROOT/.gremlin" "$HOST/.gremlin"
 GREMLIN="$HOST/.gremlin"
 
 PRIMITIVE_REPOS="${PRIMITIVE_REPOS:-$(cd "$ROOT/.." && pwd)}"
-declare -A REPO=( [nest]=nestlings [loom]=loom [lore]=lore [glean]=glean [groundhog]=groundhog )
-for name in nest loom lore glean groundhog; do
-  repo="${REPO[$name]}"
+for pair in "nest nestlings" "loom loom" "lore lore" "glean glean" "groundhog groundhog"; do
+  set -- $pair
+  name="$1"; repo="$2"
   if [ -x "$PRIMITIVE_REPOS/$repo/install.sh" ]; then
     "$PRIMITIVE_REPOS/$repo/install.sh" "$HOST" >/dev/null 2>&1
   else
