@@ -6,9 +6,16 @@
 # It writes two things:
 #   <host>/AGENTS.md         a generated block between markers, leaving any
 #                            hand-written preamble alone — the map a cold agent
-#                            of any runtime reads to orient
+#                            of any runtime reads to orient. Skipped, along with
+#                            the CLAUDE.md link, while no primitive other than
+#                            .gremlin is installed: a map of nothing is noise.
 #   <host>/.gremlin/PRIMITIVES.md   the same list as gremlin context (skipped
 #                            when the host has no gremlin)
+#
+# Each action prints one line starting with a fixed word, so a caller can tell
+# a first-time change from a routine refresh: `created` / `added` / `refreshed`
+# AGENTS.md, `linked` CLAUDE.md, `note` (a real CLAUDE.md left alone), `skipped`
+# (no primitives), `wrote` PRIMITIVES.md.
 #
 # A primitive is a self-named dotdir at the HOST ROOT — a sibling of .gremlin,
 # not something inside it — that bundles its own script (*.sh) and a README.md.
@@ -142,15 +149,26 @@ block() {
 
 # ---- write AGENTS.md, preserving the hand-written preamble -----------------
 AGENTS="$HOST_DIR/AGENTS.md"
+CLAUDE="$HOST_DIR/CLAUDE.md"
 tmp="$AGENTS.tmp"
-if [ -f "$AGENTS" ] && grep -qF "$BEGIN_MARK" "$AGENTS"; then
+others=0
+for i in "${installed[@]:-}"; do
+  [ -n "$i" ] && [ "$i" != "gremlin" ] && others=$((others + 1))
+done
+
+if [ "$others" = 0 ]; then
+  echo "skipped AGENTS.md: no primitives installed at the host root"
+elif [ -f "$AGENTS" ] && grep -qF "$BEGIN_MARK" "$AGENTS"; then
   # Replace the existing block in place; everything outside it is untouched.
   awk -v begin="$BEGIN_MARK" -v end="$END_MARK" -v blockfile="/dev/stdin" '
     $0 == begin { skipping = 1; while ((getline line < blockfile) > 0) print line; next }
     $0 == end   { skipping = 0; next }
     !skipping   { print }
   ' "$AGENTS" < <(block) > "$tmp"
+  mv "$tmp" "$AGENTS"
+  echo "refreshed AGENTS.md"
 else
+  if [ -f "$AGENTS" ]; then verb=added; else verb=created; fi
   {
     if [ -f "$AGENTS" ]; then
       cat "$AGENTS"
@@ -165,22 +183,23 @@ else
     fi
     block
   } > "$tmp"
+  mv "$tmp" "$AGENTS"
+  echo "$verb AGENTS.md"
 fi
-mv "$tmp" "$AGENTS"
-echo "wrote $AGENTS"
 
 # CLAUDE.md is the same map under the name Claude Code looks for. A symlink,
 # never a copy — two files would drift. An existing real CLAUDE.md is left
 # alone: it is someone's hand-written notes, and clobbering it would be the
 # opposite of "leave the preamble intact".
-CLAUDE="$HOST_DIR/CLAUDE.md"
-if [ -L "$CLAUDE" ]; then
+if [ "$others" = 0 ]; then
+  :
+elif [ -L "$CLAUDE" ]; then
   :
 elif [ -e "$CLAUDE" ]; then
   echo "note CLAUDE.md is a real file — the generated map is in AGENTS.md only"
 else
   ln -s "AGENTS.md" "$CLAUDE"
-  echo "linked $CLAUDE -> AGENTS.md"
+  echo "linked CLAUDE.md -> AGENTS.md"
 fi
 
 # ---- PRIMITIVES.md, the gremlin's own context copy ------------------------
@@ -195,5 +214,5 @@ if [ -d "$GREMLIN_DIR" ]; then
     printf '%s\n' "${lines[@]:-}"
   } > "$TMP"
   mv "$TMP" "$OUT"
-  echo "wrote $OUT"
+  echo "wrote .gremlin/PRIMITIVES.md"
 fi

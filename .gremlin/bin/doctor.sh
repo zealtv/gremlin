@@ -92,9 +92,24 @@ fi
 # it cannot rot the way hand-written prose does. This also refreshes the
 # generated block in the host's AGENTS.md — the map a cold agent of any
 # runtime reads to orient. Hand-written prose around the block is untouched.
+# A first-time change to the host's root (a new AGENTS.md, a block added to an
+# existing one, a new CLAUDE.md link) gets a line of its own; a routine refresh
+# stays one `ok` line.
 if [ -x "$GREMLIN_DIR/bin/index-primitives.sh" ]; then
-  "$GREMLIN_DIR/bin/index-primitives.sh" >/dev/null
-  echo "ok PRIMITIVES.md + AGENTS.md (regenerated)"
+  map_out="$("$GREMLIN_DIR/bin/index-primitives.sh")"
+  map_quiet=1
+  while IFS= read -r map_line; do
+    case "$map_line" in
+      created\ AGENTS.md) echo "created AGENTS.md with the primitives map"; map_quiet=0 ;;
+      added\ AGENTS.md)   echo "added the primitives map to your AGENTS.md"; map_quiet=0 ;;
+      linked\ CLAUDE.md*) echo "linked CLAUDE.md to AGENTS.md"; map_quiet=0 ;;
+      note\ CLAUDE.md*)   echo "ok CLAUDE.md is a real file; the map is in AGENTS.md only" ;;
+      skipped\ AGENTS.md*)
+        echo "no AGENTS.md map: no primitives are installed at the host root; run ./.gremlin/bin/install-primitives.sh to add them"
+        map_quiet=0 ;;
+    esac
+  done <<< "$map_out"
+  [ "$map_quiet" = 1 ] && echo "ok PRIMITIVES.md + AGENTS.md (regenerated)"
 else
   echo "‼️  bin/index-primitives.sh MISSING — run /update to restore it"
 fi

@@ -187,6 +187,11 @@ exists. `AGENTS.md` is the runtime-agnostic name and matches the family's
 model-agnostic stance; a real hand-written `CLAUDE.md` is left alone and told
 about, never clobbered. Two copies of a map drift; a symlink cannot.
 
+`doctor` says so the first time it adds the map to an `AGENTS.md` (new or
+existing) or creates the `CLAUDE.md` link; a routine refresh stays one `ok`
+line. While no primitive other than `.gremlin` is installed there is no map to
+write, so `doctor` writes neither file and says why.
+
 The same list is written into `.gremlin/PRIMITIVES.md` and broadcast to the
 gremlin through `context/system/primitives.md`, so the tender and the human
 read the same map from the same source.
