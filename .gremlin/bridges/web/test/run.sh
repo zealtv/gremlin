@@ -252,7 +252,7 @@ fi
 # HOST/.gremlin and HOST from its own fixed ancestry. The old `.nest` walk made
 # GREMLIN_DIR=HOST and exposed HOST's parent instead.
 echo "== current HOST/.gremlin + HOST/.nest root resolution =="
-ROOTFIX="$(mktemp -d)"
+ROOTFIX="$(cd "$(mktemp -d)" && pwd -P)"   # physical path: macOS /var is a symlink to /private/var
 ROOTHOST="$ROOTFIX/current-host"
 ROOTGREM="$ROOTHOST/.gremlin"
 mkdir -p "$ROOTGREM/bridges" "$ROOTHOST/.nest/in"
@@ -1092,6 +1092,10 @@ tbcleanup
 # ============================================================================
 echo "== 95 remote bind (token-gated, off by default) =="
 
+# The remote-bind checks need a loopback-range address other than 127.0.0.1
+# (127.0.0.2). Linux has it by default; macOS needs an alias, so skip without it.
+if python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.2",0))' 2>/dev/null; then
+
 RFIX="$(mktemp -d)"
 RG="$RFIX/.gremlin"
 mkdir -p "$RG"
@@ -1157,6 +1161,10 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' "$RURL/?t
 [ "$code" = "403" ] && ok "disallowed Host → 403 even with token" || bad "disallowed Host → 403 with token (got $code)"
 
 rcleanup
+
+else
+  echo "  skip 95 remote bind (127.0.0.2 is not bindable on this host)"
+fi
 
 # Loopback default is unaffected: no token required.
 LFIX="$(mktemp -d)"; : > "$LFIX/transcript.md"
