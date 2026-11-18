@@ -3,7 +3,7 @@
 #
 # A thin bash service wrapper around a Python-stdlib HTTP+SSE server. It is the
 # same daemon shape telegram.sh uses (nohup/setsid, pidfile, running_pid) but
-# carries no secrets: M0 is a read-only transcript window, so config is optional.
+# carries no secrets, so config is optional.
 # The HTTP layer is transport, never a runtime — it tails transcript.md and
 # serves a browser; it never writes a turn and never calls a model.
 
@@ -71,9 +71,8 @@ die() {
 }
 
 load_config() {
-  # Unlike telegram, config is optional: M0 has no secret to require. When
-  # present it may set WEB_BIND / WEB_PORT / WEB_REMOTE_TOKEN (token gating
-  # arrives with remote binding, a later stitch).
+  # Unlike telegram, config is optional: the bridge has no secret to require. When
+  # present it may set WEB_BIND / WEB_PORT / WEB_REMOTE_TOKEN.
   [ -f "$CONFIG" ] || return 0
   # shellcheck disable=SC1090
   set -a
@@ -89,7 +88,7 @@ is_loopback_bind() {
 }
 
 # Off-by-default remote binding: a non-loopback bind without a token is refused
-# loudly, before spawning the daemon (spec §17).
+# loudly, before spawning the daemon.
 require_remote_safety() {
   if ! is_loopback_bind && [ -z "${WEB_REMOTE_TOKEN:-}" ]; then
     die "refusing to bind non-loopback $WEB_BIND without WEB_REMOTE_TOKEN; set it in $CONFIG (an SSH tunnel / WireGuard is the safer path — see README)."
