@@ -125,6 +125,18 @@ FAKE_TODAY=2031-01-01 PATH="$SHIM:$PATH" "$H/.gremlin/bin/install-host-files.sh"
   && ok "re-running the installer restores the job with a fresh expiry" \
   || bad "re-arm failed: job $([ -x "$H/$JOB/run.sh" ] && echo present || echo missing), expiry $(expiries "$H")"
 
+# 6b. A literal-dated once/ source left over from an older gremlin (/update never
+# deletes) is never placed; only the +26w template is.
+H="$(new_host leftover)"
+mkdir -p "$H/.gremlin/host/$SCHED/once/2020-01-01/reflect-expire"
+cp "$H/.gremlin/host/$SCHED/once/+26w/reflect-expire/run.sh" "$H/.gremlin/host/$SCHED/once/2020-01-01/reflect-expire/"
+"$H/.gremlin/bin/install-host-files.sh" "$H" >/dev/null 2>&1
+[ ! -e "$H/$SCHED/once/2020-01-01" ] && [ "$(expiries "$H" | wc -l | tr -d ' ')" = 1 ] \
+  && ok "a dated once/ source left in host/ is not placed" \
+  || bad "dated once/ source was placed: $(expiries "$H" | tr '\n' ' ')"
+"$H/.gremlin/bin/install-host-files.sh" --check "$H" >/dev/null 2>&1 \
+  && ok "--check ignores the dated source" || bad "--check counts the dated source as missing"
+
 # 7. A moved reflect job keeps its cursor in its own directory, and leaves no stray copy.
 H="$(new_host moved)"
 "$H/.gremlin/bin/install-host-files.sh" "$H" >/dev/null 2>&1

@@ -23,7 +23,8 @@ missing primitive rather than reaching for a private copy. Add
 
 Or copy it: put a copy of `.gremlin/` in a folder, then add the five primitives
 beside it with `.gremlin/bin/install-primitives.sh` (or copy their dotdirs in
-yourself). Without a `.nest/`, `wake`, `prompt` and `tend` stop and say so.
+yourself), then run `.gremlin/bin/install-host-files.sh` and `./.gremlin/gremlin doctor`.
+Without a `.nest/`, `wake`, `prompt` and `tend` stop and say so.
 
 Point it at a model. `.gremlin/models/default.sh` is just an executable that reads a prompt on stdin and writes a reply on stdout — edit it for whichever CLI you use (Claude Code, Codex, Open Code, a local model, anything):
 

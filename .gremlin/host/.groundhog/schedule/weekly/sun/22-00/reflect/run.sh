@@ -36,7 +36,8 @@ THRESHOLD="${REFLECT_THRESHOLD:-4000}"   # bytes of new transcript before reflec
 # Material accrued = current transcript + everything archived. /new resets
 # transcript.md but grows transcript-archive/, so the sum is monotonic across
 # sessions and a reflection is never missed just because a session was closed.
-live=$(wc -c < "$GREMLIN_DIR/transcript.md" 2>/dev/null || echo 0)
+live=0
+[ -f "$GREMLIN_DIR/transcript.md" ] && live=$(wc -c < "$GREMLIN_DIR/transcript.md")
 # (find -exec cat | wc -c, not find -printf: BSD find lacks -printf, and under
 # pipefail a failing find would end the job on every tick.)
 archived=$(find "$GREMLIN_DIR/transcript-archive" -type f -exec cat {} + 2>/dev/null \

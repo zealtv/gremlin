@@ -66,6 +66,11 @@ date_after() {
 while IFS= read -r src; do
   rel="${src#"$SRC"/}"
   prim="${rel%%/*}"
+  # A literal date under once/ is never placed: products ship `+<N>w` templates
+  # only. An older gremlin updated by /update (which never deletes) can still
+  # carry a dated source such as once/2026-12-27/; re-placing it would install
+  # a one-shot that is already in the past.
+  case "$rel" in */once/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/*|*/once/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].paused/*) continue ;; esac
   # A relative once/ date (`once/+26w/`) is resolved now; `anydate` is the same
   # path with the date as a glob, to recognise an expiry already in place under
   # whatever date it carries (a human may have re-dated or paused it).
