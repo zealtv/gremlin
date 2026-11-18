@@ -2,10 +2,8 @@
 # name.sh — the gremlin's own name.
 #
 # A gremlin has a name of its own, so that "the gremlin" and "the repository it
-# tends" stop being the same word. Before this, a gremlin borrowed its host
-# directory's name: the web header's `name@host` was really `folder@machine`,
-# and after the sibling-primitive inversion the folder is a repository with its
-# own identity — the gremlin tending ~/repos would have been called "repos".
+# tends" are not the same word: a gremlin named after its host folder would be
+# called "projects" the moment it tended `~/projects`.
 #
 # The name is **rolled once, at first use, and persisted** — never derived from
 # the host path. Deriving would rename a gremlin the moment it was moved, and a
