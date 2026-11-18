@@ -26,7 +26,7 @@ case "${1:-}" in
     printf 'rolled: %s -> %s\n' "$old" "$new"
     ;;
   --help|-h)
-    sed -n '2,12p' "$0" | sed 's/^# \?//'
+    sed -n '2,11p' "$0" | sed -E 's/^# ?//'
     exit 0
     ;;
   *)
