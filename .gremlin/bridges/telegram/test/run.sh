@@ -268,8 +268,8 @@ grep -q 'DROPPING an undeliverable turn' "$ERR" \
 # is a pre-existing, bridge-wide property of the byte-cursor delivery model in
 # push_transcript_once — it re-sends the chunk on any transient failure, for
 # single- and multi-attachment turns alike. It is not specific to multiple
-# attachments and is out of scope for this stitch; changing it means reworking
-# the cursor/ack model, tracked separately if it ever earns priority.
+# attachments and is out of scope for these tests; changing it means reworking
+# the cursor/ack model.
 
 # ============================================================================
 echo "== inbound: a Telegram photo album is coalesced into one multi-photo item =="
