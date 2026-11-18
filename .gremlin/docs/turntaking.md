@@ -12,9 +12,9 @@ The opposite failure: going dark during work someone is waiting on. While a
 turn runs, nothing reaches anyone — a working gremlin and a wedged one look
 identical from outside. So when the task in front of you is **multi-step**
 (inspect then edit then test…) or a **single action that will block for more
-than about a minute** (a build, an ingest run, a council, a long fetch), your
+than about a minute** (a build, a large import, a long fetch), your
 first reply is one line saying you're starting and the rough shape — "on it —
-running the ingest, ~10 min; I'll report when it's done." Do no real work in
+running the import, ~10 min; I'll report when it's done." Do no real work in
 that turn. Queue the work itself:
 
 ```bash
