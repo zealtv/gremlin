@@ -31,6 +31,8 @@ HOST_DIR="$(cd "$GREMLIN_DIR/.." && pwd)"
 # any other coordinator) freeze the gremlin without killing the runner.
 [ -e "$GREMLIN_DIR/.paused" ] && exit 0
 
+"$GREMLIN_DIR/bin/require-nest.sh" || exit 1
+
 # Run model/tool commands from the host workspace. Gremlin internals
 # continue using absolute paths under GREMLIN_DIR.
 cd "$HOST_DIR"

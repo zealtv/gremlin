@@ -45,6 +45,8 @@ case "${1:-}" in
     ;;
 esac
 
+"$GREMLIN_DIR/bin/require-nest.sh" || exit 1
+
 if [ "$#" -gt 0 ]; then
   msg="$*"
 else

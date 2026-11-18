@@ -76,6 +76,7 @@ require_runner() {
 
 cmd_wake() {
   require_runner
+  "$GREMLIN_DIR/bin/require-nest.sh" || exit 1
   local pids
   pids="$(runner_pids)"
   if [ -n "$pids" ]; then

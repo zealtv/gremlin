@@ -28,7 +28,8 @@
 # is safe.
 #
 # usage: install-host-files.sh [--check] [host-dir]
-#   --check reports what is missing and writes nothing (exit 1 if anything is).
+#   --check reports what is missing and writes nothing (exit 1 if anything is),
+#   including files whose primitive is not installed.
 set -euo pipefail
 
 check_only=0
@@ -77,6 +78,11 @@ while IFS= read -r src; do
   dst="$HOST_DIR/$rel"
   if [ ! -d "$HOST_DIR/$prim" ]; then
     case " $missing " in *" $prim "*) ;; *) missing="$missing $prim" ;; esac
+    # A check counts a file that cannot be placed as not placed.
+    if [ "$check_only" = 1 ]; then
+      echo "missing $rel"
+      installed=$((installed + 1))
+    fi
     continue
   fi
   # Present already? Either the file itself, or its containing job directory

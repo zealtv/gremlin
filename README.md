@@ -21,6 +21,10 @@ touches them: `/update` overlays `.gremlin/` alone, and `doctor` reports a
 missing primitive rather than reaching for a private copy. Add
 `GREMLIN_SKIP_PRIMITIVES=1` to install the tender by itself.
 
+Or copy it: put a copy of `.gremlin/` in a folder, then add the five primitives
+beside it with `.gremlin/bin/install-primitives.sh` (or copy their dotdirs in
+yourself). Without a `.nest/`, `wake`, `prompt` and `tend` stop and say so.
+
 Point it at a model. `.gremlin/models/default.sh` is just an executable that reads a prompt on stdin and writes a reply on stdout — edit it for whichever CLI you use (Claude Code, Codex, Open Code, a local model, anything):
 
 ```sh
