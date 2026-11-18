@@ -79,22 +79,8 @@ A primitive dotdir found *inside* `.gremlin/` is **legacy placement**: the
 shape gremlin shipped before the sibling inversion. `doctor` reports it; the
 fix is to hoist it to the host root.
 
-There are no tiers. The three-tier model this replaces said a thing was
-canonical-delivered *iff* it lived inside `.gremlin/`, and called a sibling
-primitive drift. Both statements are withdrawn:
-
-- The old **Tier 1** (`.gremlin/` bundling the five primitives as a private
-  working set) is exactly the legacy placement described above. Primitives are
-  installed by their own `install.sh`, not delivered by gremlin, and `/update`
-  never overlays them because they are no longer inside its target.
-- The old **Tier 2** (`.dash/`, `library/` and similar gremlin-produced
-  artifacts at the host root) is unchanged in behaviour and no longer a tier —
-  those dirs were already host-root siblings and now simply sit among peers.
-  `.dash` is still content rather than a primitive: it carries no script.
-- The old **Tier 3** (the same primitive tools installed at a broader host)
-  disappears, because there is no higher scope to distinguish. A gremlin whose
-  host dir is a fleet root or a workspace repo is just a gremlin; its
-  primitives are its host's primitives, like anyone else's.
+`.dash/`, `library/` and similar gremlin-produced directories at the host root
+are content, not primitives: they carry no script.
 
 A primitive is missing, not vendored: if a gremlin needs `.loom/` and the host
 has none, `doctor` fails loudly with that primitive's own install command.
@@ -123,19 +109,14 @@ Slash commands are not prompts. Interactive bridges dispatch `/name`,
 `/update`, and their peers through `bin/slash.sh`; shell callers use the direct
 wrapper surface (`gremlin name`, `gremlin update`).
 
-**`wake` is the daemon, not a task.** It backgrounds `bin/run.sh` exactly as
-`start` did; `sleep` stops it. The per-task shape the brain dump gestured at —
-wake, do the thing, sleep — is `tend`: one pass over `.nest/in/` right now, in
-the foreground, whether or not the gremlin is awake. Making `tend` addressable
-is the real gain here; it was internal (`bin/tend-loop.sh`) and unreachable
-before.
+**`wake` is the daemon, not a task.** It backgrounds `bin/run.sh`; `sleep`
+stops it. For one-off work, `tend` runs one pass over `.nest/in/` right now, in
+the foreground, whether or not the gremlin is awake.
 
-**The old verbs are gone, not aliased.** `start`, `stop`, `say`, `ask`, and
-`tell` fail with the new name and a non-zero exit. Deliberately loud rather than silently
-forwarding, for one concrete reason: `commands/stop.sh` exists — `/stop` aborts
-an in-flight model call — so a `stop` left to fall through to the command
-dispatcher would quietly do something *different* from what muscle memory
-expects. A verb that changed meaning is worse than a verb that is gone.
+**The old verbs (`start`, `stop`, `say`, `ask`, `tell`) fail with the new name
+and a non-zero exit** rather than aliasing: `commands/stop.sh` exists (`/stop`
+aborts an in-flight model call), so a `stop` falling through to the command
+dispatcher would quietly do something different from what muscle memory expects.
 
 ## Names
 
@@ -161,9 +142,8 @@ say otherwise — right when you meant to clone one, and fixed with
 
 `doctor` generates `identity.md` from the name and broadcasts it through
 `context/system/identity.md`, so the gremlin knows what it is called and can
-sign with it. The web bridge's header is now the gremlin's name and the machine
-it runs on; the repository it tends moved to the tooltip, because those are two
-different things — before names, `name@host` was really `folder@machine`.
+sign with it. The web bridge's header shows the gremlin's name and the machine
+it runs on; the repository it tends appears in the tooltip.
 
 The vocabulary is `names/v1.txt`, a pinned local wordlist of single-word mythic
 creatures, not a dependency: an external name package could rename an
@@ -190,14 +170,8 @@ starting point, and says what a gremlin would like to find there. That is the
 whole of gremlin's involvement: noticing, not writing.
 
 This is the placement law applied to file *contents* rather than file
-locations, and it settles a question the vendored layout used to hide. When
-`.nest/` lived inside `.gremlin/`, gremlin authoring `tend.md` was
-unremarkable — it was writing in its own folder. At the host root it is writing
-in someone else's. Two symptoms made the case: the shipped `tend.md` was a
-prose description of `bin/tend-loop.sh`, kept in a second file that nothing
-verified and that could only ever be redundant or wrong; and the shipped
-`distil.md` was mostly generic glean mechanics, which belong in
-`skills/distil.md` where the model already reads them.
+locations: at the host root, gremlin writing `tend.md` would be writing in
+someone else's folder.
 
 ## The map
 

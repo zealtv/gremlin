@@ -3,7 +3,8 @@
 #
 # Python is the glass; bash and the filesystem are the only truth. This server
 # never writes a `## user —` / `## assistant —` turn, never calls a model, and
-# (in M0) never serves a host file outside its own vendored `public/`. It tails
+# never serves an arbitrary host file: only its own `public/` assets, jailed
+# inspector reads and Dash views. It tails
 # transcript.md with a single byte-cursor and fans new turns to every open
 # browser tab over Server-Sent Events. With the server stopped, `cat`/`ls`/`git
 # diff` still reconstruct the system's full truth.
@@ -61,20 +62,20 @@ CACHE_DIR = os.environ.get(
 )
 POLL_INTERVAL = float(os.environ.get("WEB_TAIL_INTERVAL", "1.0"))
 SSE_PING_INTERVAL = float(os.environ.get("WEB_SSE_PING_INTERVAL", "15.0"))
-# Text-only cap for M1's POST /send; real uploads (and WEB_MAX_UPLOAD) are M8.
+# Text-only cap for POST /send; real uploads (and WEB_MAX_UPLOAD) are not implemented yet.
 MAX_SEND_BYTES = int(os.environ.get("WEB_MAX_SEND", str(1 << 20)))
 MAX_UPLOAD_BYTES = int(os.environ.get("WEB_MAX_UPLOAD", str(25 * 1024 * 1024)))
 # A slash command that hasn't returned by now is failed loud rather than hung.
 SLASH_TIMEOUT = 30.0
 
-# The transcript turn grammar (docs/protocol.md, spec §16): a header line of
+# The transcript turn grammar (docs/protocol.md): a header line of
 # `## <role> — <ISO8601Z>`, body is everything to the next header. The separator
 # is a real em-dash (U+2014) flanked by spaces.
 TURN_HEADER = re.compile(r"^## (user|assistant|system) — (.+?)\s*$", re.MULTILINE)
 
 # Loopback Host headers are always honored; a non-loopback Host (DNS rebinding
 # keeps the attacker's Host) is refused. When bound remotely the allowlist
-# widens to exactly the configured host(s) — never wide open (spec §17).
+# widens to exactly the configured host(s) — never wide open.
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1", ""}
 
 # Remote binding (off by default): a non-loopback WEB_BIND requires a token, or
@@ -88,8 +89,8 @@ if IS_REMOTE:
     ALLOWED_HOSTS.add(BIND)
     ALLOWED_HOSTS |= EXTRA_HOSTS
 
-# The only static assets M0 serves, by exact name — no path parameter, so no
-# traversal surface exists yet (the §17 path resolver arrives with /media).
+# The static assets, served by exact name — no path parameter, so no traversal
+# surface. Anything served by path goes through under().
 STATIC = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -164,7 +165,7 @@ class TranscriptTail:
         self.interval = interval
         self.lock = threading.Lock()
         # Start at EOF: existing turns reach a tab via backfill, so nothing is
-        # re-pushed on restart (spec §10). The .cursor file is disposable; we
+        # re-pushed on restart. The .cursor file is disposable; we
         # write it for parity/observability, not correctness.
         self.cursor = file_size(path)
         self.subscribers = []
@@ -223,10 +224,10 @@ class TranscriptTail:
 TAIL = TranscriptTail(TRANSCRIPT, CURSOR_FILE, POLL_INTERVAL)
 
 
-# --- inspector reads (M3: the route→read→render pattern every inspector copies)
+# --- inspector reads (the route→read→render pattern every inspector copies)
 
 def envelope(protocol, root, items, source="fs", raw=""):
-    """The uniform inspector shape (spec §9): path + source + raw, so the UI can
+    """The uniform inspector shape: path + source + raw, so the UI can
     show how a fact was derived and fall back to verbatim output if a parse lags."""
     return {
         "protocol": protocol,
@@ -239,8 +240,8 @@ def envelope(protocol, root, items, source="fs", raw=""):
 
 
 def under(base, path):
-    """Canonicalize `path` and assert it stays at/under `base` — the §17 rule
-    (follow symlinks, then revalidate the resolved target). Returns the real
+    """Canonicalize `path` and assert it stays at/under `base`:
+    follow symlinks, then revalidate the resolved target. Returns the real
     path, or None if it escapes."""
     try:
         real = os.path.realpath(path)
@@ -255,7 +256,7 @@ def within_host(path):
 
 
 def sanitize_upload_name(name, used):
-    """Telegram's §11 upload-name rule: basename, narrow chars, reserve control
+    """Telegram's upload-name rule: basename, narrow chars, reserve control
     names, then make the result unique inside the staged item directory."""
     base = re.split(r"[/\\]", name or "")[-1]
     ext = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.splitext(base)[1])
@@ -305,7 +306,7 @@ def rel_to_gremlin(path):
 
 def build_commands():
     """The slash-command vocabulary, derived from the same `commands/*.sh` that
-    bin/slash.sh dispatches to (the autocomplete menu, stitch 22). Summary rule
+    bin/slash.sh dispatches to (the autocomplete menu). Summary rule
     mirrors help.sh: the first `# ` comment line, minus a leading `<name> — `.
     Read-only listing — never runs a command."""
     items = []
@@ -346,7 +347,7 @@ PRIMITIVES = [
 
 
 def build_primitives():
-    """Each inspector primitive with its concise purpose hint (stitch 26). An
+    """Each inspector primitive with its concise purpose hint. An
     unknown/extension primitive simply isn't listed here, so the hub degrades to
     no hint rather than an invented one."""
     items = [{"name": p["id"], "hint": p["hint"]} for p in PRIMITIVES]
@@ -534,7 +535,7 @@ LORE_DIR = os.path.join(HOST_DIR, ".lore")
 LORE_INDEX_LINE = re.compile(r"^- \[([^\]]+)\]\([^)]*\) — (.*)$")
 
 # Custom "Dash" views live at HOST_DIR/.dash/<name>/ — outside the /update overlay,
-# derived from WEB_HOST_DIR with no new env knob (design 2026-07-03, §2). The
+# derived from WEB_HOST_DIR with no new env knob. The
 # filesystem is the registry: a <name>/ with an index.html is a view.
 DASH_DIR = os.path.join(HOST_DIR, ".dash")
 DASH_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
@@ -728,7 +729,7 @@ def build_glean():
 
 def glean_finding(fid):
     """A single finding body, fetched on demand. The id is validated and the
-    resolved file must live under findings/ (the §17 path-param resolver)."""
+    resolved file must live under findings/."""
     if not SAFE_ID.match(fid or "") or fid in (".", ".."):
         return None
     real = under(FINDINGS_DIR, os.path.join(FINDINGS_DIR, fid + ".md"))
@@ -1224,7 +1225,7 @@ class Handler(BaseHTTPRequestHandler):
     def _ingest_text(self, text):
         """Stage the text to a temp file and hand it to `nestling.sh ingest` as
         a bare .md item — the same atomic landing/rename tui.sh / telegram.sh use.
-        The `-web-` infix lets filters tell web-origin items apart (spec §11)."""
+        The `-web-` infix lets filters tell web-origin items apart."""
         if not NESTLING:
             log("no nestling configured; refusing /send")
             return None
@@ -1351,7 +1352,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, "not found\n")
             return
         # no-cache: a stale gremlin build must never be cached. CSP pins the
-        # gremlin-authored view same-origin (design §3), widened only by the
+        # gremlin-authored view same-origin, widened only by the
         # view's own vetted `.embeds` profiles (never script-src/connect-src).
         self._send(200, body, ctype, {
             "Cache-Control": "no-cache",
@@ -1414,7 +1415,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    # Remote binding is token-gated and off by default (spec §17).
+    # Remote binding is token-gated and off by default.
     if IS_REMOTE and not REMOTE_TOKEN:
         log("refusing to bind non-loopback %s without WEB_REMOTE_TOKEN — set it "
             "in config (an SSH tunnel / WireGuard is the safer path)." % BIND)
@@ -1430,7 +1431,7 @@ def main():
     try:
         httpd = ThreadingHTTPServer((BIND, PORT), Handler)
     except OSError as exc:
-        # Fail loud with the bound address; no auto-bump (spec open question §1).
+        # Fail loud with the bound address; no auto-bump.
         log("could not bind %s:%d (%s)" % (BIND, PORT, exc))
         sys.exit(1)
     httpd.daemon_threads = True

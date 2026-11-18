@@ -22,7 +22,7 @@
   }
 
   // Media src: http(s) used as-is; a local/relative path points at the (future)
-  // /media route — honest-broken until M8 rather than a silent rewrite. A
+  // /media route — honest-broken until that route exists, rather than a silent rewrite. A
   // control scheme (javascript:/data:/vbscript:) is refused → unrenderable.
   function safeMediaSrc(src) {
     src = (src || "").trim();
@@ -80,7 +80,7 @@
   }
 
   // Embed grammar (docs/media-embeds.md): 🖼️/📎/🔊 [caption](src), plus the
-  // silent ![caption](src) image alias. 🔊 (tts:) is left as text in M2.
+  // silent ![caption](src) image alias. 🔊 (tts:) is left as text.
   var EMBED_RE = /(🖼️|📎|🔊) \[([^\]]*)\]\(([^)]*)\)|!\[([^\]]*)\]\(([^)]+)\)/g;
 
   function renderEmbed(emoji, caption, src, literal) {

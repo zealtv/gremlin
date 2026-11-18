@@ -19,7 +19,7 @@ author; the bridge only serves what you write. Read the web bridge's
   `.gremlin/` — `/update` never touches it). It needs a static `index.html` + any
   assets. Having an `index.html` is what makes it a view; the bridge discovers it —
   there is no manifest and **no scaffold tool**. Name it for what it is
-  (`.dash/nutrition/`, `.dash/dashboard/`).
+  (`.dash/tasks/`, `.dash/dashboard/`).
 - **Views are dumb; aggregation is a tool.** The `index.html` renders; it does not
   compute. All real state lives in a co-located `dashboard-index.json` produced by a
   per-gremlin `.gremlin/tools/build-<name>-index.sh` (see below). The view
@@ -27,9 +27,9 @@ author; the bridge only serves what you write. Read the web bridge's
   from. No view-specific bridge route, no new datastore.
 - **Charts:** default to **hand-rolled inline SVG** (line, bars, KPI tiles — zero
   deps, themeable). Escape hatch for a dense/interactive case: **one** pinned,
-  vendored lib under `bridges/web/public/vendor/` (the alpine/xterm precedent — no
-  npm, no build step). Before you write any chart code, **read the `dataviz` skill**
-  for palette, marks, and light/dark.
+  vendored lib under `bridges/web/public/vendor/` (no npm, no build step). If a
+  `dataviz` skill is installed, read it before writing chart code, for palette,
+  marks, and light/dark.
 
 ## Embedding video / third-party media
 
@@ -60,15 +60,12 @@ or remote `<img>` **will be blocked**. Two ways to show external media:
 
 **Location — inside the gremlin.** The tool lives at
 `.gremlin/tools/build-<name>-index.sh`, alongside the gremlin's other tools —
-**not** at a bare host-level `tools/`. The host dir's gremlin-owned state is all
-high-level **dot-dirs** (`.gremlin`, plus gremlin-produced artifact dirs like
-`.dash`) so it never collides with the user's own files; the primitives
-(`.loom`, `.lore`, `.glean`, `.nest`, `.groundhog`) live *inside* `.gremlin/`,
-never at host level (see the Placement section in `docs/protocol.md`). A plain
-`tools/` folder at host level breaks that pattern and gets lost. Only the view and its regenerable cache are host-level (`.dash/<name>/`);
-the tool is gremlin-owned code, so it lives in `.gremlin/tools/`. Bespoke tools
-there survive `/update` (it overlays, never deletes — the gremlin's existing app
-tools prove it).
+**not** at a bare host-level `tools/`. The host dir's gremlin-owned state sits
+in dot-dirs (`.gremlin`, plus gremlin-produced artifact dirs like `.dash`) so it
+never collides with the user's own files. Only the view and its regenerable
+cache are host-level (`.dash/<name>/`); the tool is gremlin-owned code, so it
+lives in `.gremlin/tools/`. Bespoke tools there survive `/update` (it overlays,
+never deletes).
 
 The tool follows the `tools/` contract (args → the file it writes; fail loud,
 non-zero on malformed data). It resolves the host dir (the parent of `.gremlin`),
@@ -94,7 +91,7 @@ The view **renders `generated_at`** so staleness is visible, never silent.
 Charts iterate over whatever series the index lists, keyed by a stable id. This is
 what makes modification a one-line edit instead of a rewrite:
 
-- "Add protein to the daily chart" → add a `protein` series to the **build tool**;
+- "Add a second line to the daily chart" → add a `done` series to the **build tool**;
   the chart picks it up with **zero HTML change**.
 - A genuinely new chart → append one `<section data-chart="<stable-id>">` and render
   by that id; never rewrite the whole file. Edit an existing chart by its id.
@@ -133,9 +130,9 @@ render code — do not start from a blank file.
   <h1 id="title">My Dashboard</h1>
   <div class="stamp" id="stamp">loading…</div>
 
-  <section class="card" data-chart="weight">
-    <h2>Weight</h2>
-    <svg id="chart-weight" viewBox="0 0 320 120" preserveAspectRatio="none" aria-label="weight over time"></svg>
+  <section class="card" data-chart="tasks">
+    <h2>Tasks done</h2>
+    <svg id="chart-tasks" viewBox="0 0 320 120" preserveAspectRatio="none" aria-label="tasks done over time"></svg>
   </section>
 
   <script>
@@ -151,10 +148,10 @@ render code — do not start from a blank file.
     function render(data) {
       document.getElementById("stamp").textContent = "updated " + (data.generated_at || "—");
       // Iterate the series the index lists — new series need no HTML change.
-      drawLine("chart-weight", (data.series && data.series.weight) || []);
+      drawLine("chart-tasks", (data.series && data.series.tasks) || []);
     }
 
-    // Minimal hand-rolled SVG line — read the dataviz skill before elaborating.
+    // Minimal hand-rolled SVG line.
     function drawLine(id, points) {
       var svg = document.getElementById(id);
       if (!svg || !points.length) return;
@@ -185,8 +182,8 @@ render code — do not start from a blank file.
 When the view is built or changed, run the build tool once, then reply in a plain
 chat turn naming the tab and its contents:
 
-> Built your nutrition dashboard — open the **Dash** tab. Weight trend, today's
-> macros, recent meals.
+> Built your tasks dashboard — open the **Dash** tab. Tasks done per day,
+> open items.
 
 **Fail loud:** if the build tool errored, say so and do **not** claim the dashboard
 is ready. A stale or missing index is a visible error, never a silent success.

@@ -69,9 +69,7 @@ The grammar is the same everywhere; presentation differs by bridge:
 - **Web** renders each embed inline, in the order you wrote it, as an image card
   or file chip.
 - **Telegram** sends each embed as its own native message (`sendPhoto` /
-  `sendDocument` / `sendVoice`) alongside the text. Ordering and multi-embed
-  atomicity are being tightened — see the loom stitch
-  `tg-outbound-order-and-atomicity`.
+  `sendDocument` / `sendVoice`) alongside the text.
 - **TUI** has no native attachments; the embed markup is shown as written.
 
 Inbound albums (multiple photos sent as one Telegram media group) arrive as a

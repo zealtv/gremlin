@@ -2,68 +2,34 @@
 
 A localhost web lens over Gremlin's files — the third bridge, sibling of
 `telegram.sh` and `tui.sh`. Python is the glass; bash and the filesystem are the
-only truth. The bridge never writes a `## user —` / `## assistant —` turn, never
-calls a model, and serves nothing but its own `public/` assets (M0).
+only truth. The bridge never writes a `## user —` / `## assistant —` turn and
+never calls a model. It serves its own `public/` assets, read-only inspectors
+and per-gremlin Dash views. The thumb-bar reads **Chat · Dash · Inspect · More**.
 
-> **M0** — a read-only transcript window that boots, tails `transcript.md`, and
-> renders turns in a browser over SSE.
-> **M1** — the chat round-trip: a composer + same-origin `POST /send` that writes
-> a bare `.md` item via `nestling.sh ingest`, with an honest pending echo cleared
-> when the real `## user —` / `## assistant —` turns arrive. The bridge writes the
-> inbound item only — never a transcript turn, never a model call.
-> **M2** — the mobile-first shell: 4-tab thumb-bar (Chat live; the rest inert
-> until their milestones), media-embed rendering (`🖼️` inline image, `📎`
-> download chip; `🔊 (tts:)` left as text for now) and a small safe markdown
-> subset via `render.js` (escape-first; control-scheme URLs refused). The
-> transcript markup stays the source of truth — unrenderable embeds degrade to
-> text, never a rewrite. System turns render as full-width dimmed notices,
-> bodies verbatim.
-> **M3** — the first read-only inspector and the reusable
-> route→read→render→poll shape: a **More** panel showing Identity (`gremlin.md`),
-> Context (`context/system/*.md` + `context/*.md`, symlinks resolved, targets
-> revalidated under the host folder), the active model, and runner Status derived
-> from `.paused` + `.tending.pid` (a dead pid reads *idle, stale* via `kill -0`,
-> never ghost-busy). `GET /api/context` + `GET /api/status` return the uniform
-> `path` + `source` + `raw` envelope.
-> **M5** — the Glean memory inspector (the **Inspect** tab), index-first by law:
-> `GET /api/glean` parses `findings/INDEX.md` only (no eager body reads); a body
-> loads on demand via `GET /api/glean/finding/:id` (id validated + jailed under
-> `findings/`). Findings promoted (symlinked) into `context/` wear a 📡 pill;
-> `[[wikilinks]]` navigate between findings; workbench tray counts shown.
-> This completes the judgment's MVP screen set (Chat + Inspect→Glean).
-> **M4** — the Groundhog schedule inspector, behind the **Inspect hub**.
-> `GET /api/groundhog` shells out to `groundhog.sh list` (the schedule tree,
-> verbatim in `raw`, `[paused]` already tagged) + `due` (never reimplementing
-> due-ness, never re-parsing the path grammar), and reads `out/` / `fired/<today>`
-> inertly → due-now / fired-today / awaiting-pickup. Inspect is now a hub
-> (Groundhog · Glean, with Loom/Lore to come).
-> **M6** — the Loom inspector. `GET /api/loom` reuses `loom.sh` for every derived
-> fact (the loose-end leaf test is subtle, so never re-derived): the verbatim
-> `status` tree in `raw`, NEXT TO TEND = `loose-ends`, `waiting` excluded, counts
-> from the script's own summary. Inspect hub emojis match each primitive's README
-> (the beaver Groundhog, needle Loom, crystal-ball Glean, scroll Lore); Transcript is the memo tab.
-> **M7** — the Lore inspector (reads the host's `.lore/`, skips gracefully if
-> absent). `GET /api/lore` lists the dated `INDEX.md` cards (durable/dark — no
-> recall, no promotion, cf. Glean); `GET /api/lore/item/:id` returns `item.md` +
-> the `content/` file listing; `GET /api/lore/content/:id/*path` serves a content
-> byte (jailed under the item; binary → download, text → inline).
-> **Transcript browser** — the **📝 Transcript** tab: a read-only document view of
-> `transcript.md` + `transcript-archive/*.md`. `GET /api/transcript[?archive=DATE]`
-> returns parsed turns (live or a dated archive, date-validated + jailed) plus the
-> archive list; the frontend adds a date switcher, in-document search, and
-> jump-to-bottom. The file is never modified.
-> **Dash (custom views)** — the always-present **📊 Dash** tab. The bridge stays a
-> lens: it only *serves* per-gremlin views from `HOST_DIR/.dash/<name>/`.
-> `GET /api/dash` discovers each `<name>/` with an `index.html` (the filesystem is
-> the registry — no manifest); `GET /dash/<name>/*path` is jailed static served
-> through `under(HOST_DIR/.dash)` (**not** the exact-match `STATIC` dict), `no-cache`,
-> under a `Content-Security-Policy`. One view mounts in a same-origin iframe; many
-> → a hub; none → a calm invite. The tender *authors* views (see below); the bridge
-> never writes them. See **Custom Dash views** for the contract + trust boundary.
-> The thumb-bar is now **Chat · Dash · Inspect · More**: a custom view is promoted
-> to a primary tab, and **Transcript is demoted into the Inspect hub** (📝, a
-> read-only lens over the conversation record — an inspector in nature), reachable
-> one level down with a back link (owner steer 2026-07-03).
+- **Chat** — tails `transcript.md` over SSE and renders turns in a browser. A
+  composer sends `POST /send`, which writes one `.md` item through
+  `nestling.sh ingest` (never a transcript turn); a muted pending echo clears
+  when the real turns arrive. Media embeds render inline (`🖼️` image, `📎`
+  download chip; `🔊 (tts:)` stays text) with a small safe markdown subset
+  (`render.js`: escape-first, control-scheme URLs refused). System turns appear
+  as full-width dimmed notices, bodies verbatim. Unrenderable embeds degrade to
+  text; the transcript markup stays the source of truth.
+- **Dash** — purpose-built views served from `HOST_DIR/.dash/<name>/`; see
+  **Custom Dash views** below. One view mounts in a same-origin iframe, many
+  give a hub, none gives a calm invite.
+- **Inspect** — a hub of read-only inspectors, each returning a `path` +
+  `source` + `raw` envelope: Groundhog (the `groundhog.sh list` tree plus `due`),
+  Glean (index-first: only `findings/INDEX.md` is parsed, a body loads on demand,
+  promoted findings wear a 📡 pill, `[[wikilinks]]` navigate), Loom (the
+  `loom.sh status` tree, `waiting` excluded from next-to-tend), Lore (dated
+  `INDEX.md` cards and each item's content, jailed under the item; skipped if
+  `.lore/` is absent) and a Transcript browser over `transcript.md` and
+  `transcript-archive/*.md` (date switcher, search, jump-to-bottom; the files are
+  never modified).
+- **More** — Identity (`gremlin.md`), Context (`context/system/*.md` and
+  `context/*.md`, symlinks resolved and revalidated under the host folder), the
+  active model, and runner Status derived from `.paused` and `.tending.pid` (a
+  dead pid reads *idle, stale*).
 
 ## Run
 
@@ -104,22 +70,18 @@ fixture and picks a free port):
 
 ## Config
 
-Optional in M0. `cp config.example config` and edit. The runtime `config`,
+Optional. `cp config.example config` and edit. The runtime `config`,
 `*.pid`, `*.log`, `.cursor`, and `.cache/` are gitignored and safe to delete; the
 bridge reconstructs its view from `.gremlin/` files alone.
 
-## Security (M0)
+## Security
 
 - **Loopback only.** Binds `127.0.0.1` by default; a LAN connection is refused at
   the socket. A non-loopback `Host` header is also rejected (anti-DNS-rebinding).
 - **One mutating route, same-origin only.** `POST /send` is the sole write; it
   requires a loopback `Origin`/`Referer` on the server's own port (anti-CSRF) and
   writes nothing but a guarded `.nest/in/` item. No GET has a side effect.
-- **No generic file-serving path parameter yet** — uploads (`/media`) and the
-  §17 path resolver arrive with their own milestones.
-
-Uploads and the file-serving inspectors are later stitches with their own
-mitigations (see the design spec §17).
+- **No generic file-serving path parameter, and no uploads (`/media`) yet.**
 
 ## Custom Dash views
 
@@ -139,7 +101,7 @@ is the design: the **bridge serves, the tender authors**.
   into `.dash/<name>/dashboard-index.json` (atomic, with a `generated_at`); the view
   `fetch('./dashboard-index.json')`s it through the same jailed route. No
   view-specific API, no new datastore.
-- **Authoring** is a normal chat turn — "build me a nutrition dashboard" — handled
+- **Authoring** is a normal chat turn — "build me a tasks dashboard" — handled
   by the `custom-view` skill (`skills/custom-view.md`): the `.dash/<name>/` layout,
   the inline `index.html` skeleton, the data-driven-chart idempotent-modify rule,
   and the freshness contract (rebuild on-demand + a daily `.groundhog/` job;

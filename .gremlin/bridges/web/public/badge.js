@@ -1,7 +1,7 @@
-// badge.js - unread-message badge for a hidden tab (stitch 65). Pure state
+// badge.js - unread-message badge for a hidden tab. Pure state
 // transition + title formatting (unit-tested by node), plus a thin DOM layer
 // (browser only) that swaps the tab title and favicon. No Notification API
-// (no secure context on the fleet), no permissions, no persisted state: a
+// (no secure context over plain HTTP), no permissions, no persisted state: a
 // reload always starts at 0.
 (function (root, factory) {
   var api = factory();

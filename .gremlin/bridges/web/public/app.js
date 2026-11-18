@@ -1,4 +1,4 @@
-// app.js - the M0 data path: tail the transcript over SSE, render turns.
+// app.js - the data path: tail the transcript over SSE, render turns.
 // Vanilla fetch + EventSource, no framework. "live" means only "tailing the
 // file." The bridge never invents a turn; everything here came from disk.
 
@@ -14,7 +14,7 @@
     liveLabel.textContent = label;
   }
 
-  // --- unread badge (stitch 65) ------------------------------------------
+  // --- unread badge ------------------------------------------
   // lastResetAt marks the last SSE `reset` (a fresh connection or an auto-
   // reconnect, both of which replay a backfill burst); initialized now so the
   // poll fallback — which never sees a `reset` event — also gets a sane value
@@ -22,9 +22,9 @@
   var lastResetAt = Date.now();
   var badgeState = { unread: 0 };
 
-  // Base title is read lazily at apply time, not captured once at load: a
-  // later stitch retitles the page to name@host, and the badge must compose
-  // with whatever the current base title is.
+  // Base title is read lazily at apply time, not captured once at load: the
+  // page is retitled to name@host, and the badge must compose with the
+  // current base title.
   function baseTitle() {
     if (window.GremlinBadge) {
       var t = document.title;
@@ -374,7 +374,7 @@
     });
   }
 
-  // --- slash-command autocomplete (stitch 22) ---------------------------------
+  // --- slash-command autocomplete ---------------------------------
   // The menu derives from /api/commands — the same commands/*.sh bin/slash.sh
   // dispatches to — so the web vocabulary can never drift from the CLI's.
   var cmdMenu = document.getElementById("cmd-menu");
@@ -821,7 +821,7 @@
     inspect.appendChild(head);
   }
 
-  // --- Inspect hub: index-first inspectors, one screen each (spec §5) -------
+  // --- Inspect hub: index-first inspectors, one screen each -------
   // Emojis match each primitive's own README title.
   var INSPECTORS = [
     { id: "groundhog", emoji: "🦫", label: "Groundhog", api: "/api/groundhog", render: renderGroundhog },
@@ -831,7 +831,7 @@
   ];
   var SOON = [];
 
-  // Purpose hints (stitch 26), keyed by primitive id, sourced live from each
+  // Purpose hints, keyed by primitive id, sourced live from each
   // primitive's own README via /api/primitives — never authored here, so the
   // hub can't drift from canonical docs. Fetched once, then the hub re-renders.
   var primitiveHints = null;
@@ -871,7 +871,7 @@
     });
     // Transcript is a read-only lens over the conversation record — an inspector
     // in nature (route→read→render), so it lives in the hub rather than the
-    // primary thumb-bar (owner steer 2026-07-03). Its own rich renderer (archive
+    // primary thumb-bar. Its own rich renderer (archive
     // switch, search) opens one level down, with a back link to the hub.
     var trow = el("div", "hub-row");
     trow.appendChild(el("span", "hub-emoji", "📝"));
@@ -922,9 +922,9 @@
     });
   }
 
-  // --- honest activity indicator (stitch 29) ---------------------------------
-  // NOT a fabricated "typing…": the council forbids inventing liveness the files
-  // can't justify (designer report §8). This reflects only what build_status
+  // --- honest activity indicator ---------------------------------
+  // NOT a fabricated "typing…": never invent liveness the files
+  // can't justify. This reflects only what build_status
   // derives from disk — the tender is actively handling a turn when .tending.pid
   // is alive ("thinking") or a .nest/in item is claimed. It clears on completion
   // (pid idle), on disconnect (fetch fails), and on leaving Chat. A short linger
@@ -966,7 +966,7 @@
   // --- Dash: custom per-gremlin views the bridge serves from HOST_DIR/.dash/ ---
   // The bridge is a lens: it only *serves* views (discovery + jailed static). A
   // view is trusted gremlin-authored code — loading it is a smaller grant than
-  // the POST /send every token-holder already wields (design §4). The iframe is
+  // the POST /send every token-holder already wields. The iframe is
   // failure-isolation (a broken view breaks only its frame), NOT containment.
   function renderDashEmpty() {
     dashView.classList.remove("framed");
@@ -1041,8 +1041,8 @@
     if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
     stopActivity();
     if (name === "chat") {
-      // Entering Chat always reveals the latest turn + composer (stitch 27) and
-      // starts the honest activity poll (stitch 29).
+      // Entering Chat always reveals the latest turn + composer and
+      // starts the honest activity poll.
       scrollToBottom();
       startActivity();
     } else if (name === "more") {
@@ -1176,7 +1176,7 @@
     startPolling();
   }
 
-  // Discreet click-to-refresh (stitch 66): the header name is not just a
+  // Discreet click-to-refresh: the header name is not just a
   // label, it re-pulls transcript/identity without a full page reload. SSE
   // mode closes and reopens the connection (the server replays the backfill
   // after `reset`, which already re-renders cleanly); poll mode rewinds the

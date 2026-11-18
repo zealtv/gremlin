@@ -164,30 +164,6 @@ From a script or shell:
 `/update` refreshes the shared machinery and leaves everything that's *yours* untouched — your identity, context, transcripts, queues, schedules, memory, and settings (`.upstream`, `.model`, `.paused`). Afterwards it runs `gremlin doctor` to restore any managed `context/system/` links.
 
 
-## Developing
-
-Keep personal state out of this repo.
-
-- Run and personalize a copy outside the repo.
-- Never run `prompt` or the TUI against the repo's reference `.gremlin/`.
-- Promote personal-copy ideas back by rewriting generic versions in canonical.
-- Use `.nest/README.md` and `.groundhog/README.md` to
-  understand the nested protocols.
-
-Before pushing:
-
-- `git status` shows only intended changes.
-- `.gremlin/transcript.md` is untracked (`.gremlin/.gitignore` lists it).
-- `.nest/in/`, `.groundhog/out/`, and `.groundhog/fired/` contain only
-  placeholder files.
-- `.loom/threads/`, `.loom/tied/`, and `.loom/dropped/` contain
-  only placeholder files.
-- `.gremlin/context/` contains no personal facts.
-- `.gremlin/gremlin.md` is generic.
-- No `.env`, API keys, bridge configs, or personal metadata are tracked.
-
-
-
 ## More
 
 - `docs/protocol.md`: layout, loops, transcript, skills, tools, models, and data

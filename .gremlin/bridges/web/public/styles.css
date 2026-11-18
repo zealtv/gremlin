@@ -1,5 +1,4 @@
-/* styles.css - calm, typographic, mobile-first. A reading app first. The full
-   visual system (themes, embeds, composer) lands in M2; M0 is a clean window. */
+/* styles.css - calm, typographic, mobile-first. A reading app first. */
 
 :root {
   --paper: #FAFAF8;
@@ -193,7 +192,7 @@ pre { max-width: 100%; overflow-x: auto; }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* honest activity indicator (stitch 29): a calm line above the composer, shown
+/* honest activity indicator: a calm line above the composer, shown
    only while the tender is actually handling a turn (file-derived, not faked) */
 .activity {
   max-width: 66ch;
