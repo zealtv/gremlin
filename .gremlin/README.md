@@ -177,7 +177,7 @@ Keep personal state out of this repo.
 Before pushing:
 
 - `git status` shows only intended changes.
-- `.gremlin/transcript.md` is empty.
+- `.gremlin/transcript.md` is untracked (`.gremlin/.gitignore` lists it).
 - `.nest/in/`, `.groundhog/out/`, and `.groundhog/fired/` contain only
   placeholder files.
 - `.loom/threads/`, `.loom/tied/`, and `.loom/dropped/` contain
