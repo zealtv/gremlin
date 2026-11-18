@@ -15,6 +15,13 @@
 # `.groundhog/schedule/` sees that this repository reflects on Sunday nights,
 # and pausing it is a legitimate human action (`mv reflect reflect.paused`).
 #
+# No tracked file names a date. A `once/` folder spelled `+<N>w` (or `+<N>d`)
+# in `host/` means "N weeks (days) after the day of installing", and lands in the
+# host as that date: `once/+26w/reflect-expire/` installed on 2030-03-01 becomes
+# `once/2030-08-30/reflect-expire/`. A date baked into the product would fire on
+# the next tick for any gremlin installed after it (groundhog: a past-dated
+# one-shot "fires on the next tick regardless").
+#
 # Install-time convenience, never delivery and never update-time. Nothing here
 # is ever overwritten: a job you paused, a tend.md you rewrote, a finding brief
 # you tuned — all stay yours. The installer only fills gaps, so re-running it
@@ -39,6 +46,18 @@ installed=0
 skipped=0
 missing=""
 
+# date_after <N> <w|d> — the date N weeks/days after today, as YYYY-MM-DD.
+# BSD date and GNU date spell this differently, so try both; "today" comes from
+# one plain `date +%F` call, which is also the only call a test needs to fake.
+date_after() {
+  local n="$1" unit="$2" today word
+  today="$(date +%F)"
+  case "$unit" in w) word=weeks ;; *) word=days ;; esac
+  date -j -v"+${n}${unit}" -f %F "$today" +%F 2>/dev/null \
+    || date -d "$today + $n $word" +%F 2>/dev/null \
+    || { echo "cannot work out a date $n $word from $today" >&2; return 1; }
+}
+
 # Walk the files, not the directories: a file's own primitive must already be
 # installed (we never create .nest or .groundhog ourselves — that is the
 # primitive's own install.sh's job, via bin/install-primitives.sh), but the
@@ -46,6 +65,15 @@ missing=""
 while IFS= read -r src; do
   rel="${src#"$SRC"/}"
   prim="${rel%%/*}"
+  # A relative once/ date (`once/+26w/`) is resolved now; `anydate` is the same
+  # path with the date as a glob, to recognise an expiry already in place under
+  # whatever date it carries (a human may have re-dated or paused it).
+  anydate=""
+  if [[ "$rel" =~ ^(.*/once/)\+([0-9]+)([wd])(/.*)$ ]]; then
+    anydate="$HOST_DIR/${BASH_REMATCH[1]}*${BASH_REMATCH[4]}"
+    when="$(date_after "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")" || exit 1
+    rel="${BASH_REMATCH[1]}$when${BASH_REMATCH[4]}"
+  fi
   dst="$HOST_DIR/$rel"
   if [ ! -d "$HOST_DIR/$prim" ]; then
     case " $missing " in *" $prim "*) ;; *) missing="$missing $prim" ;; esac
@@ -55,7 +83,15 @@ while IFS= read -r src; do
   # renamed to pause or un-pause it (`reflect` <-> `reflect.paused`) — a human
   # renaming a job must not cause the original to be reinstalled beside it.
   parent="$(dirname "$dst")"
+  present=0
   if [ -e "$dst" ] || [ -e "${parent%.paused}" ] || [ -e "$parent.paused" ]; then
+    present=1
+  elif [ -n "$anydate" ]; then
+    adir="$(dirname "$anydate")"
+    compgen -G "$adir" >/dev/null && present=1
+    compgen -G "$adir.paused" >/dev/null && present=1
+  fi
+  if [ "$present" = 1 ]; then
     [ "$check_only" = 1 ] || echo "ok $rel already present"
     skipped=$((skipped + 1))
     continue
