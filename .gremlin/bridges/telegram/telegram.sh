@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # telegram.sh - Telegram bridge daemon.
 #
-# Reads Telegram updates and writes inbound text to .nest/in/. Later
-# implementation stitches fill in API polling and transcript fan-out; this file
-# first establishes the service shape used by the gremlin wrapper.
+# Reads Telegram updates and writes inbound items to .nest/in/; pushes new
+# assistant and system turns from transcript.md back to the chat. See README.md.
 
 set -euo pipefail
 
