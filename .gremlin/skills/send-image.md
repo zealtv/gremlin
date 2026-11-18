@@ -18,7 +18,7 @@ other text in the same reply is sent alongside as a message.
 
 - A relative path resolves against the gremlin's working directory (the host
   folder) — reference files you created with the same path you wrote them to,
-  e.g. `🖼️ [today's totals](log/2026-06-13/graph.png)`.
+  e.g. `🖼️ [weekly totals](out/totals.png)`.
 - An absolute path (`/...`) or an `http(s)://` URL is used as-is.
 - Only send a file that exists; a missing local file fails the send rather than
   delivering a broken reply.
