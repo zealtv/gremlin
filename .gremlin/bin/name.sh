@@ -93,9 +93,10 @@ case "${1:-get}" in
   slug)
     # Vocabulary words are already lowercase ASCII, but a custom name is
     # whatever a human typed. Fold it to something a URL, a filename or a
-    # process listing can carry.
+    # process listing can carry. Extended regex (-E): BSD sed, as on macOS,
+    # does not read \+ in a basic regex, and would leave the spaces in place.
     ensure | tr '[:upper:]' '[:lower:]' \
-      | sed -e 's/[^a-z0-9]\+/-/g' -e 's/^-\+//' -e 's/-\+$//'
+      | sed -E -e 's/[^a-z0-9]+/-/g' -e 's/^-+//' -e 's/-+$//'
     ;;
   source)
     field source || echo generated
