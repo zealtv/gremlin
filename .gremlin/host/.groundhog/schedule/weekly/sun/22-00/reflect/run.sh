@@ -25,16 +25,23 @@ GREMLIN_DIR="$HOST_DIR/.gremlin"
 
 # The cursor lives in the schedule SOURCE (in the host's .groundhog, which
 # /update cannot reach at all) — never this materialised copy, which is
-# discarded after the tend.
-STATE="$HOST_DIR/.groundhog/schedule/weekly/sun/22-00/reflect/cursor"
+# discarded after the tend. The host may have moved the job to another time
+# slot, so find it by name, as `groundhog drop` does; the shipped slot is only
+# the fallback (a run by hand, with no scheduled job to find).
+JOB="$(find "$HOST_DIR/.groundhog/schedule" -type d -name reflect 2>/dev/null | head -n 1)"
+[ -n "$JOB" ] || JOB="$HOST_DIR/.groundhog/schedule/weekly/sun/22-00/reflect"
+STATE="$JOB/cursor"
 THRESHOLD="${REFLECT_THRESHOLD:-4000}"   # bytes of new transcript before reflecting is worth it
 
 # Material accrued = current transcript + everything archived. /new resets
 # transcript.md but grows transcript-archive/, so the sum is monotonic across
 # sessions and a reflection is never missed just because a session was closed.
 live=$(wc -c < "$GREMLIN_DIR/transcript.md" 2>/dev/null || echo 0)
-archived=$(find "$GREMLIN_DIR/transcript-archive" -type f -printf '%s\n' 2>/dev/null \
-  | awk '{s+=$1} END{print s+0}')
+# (find -exec cat | wc -c, not find -printf: BSD find lacks -printf, and under
+# pipefail a failing find would end the job on every tick.)
+archived=$(find "$GREMLIN_DIR/transcript-archive" -type f -exec cat {} + 2>/dev/null \
+  | wc -c || true)
+archived=$(( archived + 0 ))
 cur=$(( live + archived ))
 last=0
 [ -f "$STATE" ] && last=$(cat "$STATE" 2>/dev/null || echo 0)
