@@ -1,10 +1,10 @@
-# web bridge config — copy to `config` and edit. All values are optional in M0;
+# web bridge config — copy to `config` and edit. All values are optional;
 # the defaults below serve a loopback-only, read-only transcript window.
 #
 #   cp config.example config
 
 # Address to bind. Keep this on loopback. A non-loopback bind is a loud,
-# token-gated, off-by-default opt-in handled by a later stitch (spec §17).
+# token-gated, off-by-default opt-in (see "Remote access" below).
 WEB_BIND=127.0.0.1
 
 # Port to listen on. Leave it unset (the default) and the bridge auto-assigns a
@@ -27,5 +27,5 @@ WEB_BIND=127.0.0.1
 # e.g. a MagicDNS name. The bind address itself is always accepted.
 # WEB_REMOTE_HOST=
 
-# Reserved for attachments (a later stitch): per-file/per-body upload cap.
+# Reserved for attachments (not implemented yet): per-file/per-body upload cap.
 WEB_MAX_UPLOAD=26214400
