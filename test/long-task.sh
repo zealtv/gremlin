@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# long-task.sh — regression for the long-task start/progress compliance stitch.
+# long-task.sh — regression for the long-task start/progress behaviour.
 #
-# Origin: on 2026-06-30 a ~3-minute vendored-primitives sync (inspect, edit,
-# test, commit, loom tie-off) produced only a final turn — no start
-# announcement, no intermediate progress. The long-task skill exists; the gap
+# Origin: a ~3-minute multi-step task (inspect, edit, test, commit) once
+# produced only a final turn — no start announcement, no intermediate
+# progress. The long-task skill exists; the gap
 # was behavioural: a multi-step task that *fits* in one silent tend was run as
 # one opaque span.
 #
@@ -105,13 +105,13 @@ fi
 step=0
 [[ -f "$GDIR/.test-step" ]] && step="$(cat "$GDIR/.test-step")"
 case "$step" in
-  0) echo "STARTTURN on it — syncing the vendored primitives across three repos; I'll report as I go"
-     "$GDIR/tools/continue.sh" "step 1/3: inspect the vendored copies, patch drift" >/dev/null ;;
-  1) echo "PROGRESSTURN step 1/3 done — inspected and patched the vendored copies; running tests next"
+  0) echo "STARTTURN on it — renaming the config key across three modules; I'll report as I go"
+     "$GDIR/tools/continue.sh" "step 1/3: find every use of the old key, patch them" >/dev/null ;;
+  1) echo "PROGRESSTURN step 1/3 done — found and patched the old key; running tests next"
      "$GDIR/tools/continue.sh" "step 2/3: run the tests, then commit" >/dev/null ;;
-  2) echo "PROGRESSTURN tests green; committing and tying off the loom stitch"
-     "$GDIR/tools/continue.sh" "step 3/3: commit and tie off" >/dev/null ;;
-  *) echo "FINALTURN ✅ synced, committed, loom tied off" ;;
+  2) echo "PROGRESSTURN tests green; committing"
+     "$GDIR/tools/continue.sh" "step 3/3: commit" >/dev/null ;;
+  *) echo "FINALTURN ✅ renamed, tested, committed" ;;
 esac
 echo "$((step + 1))" > "$GDIR/.test-step"
 STUB
@@ -138,7 +138,7 @@ echo "== a multi-step task surfaces start -> progress -> final, each its own tur
 
 reset_nest
 touch "$GREMLIN/.test-longtask"
-queue sync-primitives "sync the vendored primitives across every repo"
+queue rename-key "rename the config key across every module"
 drain
 
 turns="$(count_of "$TRANSCRIPT" '^## assistant —')"
