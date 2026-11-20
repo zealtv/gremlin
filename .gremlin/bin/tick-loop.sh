@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # tick-loop.sh — one pass of the groundhog tick.
 #
-# Pure router: ticks groundhog, then moves each materialised item into
-# .nest/in/. The tender owns shape recognition and transcript writes;
-# this loop never writes transcript turns.
+# Pure router: ticks groundhog, then moves each delivery-only item into
+# .nest/in/. A delivery groundhog runs itself (its item carried a `run`)
+# is left in out/ for groundhog. The tender owns shape recognition and
+# transcript writes; this loop never writes transcript turns.
 
 set -uo pipefail
 
@@ -24,6 +25,14 @@ for item in "$GH/out"/*; do
     .gitkeep) continue ;;
   esac
   [ -d "$item" ] || continue
+  # A delivery whose record says groundhog runs it (an item that carried an
+  # executable `run`) stays in out/: its run starts from there, on this tick
+  # or a later one. Only delivery-only items come through the nest.
+  if [ -f "$item/.groundhog-record" ]; then
+    kind="" handler=""
+    read -r kind _ _ handler _ < "$item/.groundhog-record" || true
+    [ "$kind" = fired ] && [ "$handler" = run ] && continue
+  fi
 
   target="$NEST_IN/$base"
   n=2

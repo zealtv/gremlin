@@ -167,6 +167,24 @@ check_primitive "loom" "loom.sh" "loom"
 check_primitive "lore" "lore.sh" "lore"
 check_primitive "glean" "glean.sh" "glean"
 check_primitive "groundhog" "groundhog.sh" "groundhog"
+# Groundhog's protocol. 2 runs an item's own `run`; 1 only delivers, which is
+# all a gremlin needs, so 1 is a note, not a fault. Files 1 kept in runtime/
+# are ignored by 2 and can go.
+if [ -x "$HOST_DIR/.groundhog/groundhog.sh" ]; then
+  gh_proto="$("$HOST_DIR/.groundhog/groundhog.sh" capabilities --json 2>/dev/null \
+    | sed -n 's/.*"protocol_version":\([0-9][0-9]*\).*/\1/p' || true)"
+  if [ -z "$gh_proto" ] || [ "$gh_proto" = 1 ]; then
+    echo "note .groundhog is older than protocol 2 (still fine for a gremlin). To upgrade, run"
+    echo "     ./install.sh $HOST_DIR from a groundhog checkout; its README has \"Upgrading from protocol 1\""
+  else
+    echo "ok .groundhog protocol $gh_proto"
+    for f in state.json config.json; do
+      if [ -e "$HOST_DIR/.groundhog/runtime/$f" ]; then
+        echo "note .groundhog/runtime/$f is left from protocol 1 and ignored — it can be removed"
+      fi
+    done
+  fi
+fi
 if [ -d "$HOST_DIR/.dash" ]; then
   echo "note .dash present at the host root — gremlin-produced content (correct placement)"
 fi
