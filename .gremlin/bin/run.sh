@@ -34,6 +34,7 @@ pids=()
 # nap <seconds>: sleep inside a loop subshell without ending the loop.
 #   - A TERM to the sleep alone (something killed it) just ends the nap, so
 #     the loop carries on; a bare `while sleep N` would end the loop for good.
+#     It leaves one line on stderr, so run.log shows that something killed it.
 #   - A TERM to the loop subshell kills its sleep first, so stopping the
 #     gremlin leaves no orphaned sleep behind.
 nap() {
@@ -41,7 +42,7 @@ nap() {
   trap 'kill "$nap_pid" 2>/dev/null; exit 0' TERM
   sleep "$1" &
   nap_pid=$!
-  wait "$nap_pid" 2>/dev/null
+  wait "$nap_pid" 2>/dev/null || echo "run.sh: a nap's sleep ended early (status $?)" >&2
   trap - TERM
   return 0
 }

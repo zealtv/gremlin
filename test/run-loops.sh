@@ -106,13 +106,19 @@ item() {
 tended() { [ -e "$1/ran-$2" ] && [ ! -e "$1/.nest/in/$2" ]; }
 
 # kill_tend_sleep: kill the tend loop's own sleep; fail if it can't be found.
+# kills counts the sleeps killed, for the run.log check below.
+kills=0
 kill_tend_sleep() {
   local s
   wait_until 10 has_tend_sleep || return 1
   s="$(tend_sleep)"
   kill "$s" 2>/dev/null || return 1
+  kills=$((kills + 1))
   wait_until 5 sh -c "! kill -0 $s 2>/dev/null"
 }
+
+# early_lines <host>: how many times run.log says a nap's sleep ended early.
+early_lines() { grep -c "a nap's sleep ended early" "$1/run.log" 2>/dev/null || true; }
 
 # gone <pids...>: none of them is running.
 gone() { local p; for p in "$@"; do alive "$p" && return 1; done; return 0; }
@@ -142,8 +148,18 @@ wait_until 6 tended "$H" two && ok "the loop survives repeated kills" \
   || bad "an item was never tended after repeated kills"
 alive "$loop" && ok "still the same loop" || bad "the tend loop ended"
 
+# 2b. Each killed sleep leaves one line in run.log (stderr of run.sh), and the
+# naps that ran their full time (the tend loop's every few seconds) leave none.
+sleep 0.3
+[ "$(early_lines "$H")" -eq "$kills" ] \
+  && ok "run.log has one early-end line for each of the $kills killed sleeps" \
+  || bad "run.log has $(early_lines "$H") early-end line(s) for $kills killed sleeps: $(tail -n 3 "$H/run.log" | tr '\n' '|')"
+grep -q "a nap's sleep ended early (status 143)" "$H/run.log" \
+  && ok "and the line names the sleep's status" || bad "no early-end line names status 143"
+
 # 3. A TERM to run.sh stops everything it started, sleeps included.
 wait_until 10 has_tend_sleep
+early_before="$(early_lines "$H")"
 SEEN="$(descendants "$RUN_PID" | tr '\n' ' ')"
 sleeps=0
 for p in $SEEN; do
@@ -155,6 +171,8 @@ wait_until 5 gone "$RUN_PID" $SEEN \
   && ok "TERM to run.sh leaves no loop or sleep behind" \
   || bad "left running after TERM: $(for p in $RUN_PID $SEEN; do alive "$p" && printf '%s ' "$p"; done)"
 RUN_PID=""
+[ "$(early_lines "$H")" -eq "$early_before" ] \
+  && ok "and the stop leaves no early-end line in run.log" || bad "the stop added early-end line(s) to run.log"
 
 # 4. `gremlin sleep` (a TERM to run.sh and to both loops at once) does too.
 H="$(new_host sleep)"
