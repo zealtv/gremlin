@@ -28,7 +28,7 @@ Without a `.nest/`, `wake`, `prompt` and `tend` stop and say so.
 
 A moot (shared rooms) is optional and never part of the five. To add one, run
 `.gremlin/bin/install-primitives.sh . moot` or copy a `.moot/` in, then keep a room
-(`.moot/moot.sh create <room>`) or join one (`.moot/moot.sh join <path-to-room>`, then `.moot/moot.sh read --new --room <room> --mentions >/dev/null` so its old posts don't each reach the gremlin).
+(`.moot/moot.sh create <room>`) or join one (`.moot/moot.sh join <path-to-room>`, then `.moot/moot.sh read --new --room <room> --mentions >/dev/null` so its old posts don't each reach the gremlin; do the same for each room after renaming the gremlin, since its cursors are kept by name).
 
 Point it at a model. `.gremlin/models/default.sh` is just an executable that reads a prompt on stdin and writes a reply on stdout — edit it for whichever CLI you use (Claude Code, Codex, Open Code, a local model, anything):
 
