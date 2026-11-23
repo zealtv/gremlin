@@ -109,6 +109,72 @@ out="$("$LEGACY/.gremlin/bin/doctor.sh" 2>&1)"
 printf '%s' "$out" | grep -q 'LEGACY placement' && ok "doctor rejects a legacy symlink" \
   || bad "doctor missed a legacy symlink"
 
+# moot is an optional sixth dotdir. install-primitives.sh with no names still
+# installs exactly the five; naming moot adds .moot/. Offline when every
+# primitive has a sibling checkout (each is packed into a local tarball and
+# fetched through GREMLIN_PRIMITIVE_URL_BASE), else through the network.
+BASE_ARGS=()
+offline=1
+for repo in nestlings loom lore glean groundhog moot; do
+  [ -x "$PRIMITIVE_REPOS/$repo/install.sh" ] || offline=0
+done
+if [ "$offline" = 1 ]; then
+  for repo in nestlings loom lore glean groundhog moot; do
+    mkdir -p "$TMP/tarballs/$repo/archive/refs/heads" "$TMP/pack/$repo-main"
+    cp -R "$PRIMITIVE_REPOS/$repo/." "$TMP/pack/$repo-main/"
+    rm -rf "${TMP:?}/pack/$repo-main/.git"
+    tar -czf "$TMP/tarballs/$repo/archive/refs/heads/main.tar.gz" -C "$TMP/pack" "$repo-main"
+  done
+  export GREMLIN_PRIMITIVE_URL_BASE="file://$TMP/tarballs"
+fi
+MH="$TMP/optional-host"
+mkdir -p "$MH"
+cp -R "$ROOT/.gremlin" "$MH/.gremlin"
+"$MH/.gremlin/bin/install-primitives.sh" "$MH" >/dev/null 2>&1
+n=0
+for name in nest loom lore glean groundhog; do [ -d "$MH/.$name" ] && n=$((n + 1)); done
+[ "$n" = 5 ] && ok "a default run installs the five" || bad "a default run installed $n of the five"
+[ -e "$MH/.moot" ] && bad "a default run installed .moot" || ok "a default run installs no .moot"
+printf '%s' "$("$MH/.gremlin/bin/doctor.sh" 2>&1)" | grep -q 'moot' \
+  && bad "doctor mentions moot on a host with no .moot" \
+  || ok "doctor says nothing about moot on a host with no .moot"
+out="$("$MH/.gremlin/bin/install-primitives.sh" "$MH" moot 2>&1)"
+[ -x "$MH/.moot/moot.sh" ] && ok "naming moot installs .moot/moot.sh" || bad "naming moot installed no .moot/moot.sh: $out"
+out="$("$MH/.gremlin/bin/install-primitives.sh" "$MH" moot 2>&1)"
+printf '%s' "$out" | grep -q 'already installed' && ok "a second run says moot is already installed" \
+  || bad "a second run did not say already installed: $out"
+unset GREMLIN_PRIMITIVE_URL_BASE
+
+# doctor and moot: nothing without a .moot/; ok with one; a note while no room
+# is heard; and doctor never runs moot.sh (every moot command repairs links).
+DH="$TMP/doctor-host"
+mkdir -p "$DH"
+cp -R "$ROOT/.gremlin" "$DH/.gremlin"
+printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qi 'moot' \
+  && bad "doctor mentions moot with no .moot/" || ok "doctor: no moot line without .moot/"
+mkdir -p "$DH/.moot/rooms"
+printf '#!/bin/sh\ntouch "%s/moot-ran"\n' "$DH" > "$DH/.moot/moot.sh"
+chmod +x "$DH/.moot/moot.sh"
+out="$("$DH/.gremlin/bin/doctor.sh" 2>&1)"
+printf '%s' "$out" | grep -qF 'ok .moot' && ok "doctor: ok .moot with a .moot/" || bad "doctor: no ok .moot: $out"
+printf '%s' "$out" | grep -qF '.moot hears no room yet' && ok "doctor: notes that no room is heard" \
+  || bad "doctor: no 'hears no room yet' note: $out"
+printf '%s' "$out" | grep -qF 'join <path-to-room>' && printf '%s' "$out" | grep -qF 'create <room>' \
+  && ok "doctor: the note names create and join" || bad "doctor: the note lacks create or join: $out"
+[ -e "$DH/moot-ran" ] && bad "doctor ran moot.sh" || ok "doctor does not run moot.sh"
+mkdir -p "$DH/.moot/rooms/example"
+out="$("$DH/.gremlin/bin/doctor.sh" 2>&1)"
+printf '%s' "$out" | grep -qF 'ok .moot' && ok "doctor: still ok .moot with a room" || bad "doctor: lost ok .moot with a room"
+printf '%s' "$out" | grep -qF 'hears no room yet' && bad "doctor: notes no room although one is there" \
+  || ok "doctor: no note once a room is there"
+rm -rf "$DH/.moot/rooms/example"
+ln -s "$TMP/nowhere" "$DH/.moot/rooms/example"
+printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qF 'hears no room yet' \
+  && bad "doctor: a linked room does not count" || ok "doctor: a linked room counts as heard"
+rm -f "$DH/.moot/moot.sh"
+printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qF '.moot exists at the host root but has no moot.sh' \
+  && ok "doctor: names a .moot/ with no moot.sh" || bad "doctor: silent about a .moot/ with no moot.sh"
+
 printf '\npassed: %d, failed: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || { echo "not ok - fresh install produces the sibling shape" >&2; exit 1; }
 echo "ok - fresh install produces the sibling shape"

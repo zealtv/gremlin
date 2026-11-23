@@ -85,6 +85,26 @@ mkdir -p "$H/.notes"; printf '# notes\n\nNothing runnable.\n' > "$H/.notes/READM
 doctor "$H" >/dev/null
 [ ! -e "$H/AGENTS.md" ] && ok "readme-only dotdir: no AGENTS.md" || bad "readme-only dotdir counted as a primitive"
 
+# 7. moot is an optional dotdir: with a .moot/ the map carries its "Start here"
+# and ownership lines; without one the map never mentions moot.
+H="$(new_host nomoot primitive)"
+doctor "$H" >/dev/null
+grep -qi 'moot' "$H/AGENTS.md" "$H/.gremlin/PRIMITIVES.md" 2>/dev/null \
+  && bad "no .moot: the map mentions moot" || ok "no .moot: the map says nothing about moot"
+H="$(new_host withmoot primitive)"
+mkdir -p "$H/.moot"
+printf '# 📣 moot\n\nA moot is a directory of messages.\n' > "$H/.moot/README.md"
+printf '#!/bin/sh\nexit 0\n' > "$H/.moot/moot.sh"
+doctor "$H" >/dev/null
+grep -qF 'Read `.moot/SKILL.md` before posting to or catching up on a shared room' "$H/AGENTS.md" \
+  && ok ".moot: AGENTS.md carries the moot Start here line" || bad ".moot: no Start here line in AGENTS.md"
+grep -qF '`.moot/` — rooms shared with other folders and people' "$H/AGENTS.md" \
+  && ok ".moot: AGENTS.md carries the moot ownership line" || bad ".moot: no ownership line in AGENTS.md"
+grep -qF '`.moot/moot.sh rooms`' "$H/AGENTS.md" \
+  && ok ".moot: the Start here line names the rooms command" || bad ".moot: no rooms command named"
+[ -f "$H/.gremlin/PRIMITIVES.md" ] && grep -qF '.moot/' "$H/.gremlin/PRIMITIVES.md" \
+  && ok ".moot: PRIMITIVES.md lists it" || bad ".moot: PRIMITIVES.md does not list it"
+
 printf '\npassed: %d, failed: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || { echo "not ok - host map" >&2; exit 1; }
 echo "ok - host map"
