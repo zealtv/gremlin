@@ -162,6 +162,16 @@ if [ "$dry_run" = "1" ]; then
   exit 0
 fi
 
+# The running loops are subshells of bin/run.sh, forked when the gremlin woke:
+# they keep that copy of run.sh until a restart. The scripts they call each
+# pass (tend-loop.sh, tick-loop.sh, moot-loop.sh, llm.sh) are read afresh, so
+# only run.sh matters. Compare content: a tarball's mtimes differ from this
+# copy's, so rsync itemizes every file whether or not it changed.
+runner_changed=0
+if [ -f "${src}bin/run.sh" ] && ! cmp -s "${src}bin/run.sh" "$GREMLIN_DIR/bin/run.sh"; then
+  runner_changed=1
+fi
+
 # Pause the loops while we swap files in. Existing .paused (set by
 # archive.sh or the user) is honoured — don't remove what we didn't set.
 if [ ! -e "$PAUSED_FILE" ]; then
@@ -175,6 +185,17 @@ count=0
 [ -n "$changes" ] && count="$(printf '%s\n' "$changes" | wc -l | tr -d ' ')"
 
 echo "✨ updated: $count file(s)"
+
+# The overlay lays the canonical skills/INDEX.md over this copy's, which
+# drops any skill of the host's own until something rebuilds it. Rebuild it
+# now rather than at the next wake.
+if [ -x "$GREMLIN_DIR/bin/index-skills.sh" ]; then
+  "$GREMLIN_DIR/bin/index-skills.sh" >/dev/null || echo "warning: skills index refresh failed" >&2
+fi
+
+if [ "$runner_changed" = "1" ] && pgrep -f "$GREMLIN_DIR/bin/run.sh" >/dev/null 2>&1; then
+  echo "↻ bin/run.sh changed: the running loops keep the old one until ./.gremlin/gremlin restart"
+fi
 
 # Note what is deliberately absent: /update does not initialise, install or
 # repair a primitive. The primitives are the repository's, installed once

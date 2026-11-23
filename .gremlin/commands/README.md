@@ -35,6 +35,10 @@ file to track a fork or a local tarball (`file:///path/to/gremlin.tar.gz`).
 
 `/update --dry-run` reports what would change without writing.
 
+A running gremlin keeps its loops through an update. The scripts they call are read
+afresh each pass, but the loops themselves come from `bin/run.sh`: when that
+changes, `/update` says so, and `./.gremlin/gremlin restart` picks it up.
+
 `/update --revert <path>` fetches canonical and copies one file over the local
 copy, overriding the exclusion list. Use it to pull a clean copy of files
 `/update` normally preserves — any `models/*.sh` preset, `gremlin.md`,
