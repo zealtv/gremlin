@@ -90,14 +90,16 @@ sleep_arg() {
 # find_tend_loop: tell the tend loop from the tick loop by what each sleeps:
 # the tend loop naps 5 s, the tick loop until the next minute. At :55 both
 # show `sleep 5`, and a loop between naps shows none, so it succeeds only once
-# exactly one of run.sh's children is in `sleep 5`; callers retry.
+# both loops nap and exactly one of them is in `sleep 5`; callers retry.
 TEND_LOOP=""
 find_tend_loop() {
-  local c fives=0 pick=""
+  local c a fives=0 asleep=0 pick=""
   for c in $(ps -axo pid=,ppid= | awk -v p="$RUN_PID" '$2 == p { print $1 }'); do
-    if [ "$(sleep_arg "$c")" = 5 ]; then fives=$((fives + 1)); pick="$c"; fi
+    a="$(sleep_arg "$c")"
+    [ -n "$a" ] && asleep=$((asleep + 1))
+    if [ "$a" = 5 ]; then fives=$((fives + 1)); pick="$c"; fi
   done
-  [ "$fives" -eq 1 ] || return 1
+  [ "$asleep" -eq 2 ] && [ "$fives" -eq 1 ] || return 1
   TEND_LOOP="$pick"
 }
 tend_loop() { printf '%s' "$TEND_LOOP"; }
