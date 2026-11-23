@@ -171,6 +171,11 @@ rm -rf "$DH/.moot/rooms/example"
 ln -s "$TMP/nowhere" "$DH/.moot/rooms/example"
 printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qF 'hears no room yet' \
   && bad "doctor: a linked room does not count" || ok "doctor: a linked room counts as heard"
+rm -f "$DH/.moot/rooms/example"
+mkdir -p "$DH/.moot/rooms/old.archived"
+printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qF 'hears no room yet' \
+  && ok "doctor: an archived room alone counts as no room" || bad "doctor: counts an archived room as heard"
+rm -rf "$DH/.moot/rooms/old.archived"
 chmod -x "$DH/.moot/moot.sh"
 out="$("$DH/.gremlin/bin/doctor.sh" 2>&1)"
 printf '%s' "$out" | grep -qF '.moot/moot.sh is not executable' \

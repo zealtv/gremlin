@@ -187,12 +187,14 @@ if [ -x "$HOST_DIR/.groundhog/groundhog.sh" ]; then
 fi
 # moot is an optional sixth dotdir: say nothing unless one is there. Never run
 # moot.sh from here (every moot command repairs links as a side effect); look
-# for a room entry with the shell. A link counts even when it dangles.
+# for a room entry with the shell. A link counts even when it dangles; an
+# archived room (`<room>.archived`) does not, since the runner's pass skips it.
 if [ -d "$HOST_DIR/.moot" ]; then
   if [ -x "$HOST_DIR/.moot/moot.sh" ]; then
     echo "ok .moot"
     moot_room=""
     for f in "$HOST_DIR/.moot/rooms"/*; do
+      case "$f" in *.archived) continue ;; esac
       if [ -e "$f" ] || [ -L "$f" ]; then moot_room=1; break; fi
     done
     if [ -z "$moot_room" ]; then
