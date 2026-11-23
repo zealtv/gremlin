@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # moot.sh — the moot catch-up pass (bin/moot-loop.sh): a mention on the board
 # reaches the nest and costs one model turn; a quiet board costs none; a host
-# with no moot, or no nest, or a paused gremlin is left alone.
+# with no moot, or no nest, or a paused gremlin is left alone. Also: the tracked
+# skills/INDEX.md lists the moot skill, and a delivered mention reaches the model
+# as the last turn of a prompt that names it.
 #
 # Uses sibling nestlings, glean and moot checkouts when there are some
 # (offline), else the network installers. With no moot to be had, the moot
@@ -53,7 +55,8 @@ install_primitive() {
 }
 
 # new_host <name> [nest]: a host with .gremlin and, unless told "no-nest", a nest
-# and glean. Its model appends a line to .gremlin/model.calls on every call.
+# and glean. Its model appends a line to .gremlin/model.calls on every call, and
+# keeps the prompt it was given in .gremlin/prompt.seen.
 new_host() {
   local h="$TMP/$1"
   mkdir -p "$h"
@@ -67,7 +70,7 @@ new_host() {
   cat > "$h/.gremlin/models/echo.sh" <<'EOF'
 #!/usr/bin/env bash
 GREMLIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cat > /dev/null
+cat > "$GREMLIN_DIR/prompt.seen"
 echo called >> "$GREMLIN_DIR/model.calls"
 printf 'model response\n'
 EOF
@@ -117,6 +120,14 @@ pass_of "$H"; rc=$?
 [ "$rc" -eq 0 ] && ok "no .moot/: the pass exits 0" || bad "no .moot/: the pass exited $rc"
 [ ! -s "$TMP/out" ] && [ ! -s "$TMP/err" ] && ok "and says nothing" || bad "no .moot/: the pass printed something"
 [ "$(tree "$H")" = "$before" ] && ok "and creates nothing" || bad "no .moot/: the pass changed the host"
+
+# 1b. The tracked skills/INDEX.md lists the moot skill: regenerating it in a
+# host gives the same file, so a skill added without regenerating fails here.
+"$H/.gremlin/bin/index-skills.sh" >/dev/null 2>&1
+grep -q '^- `moot` — ' "$ROOT/.gremlin/skills/INDEX.md" \
+  && ok "skills/INDEX.md lists the moot skill" || bad "skills/INDEX.md does not list the moot skill"
+cmp -s "$H/.gremlin/skills/INDEX.md" "$ROOT/.gremlin/skills/INDEX.md" \
+  && ok "and matches what index-skills.sh makes" || bad "skills/INDEX.md is stale: run .gremlin/bin/index-skills.sh"
 
 MOOT_SRC="$(moot_src)"
 if [ -z "$MOOT_SRC" ]; then
@@ -171,6 +182,13 @@ tend "$H"
 [ "$(calls "$H")" -eq 1 ] && ok "the tender makes exactly one model call" || bad "a mention: $(calls "$H") model call(s)"
 grep -q '^## user — ' "$H/.gremlin/transcript.md" && grep -q '# moot mention' "$H/.gremlin/transcript.md" \
   && ok "transcript.md holds a user turn with the mention" || bad "the mention is not a user turn in transcript.md"
+# The model sees the moot skill in its index, and the mention is the last turn.
+awk '/^## user — / { u = NR } /^- `moot` — / { m = NR } END { exit !(m && u && m < u) }' "$H/.gremlin/prompt.seen" \
+  && ok "the prompt names the moot skill before the mention" || bad "the prompt does not name the moot skill"
+awk '/^## / { last = $0; body = "" ; next } { body = body $0 "\n" }
+     END { exit !(last ~ /^## user — / && body ~ /# moot mention · board · alice/) }' "$H/.gremlin/prompt.seen" \
+  && ok "and ends with the mention turn" || bad "the prompt does not end with the mention turn"
+
 pass_of "$H"
 [ "$(count_delivered "$H")" -eq 0 ] && ok "a second pass delivers nothing" || bad "a second pass delivered again"
 tend "$H"
