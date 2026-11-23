@@ -7,7 +7,8 @@
 #
 # Loops:
 #   - tend-loop.sh (~5s) — process items in .nest/in/
-#   - tick-loop.sh (~60s) — joins in stage 7 (groundhog)
+#   - tick-loop.sh (~60s) — joins in stage 7 (groundhog); each minute it is
+#     followed by moot-loop.sh, which does nothing unless the host has a .moot/
 #
 # Startup index refreshes and .paused gate (s14) slot in here too.
 
@@ -63,6 +64,7 @@ pids+=($!)
 ( while :; do
     nap $(( 60 - $(date +%s) % 60 ))
     "$GREMLIN_DIR/bin/tick-loop.sh"
+    "$GREMLIN_DIR/bin/moot-loop.sh"
   done
 ) &
 pids+=($!)
