@@ -56,7 +56,10 @@ start_here() {
     loom)      echo 'Run `./.loom/loom.sh status`. The loom is the sole owner of finite open work, blockers and queue order.' ;;
     nest)      echo 'Read `.nest/tend.md` and inspect `.nest/in/` for arrivals waiting to be actioned.' ;;
     groundhog) echo 'Check `.groundhog/schedule/` for the recurring work this repository expects to happen on its own.' ;;
-    moot)      echo 'Read `.moot/SKILL.md` before posting to or catching up on a shared room; `.moot/moot.sh rooms` lists the rooms heard here.' ;;
+    moot)      local m='Read `.moot/SKILL.md` before posting to or catching up on a shared room; `.moot/moot.sh rooms` lists the rooms heard here.'
+               # A gremlin here reads the rooms itself, each minute, with its own cursor.
+               has gremlin && m="$m The gremlin here catches up each minute, so don't run \`read --new\` in this folder; read a room with \`.moot/moot.sh read --room <room> --tail 20\`."
+               echo "$m" ;;
     lore)      echo 'Consult `.lore/INDEX.md` only when complete evidence or history is needed. Lore is dark by default.' ;;
     gremlin)   echo 'A gremlin tends this folder. `.gremlin/gremlin.md` is who it is; `.gremlin/transcript.md` is what it has been told and has said.' ;;
   esac

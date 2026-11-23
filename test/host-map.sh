@@ -104,6 +104,21 @@ grep -qF '`.moot/moot.sh rooms`' "$H/AGENTS.md" \
   && ok ".moot: the Start here line names the rooms command" || bad ".moot: no rooms command named"
 [ -f "$H/.gremlin/PRIMITIVES.md" ] && grep -qF '.moot/' "$H/.gremlin/PRIMITIVES.md" \
   && ok ".moot: PRIMITIVES.md lists it" || bad ".moot: PRIMITIVES.md does not list it"
+# With a gremlin here, the line tells other agents the gremlin reads the rooms
+# each minute and not to move its cursor; a repo mapped with no gremlin gets no such line.
+grep -F 'Read `.moot/SKILL.md`' "$H/AGENTS.md" | grep -qF 'catches up each minute' \
+  && grep -F 'Read `.moot/SKILL.md`' "$H/AGENTS.md" | grep -qF "don't run \`read --new\` in this folder" \
+  && grep -F 'Read `.moot/SKILL.md`' "$H/AGENTS.md" | grep -qF '.moot/moot.sh read --room <room> --tail 20' \
+  && ok ".moot with a gremlin: the Start here line says the gremlin catches up and not to run read --new" \
+  || bad ".moot with a gremlin: the Start here line lacks the gremlin's catch-up note"
+[ "$(grep -cF 'Read `.moot/SKILL.md`' "$H/AGENTS.md")" -eq 1 ] \
+  && ok ".moot with a gremlin: the Start here line stays one line" || bad ".moot with a gremlin: the moot Start here line is not one line"
+N="$TMP/nogremlin"
+mkdir -p "$N/.moot"
+cp "$H/.moot/README.md" "$H/.moot/moot.sh" "$N/.moot/"
+"$ROOT/.gremlin/bin/index-primitives.sh" "$N" >/dev/null 2>&1
+grep -qF 'Read `.moot/SKILL.md`' "$N/AGENTS.md" 2>/dev/null && ! grep -qF 'catches up each minute' "$N/AGENTS.md" \
+  && ok ".moot, no gremlin: the line carries no gremlin note" || bad ".moot, no gremlin: the map is missing or names a gremlin"
 
 printf '\npassed: %d, failed: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || { echo "not ok - host map" >&2; exit 1; }
