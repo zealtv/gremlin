@@ -255,5 +255,54 @@ delivered "$H" | grep -q '^moot-board-' \
 delivered "$H" | grep -q '^moot-side-' \
   && bad "the second room's backlog was delivered after priming" || ok "and the second room's backlog is not delivered"
 
+# 8. A board name, @all, a rename and a DM.
+grep -qF '`@MrFox`' "$ROOT/.gremlin/skills/moot.md" && ok "the skill gives the board-name rule" \
+  || bad "skills/moot.md does not say how a name looks on the board"
+grep -qi 'renamed' "$ROOT/.gremlin/skills/moot.md" && grep -qi 'renam' "$ROOT/README.md" \
+  && ok "the skill and README say to prime after a rename" || bad "no word on priming after a rename"
+clear_delivered() { rm -f "$1"/.nest/in/moot-*; }
+H="$(new_host renamed)"
+add_moot "$H"
+prime "$H" board
+"$H/.gremlin/bin/name.sh" set "Mr Fox" >/dev/null
+prime "$H" board
+say "@all the build is green"
+sleep 1
+pass_of "$H"
+[ "$(count_delivered "$H")" -eq 1 ] && ok "@all reaches the gremlin" || bad "@all delivered $(count_delivered "$H") item(s)"
+clear_delivered "$H"
+say "@MrFox are you about?"
+say "@Mr are you about?"
+sleep 1
+pass_of "$H"
+[ "$(count_delivered "$H")" -eq 1 ] && grep -q '@MrFox' "$H"/.nest/in/moot-* \
+  && ok "\"Mr Fox\" is @MrFox on the board, as the skill says" || bad "a spaced name: delivered $(count_delivered "$H") item(s)"
+clear_delivered "$H"
+"$H/.gremlin/bin/name.sh" set "Lady Grey" >/dev/null
+sleep 1
+pass_of "$H"
+[ "$(count_delivered "$H")" -ge 1 ] && ok "unprimed after a rename, old mentions arrive again (why the skill says prime)" \
+  || bad "a rename replayed nothing: the skill's warning may be stale"
+clear_delivered "$H"
+"$H/.gremlin/bin/name.sh" set "Old Moon" >/dev/null
+prime "$H" board
+pass_of "$H"
+[ "$(count_delivered "$H")" -eq 0 ] && ok "primed after a rename, nothing old arrives" \
+  || bad "primed after a rename, $(count_delivered "$H") item(s) still arrived"
+if "$KEEPER/.moot/moot.sh" help 2>&1 | grep -q 'moot.sh dm'; then
+  dm="$("$KEEPER/.moot/moot.sh" dm "$H" 2>/dev/null | sed -n 's/.*rooms\/\(dm-[^ ]*\).*/\1/p' | head -n 1)"
+  if [ -n "$dm" ]; then
+    "$KEEPER/.moot/moot.sh" post --room "$dm" -m "a quiet word, no at" >/dev/null 2>&1
+    sleep 1
+    pass_of "$H"
+    delivered "$H" | grep -q "^moot-$dm-" && ok "any post in a DM reaches the gremlin" \
+      || bad "a DM post was not delivered ($(delivered "$H" | tr '\n' ' '))"
+  else
+    skip "DM case (moot's dm printed no room)"
+  fi
+else
+  skip "DM case (this moot has no dm)"
+fi
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
