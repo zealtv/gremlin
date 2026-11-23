@@ -48,7 +48,7 @@ END_MARK="<!-- END GENERATED PRIMITIVES -->"
 # Reading order for the "Start here" list, and what each dotdir owns. Only
 # installed primitives appear. Order is deliberate: current guidance first,
 # then open work, then arrivals, then the record.
-read_order=(glean loom nest groundhog lore gremlin)
+read_order=(glean loom nest groundhog moot lore gremlin)
 
 start_here() {
   case "$1" in
@@ -56,6 +56,7 @@ start_here() {
     loom)      echo 'Run `./.loom/loom.sh status`. The loom is the sole owner of finite open work, blockers and queue order.' ;;
     nest)      echo 'Read `.nest/tend.md` and inspect `.nest/in/` for arrivals waiting to be actioned.' ;;
     groundhog) echo 'Check `.groundhog/schedule/` for the recurring work this repository expects to happen on its own.' ;;
+    moot)      echo 'Read `.moot/SKILL.md` before posting to or catching up on a shared room; `.moot/moot.sh rooms` lists the rooms heard here.' ;;
     lore)      echo 'Consult `.lore/INDEX.md` only when complete evidence or history is needed. Lore is dark by default.' ;;
     gremlin)   echo 'A gremlin tends this folder. `.gremlin/gremlin.md` is who it is; `.gremlin/transcript.md` is what it has been told and has said.' ;;
   esac
@@ -67,6 +68,7 @@ owns() {
     loom)      echo 'finite work: threads, stitches, dependencies, queue order' ;;
     nest)      echo 'arrivals — inbox, claimed, completed' ;;
     groundhog) echo 'recurring work and its firing history' ;;
+    moot)      echo 'rooms shared with other folders and people, and this folder'"'"'s own read cursors' ;;
     lore)      echo 'complete dated records, kept whole' ;;
     gremlin)   echo 'the tender itself: identity, context, skills, tools, transcript' ;;
   esac
