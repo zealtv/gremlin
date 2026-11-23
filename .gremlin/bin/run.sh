@@ -36,10 +36,12 @@ pids=()
 #     the loop carries on; a bare `while sleep N` would end the loop for good.
 #     It leaves one line on stderr, so run.log shows that something killed it.
 #   - A TERM to the loop subshell kills its sleep first, so stopping the
-#     gremlin leaves no orphaned sleep behind.
+#     gremlin leaves no orphaned sleep behind. The trap names the sleep by
+#     `jobs -p`, not by $nap_pid, so a TERM that lands between `sleep &` and
+#     the assignment still finds it. (Not `kill 0`: it segfaults bash 3.2.)
 nap() {
   local nap_pid=""
-  trap 'kill "$nap_pid" 2>/dev/null; exit 0' TERM
+  trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM
   sleep "$1" &
   nap_pid=$!
   wait "$nap_pid" 2>/dev/null || echo "run.sh: a nap's sleep ended early (status $?)" >&2
