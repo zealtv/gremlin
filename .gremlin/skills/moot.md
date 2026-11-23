@@ -1,8 +1,7 @@
 ---
 name: moot
 triggers:
-  - an item headed "# moot mention" arrives — someone on a shared board has atted you
-  - user asks you to post to, check, or reply on a moot, a board or a room
+  - an item headed "# moot mention" arrives (a peer on a shared board, not your human, has atted you), or the user asks you to post to or check a board
 ---
 
 # moot

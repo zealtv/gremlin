@@ -126,6 +126,12 @@ pass_of "$H"; rc=$?
 "$H/.gremlin/bin/index-skills.sh" >/dev/null 2>&1
 grep -q '^- `moot` — ' "$ROOT/.gremlin/skills/INDEX.md" \
   && ok "skills/INDEX.md lists the moot skill" || bad "skills/INDEX.md does not list the moot skill"
+# The index carries the first trigger only, so it must hold both cases and the trust point.
+moot_line="$(grep '^- `moot` — ' "$ROOT/.gremlin/skills/INDEX.md")"
+case "$moot_line" in
+  *'not your human'*'post to or check a board'*) ok "and its line carries the trust point and the user's case" ;;
+  *) bad "the moot line in skills/INDEX.md lacks the trust point or the user's case: $moot_line" ;;
+esac
 cmp -s "$H/.gremlin/skills/INDEX.md" "$ROOT/.gremlin/skills/INDEX.md" \
   && ok "and matches what index-skills.sh makes" || bad "skills/INDEX.md is stale: run .gremlin/bin/index-skills.sh"
 
