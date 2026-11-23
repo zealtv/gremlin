@@ -81,7 +81,8 @@ fix is to hoist it to the host root.
 
 `.moot/`, shared rooms, is an optional peer, not one of the five a gremlin needs:
 `install-primitives.sh <host> moot` adds it on request, `doctor` mentions it only when it is
-there, and a gremlin with no `.moot/` sees no difference.
+there, and on a gremlin with no `.moot/` nothing changes but one line in its skills index (the `moot`
+skill, which says to stop when there is no `.moot/`).
 
 `.dash/`, `library/` and similar gremlin-produced directories at the host root
 are content, not primitives: they carry no script.
