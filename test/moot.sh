@@ -216,5 +216,38 @@ pass_of "$H"; rc=$?
 grep -q 'moot: broken' "$TMP/err" && [ ! -s "$TMP/out" ] \
   && ok "stderr is kept and stdout dropped" || bad "stdout [$(cat "$TMP/out")], stderr [$(cat "$TMP/err")]"
 
+# 7. The priming the skill documents, for a room just joined, moves that room's
+# cursor and no other: a mention waiting in a room already heard still arrives.
+# The command is read from skills/moot.md and run as written, <room> and
+# <path-to-room> filled in.
+prime_cmd="$(grep '/dev/null' "$ROOT/.gremlin/skills/moot.md" | grep 'read --new' | head -n 1 \
+  | sed -E 's/^[^`]*`([^`]*)`.*$/\1/')"
+# prime <host> <room>: join the keeper's room and prime it, as the skill says.
+prime() {
+  local cmd
+  cmd="$(printf '%s' "$prime_cmd" | sed -e "s|<path-to-room>|$KEEPER/.moot/rooms/$2|g" -e "s|<room>|$2|g")"
+  # A command that does not join does so first, as a step of its own.
+  case "$cmd" in *'moot.sh join'*) ;; *) ( cd "$1" && .moot/moot.sh join "$KEEPER/.moot/rooms/$2" ) >/dev/null 2>&1 ;; esac
+  ( cd "$1" && eval "$cmd" ) >/dev/null 2>&1
+}
+[ -n "$prime_cmd" ] && ok "skills/moot.md documents a priming command" || bad "skills/moot.md documents no priming command"
+
+"$KEEPER/.moot/moot.sh" create side >/dev/null 2>&1
+H="$(new_host primed)"
+add_moot "$H"
+name="$("$H/.gremlin/bin/name.sh")"
+prime "$H" board
+"$KEEPER/.moot/moot.sh" post --as alice --room side -m "@$name an old request, before you joined" >/dev/null 2>&1
+sleep 1
+say "@$name a live request, waiting for the next pass"
+sleep 1
+prime "$H" side
+[ -e "$H/.moot/rooms/side" ] && ok "the documented priming joins the second room" || bad "the documented priming did not join the room"
+pass_of "$H"
+delivered "$H" | grep -q '^moot-board-' \
+  && ok "a mention waiting in the first room survives priming the second" || bad "the mention waiting in the first room was lost ($(delivered "$H" | tr '\n' ' '))"
+delivered "$H" | grep -q '^moot-side-' \
+  && bad "the second room's backlog was delivered after priming" || ok "and the second room's backlog is not delivered"
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
