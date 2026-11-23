@@ -189,7 +189,7 @@ fi
 # moot.sh from here (every moot command repairs links as a side effect); look
 # for a room entry with the shell. A link counts even when it dangles.
 if [ -d "$HOST_DIR/.moot" ]; then
-  if [ -e "$HOST_DIR/.moot/moot.sh" ]; then
+  if [ -x "$HOST_DIR/.moot/moot.sh" ]; then
     echo "ok .moot"
     moot_room=""
     for f in "$HOST_DIR/.moot/rooms"/*; do
@@ -199,6 +199,8 @@ if [ -d "$HOST_DIR/.moot" ]; then
       echo "note .moot hears no room yet — keep one with .moot/moot.sh create <room>,"
       echo "     or hear one with .moot/moot.sh join <path-to-room>"
     fi
+  elif [ -e "$HOST_DIR/.moot/moot.sh" ]; then
+    echo "‼️  .moot/moot.sh is not executable — the runner's moot pass skips it; chmod +x .moot/moot.sh"
   else
     echo "‼️  .moot exists at the host root but has no moot.sh — incomplete install"
   fi

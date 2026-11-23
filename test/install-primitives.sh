@@ -171,6 +171,12 @@ rm -rf "$DH/.moot/rooms/example"
 ln -s "$TMP/nowhere" "$DH/.moot/rooms/example"
 printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qF 'hears no room yet' \
   && bad "doctor: a linked room does not count" || ok "doctor: a linked room counts as heard"
+chmod -x "$DH/.moot/moot.sh"
+out="$("$DH/.gremlin/bin/doctor.sh" 2>&1)"
+printf '%s' "$out" | grep -qF '.moot/moot.sh is not executable' \
+  && ok "doctor: names a moot.sh that is not executable" || bad "doctor: silent about a moot.sh that is not executable: $out"
+printf '%s' "$out" | grep -qF 'ok .moot' \
+  && bad "doctor: says ok .moot for a moot.sh that is not executable" || ok "and does not say ok .moot for it"
 rm -f "$DH/.moot/moot.sh"
 printf '%s' "$("$DH/.gremlin/bin/doctor.sh" 2>&1)" | grep -qF '.moot exists at the host root but has no moot.sh' \
   && ok "doctor: names a .moot/ with no moot.sh" || bad "doctor: silent about a .moot/ with no moot.sh"
