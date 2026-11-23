@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # install-primitives.sh — install any of the five primitives that are missing
 # from a host root, using each primitive's OWN install.sh from its own repo.
+# A sixth, `moot` (shared rooms), is optional: it installs only when named.
 #
 # This is install-time convenience, never update-time. gremlin does not deliver
 # the primitives and does not own their contents: this fetches each project's
@@ -10,17 +11,18 @@
 #
 # usage: install-primitives.sh [host-dir] [name...]
 #   host-dir  defaults to the host of the gremlin this script is installed in
-#   name...   defaults to all five (nest loom lore glean groundhog)
+#   name...   defaults to the five (nest loom lore glean groundhog); `moot` is
+#             installed only when named
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # dotdir name -> github repo name. `.nest` comes from `nestlings`; the rest
-# share their names.
+# share their names. `moot` is known here but never in the default list below.
 repo_for() {
   case "$1" in
     nest) echo nestlings ;;
-    loom|lore|glean|groundhog) echo "$1" ;;
+    loom|lore|glean|groundhog|moot) echo "$1" ;;
     *) return 1 ;;
   esac
 }
