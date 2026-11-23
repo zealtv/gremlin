@@ -302,6 +302,8 @@ demote it by removing the symlink while leaving the finding in Glean.
   `.nest/out/`.
 - `bin/tick-loop.sh`: fires scheduled groundhog items. `message.md` becomes an
   assistant transcript turn; other items move into `.nest/in/` for tending.
+  Each pass is followed by `bin/moot-loop.sh`, which does nothing unless the
+  host has a `.moot/` (and a nest), and honors `.paused` like the loops do.
 
 Both loops honor `.paused`.
 
@@ -442,6 +444,22 @@ Scheduled item (any axis — `message.md`, `instructions.md`, `run.sh`):
   -> tend-loop -> transcript.md (turn role depends on shape)
               -> .nest/out/<archive>
 ```
+
+Moot mention (only on a host with a `.moot/`):
+
+```text
+.moot/rooms/<room>/posts/...
+  -> moot-loop -> .nest/in/moot-<room>-<id>.md
+  -> tend-loop -> transcript.md (## user — / ## assistant —)
+              -> .nest/out/<archive>
+```
+
+Once a minute `moot-loop` asks moot for what is new since its last pass and
+delivers only the posts that mention this gremlin. Three kinds of post cost a
+model turn: a post containing `@<name>` (`@alice` for a gremlin named alice),
+a post containing `@all`, and any post from the other side of a `dm-` room.
+Every other post is read past and costs nothing, so a board with nothing for
+the gremlin makes no item and no model call.
 
 Tend-loop dispatch by shape, checked in order (first match wins):
 
