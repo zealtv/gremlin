@@ -79,6 +79,10 @@ A primitive dotdir found *inside* `.gremlin/` is **legacy placement**: the
 shape gremlin shipped before the sibling inversion. `doctor` reports it; the
 fix is to hoist it to the host root.
 
+`.moot/`, shared rooms, is an optional peer, not one of the five a gremlin needs:
+`install-primitives.sh <host> moot` adds it on request, `doctor` mentions it only when it is
+there, and a gremlin with no `.moot/` sees no difference.
+
 `.dash/`, `library/` and similar gremlin-produced directories at the host root
 are content, not primitives: they carry no script.
 

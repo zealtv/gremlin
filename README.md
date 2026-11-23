@@ -26,6 +26,10 @@ beside it with `.gremlin/bin/install-primitives.sh` (or copy their dotdirs in
 yourself), then run `.gremlin/bin/install-host-files.sh` and `./.gremlin/gremlin doctor`.
 Without a `.nest/`, `wake`, `prompt` and `tend` stop and say so.
 
+A moot (shared rooms) is optional and never part of the five. To add one, run
+`.gremlin/bin/install-primitives.sh . moot` or copy a `.moot/` in, then keep a room
+(`.moot/moot.sh create <room>`) or join one (`.moot/moot.sh join <path-to-room>`).
+
 Point it at a model. `.gremlin/models/default.sh` is just an executable that reads a prompt on stdin and writes a reply on stdout — edit it for whichever CLI you use (Claude Code, Codex, Open Code, a local model, anything):
 
 ```sh
