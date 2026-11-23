@@ -30,6 +30,21 @@ fi
 
 pids=()
 
+# nap <seconds>: sleep inside a loop subshell without ending the loop.
+#   - A TERM to the sleep alone (something killed it) just ends the nap, so
+#     the loop carries on; a bare `while sleep N` would end the loop for good.
+#   - A TERM to the loop subshell kills its sleep first, so stopping the
+#     gremlin leaves no orphaned sleep behind.
+nap() {
+  local nap_pid=""
+  trap 'kill "$nap_pid" 2>/dev/null; exit 0' TERM
+  sleep "$1" &
+  nap_pid=$!
+  wait "$nap_pid" 2>/dev/null
+  trap - TERM
+  return 0
+}
+
 shutdown() {
   trap - INT TERM
   for pid in "${pids[@]}"; do
@@ -40,13 +55,13 @@ shutdown() {
 }
 trap shutdown INT TERM
 
-( while sleep 5; do "$GREMLIN_DIR/bin/tend-loop.sh"; done ) &
+( while :; do nap 5; "$GREMLIN_DIR/bin/tend-loop.sh"; done ) &
 pids+=($!)
 
 # Align tick to wall-clock minute so groundhog's HH-MM schedules fire
 # near :00 of their target minute.
 ( while :; do
-    sleep $(( 60 - $(date +%s) % 60 ))
+    nap $(( 60 - $(date +%s) % 60 ))
     "$GREMLIN_DIR/bin/tick-loop.sh"
   done
 ) &
