@@ -82,10 +82,33 @@ start() {
 }
 two_loops() { [ "$(ps -axo pid=,ppid= | awk -v p="$RUN_PID" '$2 == p' | wc -l)" -ge 2 ]; }
 
-# tend_loop: the pid of the tend loop's subshell. run.sh starts it first, so it
-# is the lower pid of run.sh's two children.
-tend_loop() {
-  ps -axo pid=,ppid= | awk -v p="$RUN_PID" '$2 == p { print $1 }' | sort -n | head -n 1
+# sleep_arg <pid>: the argument of the sleep that loop subshell <pid> is in, or nothing.
+sleep_arg() {
+  ps -axo pid=,ppid=,command= | awk -v p="$1" '$2 == p && $3 == "sleep" { print $4; exit }'
+}
+
+# find_tend_loop: tell the tend loop from the tick loop by what each sleeps:
+# the tend loop naps 5 s, the tick loop until the next minute. At :55 both
+# show `sleep 5`, and a loop between naps shows none, so it succeeds only once
+# exactly one of run.sh's children is in `sleep 5`; callers retry.
+TEND_LOOP=""
+find_tend_loop() {
+  local c fives=0 pick=""
+  for c in $(ps -axo pid=,ppid= | awk -v p="$RUN_PID" '$2 == p { print $1 }'); do
+    if [ "$(sleep_arg "$c")" = 5 ]; then fives=$((fives + 1)); pick="$c"; fi
+  done
+  [ "$fives" -eq 1 ] || return 1
+  TEND_LOOP="$pick"
+}
+tend_loop() { printf '%s' "$TEND_LOOP"; }
+
+# both_asleep: each of run.sh's two loop subshells is in its nap.
+both_asleep() {
+  local c n=0
+  for c in $(ps -axo pid=,ppid= | awk -v p="$RUN_PID" '$2 == p { print $1 }'); do
+    [ -n "$(sleep_arg "$c")" ] && n=$((n + 1))
+  done
+  [ "$n" -eq 2 ]
 }
 
 # tend_sleep: the pid of the sleep the tend loop is in, or nothing.
@@ -128,8 +151,9 @@ echo "run-loops"
 H="$(new_host kill)"
 [ -x "$H/.nest/nestling.sh" ] || { echo "not ok - no nest installed"; exit 1; }
 start "$H"
-loop="$(tend_loop)"
 two_loops && ok "run.sh starts its two loops" || bad "run.sh did not start two loops"
+wait_until 10 find_tend_loop && ok "the tend loop is the one napping 5 s" || bad "could not tell the tend loop apart"
+loop="$(tend_loop)"
 
 # 1. A killed sleep does not end the tend loop: a later item is still tended.
 kill_tend_sleep && ok "the tend loop's sleep was killed" || bad "could not kill the tend loop's sleep"
@@ -141,10 +165,15 @@ wait_until 15 tended "$H" one && ok "an item dropped after the kill is tended" \
 
 # 2. And again, several times over: a pending item is tended right after the last kill.
 wait_until 10 has_tend_sleep || bad "the tend loop has no sleep after a pass"
-kill_tend_sleep; kill_tend_sleep
+# Every kill must land: one that found no sleep would let the item be tended on
+# the loop's own schedule and pass for nothing. The wait after the last kill is
+# shorter than a nap, so only the kill can have woken the loop in time.
+k=0
+kill_tend_sleep && k=$((k + 1)); kill_tend_sleep && k=$((k + 1))
 item "$H" two
-kill_tend_sleep
-wait_until 6 tended "$H" two && ok "the loop survives repeated kills" \
+kill_tend_sleep && k=$((k + 1))
+[ "$k" -eq 3 ] && ok "three more kills each found the tend loop's sleep" || bad "only $k of 3 kills found a sleep"
+wait_until 3 tended "$H" two && ok "the loop survives repeated kills" \
   || bad "an item was never tended after repeated kills"
 alive "$loop" && ok "still the same loop" || bad "the tend loop ended"
 
@@ -158,7 +187,9 @@ grep -q "a nap's sleep ended early (status 143)" "$H/run.log" \
   && ok "and the line names the sleep's status" || bad "no early-end line names status 143"
 
 # 3. A TERM to run.sh stops everything it started, sleeps included.
-wait_until 10 has_tend_sleep
+# Snapshot while both loops nap: the tick loop is briefly between naps each
+# minute, and a snapshot then would see one sleep.
+wait_until 10 both_asleep
 early_before="$(early_lines "$H")"
 SEEN="$(descendants "$RUN_PID" | tr '\n' ' ')"
 sleeps=0
