@@ -204,6 +204,15 @@ if [ -d "$HOST_DIR/.moot" ]; then
       echo "note .moot hears no room yet — keep one with .moot/moot.sh create <room>,"
       echo "     or hear one with .moot/moot.sh join <path-to-room>"
     fi
+    # The board name is the gremlin's name without spaces, unless .moot/name says
+    # otherwise. moot takes only A-Za-z0-9._-, and can't @ a name that ends in . _ -
+    board="$(printf '%s' "${gremlin_name:-}" | tr -d ' ')"
+    if [ ! -e "$HOST_DIR/.moot/name" ]; then
+      case "$board" in
+        *[!A-Za-z0-9._-]*|.*|*[._-])
+          echo "note moot can't take or @ the board name '$board' — write a plain one to .moot/name" ;;
+      esac
+    fi
   elif [ -e "$HOST_DIR/.moot/moot.sh" ]; then
     echo "‼️  .moot/moot.sh is not executable — the runner's moot pass skips it; chmod +x .moot/moot.sh"
   else

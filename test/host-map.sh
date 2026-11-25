@@ -123,6 +123,28 @@ cp "$H/.moot/README.md" "$H/.moot/moot.sh" "$N/.moot/"
 grep -qF 'Read `.moot/SKILL.md`' "$N/AGENTS.md" 2>/dev/null && ! grep -qF 'catches up each minute' "$N/AGENTS.md" \
   && ok ".moot, no gremlin: the line carries no gremlin note" || bad ".moot, no gremlin: the map is missing or names a gremlin"
 
+# 6. A gremlin name moot can't take or can't @ gets a note naming a board name
+# file; a plain name, or a .moot/name already there, gets none.
+moot_host() {  # moot_host <label> <gremlin name>: a host with a moot stub that hears a room
+  local h
+  h="$(new_host "$1" primitive)"
+  mkdir -p "$h/.moot/rooms/lobby"
+  printf '#!/bin/sh\nexit 0\n' > "$h/.moot/moot.sh"; chmod +x "$h/.moot/moot.sh"
+  "$h/.gremlin/bin/name.sh" set "$2" >/dev/null
+  printf '%s' "$h"
+}
+for n in "O'Malley" "Fox Jr."; do
+  H="$(moot_host "board-$(printf '%s' "$n" | tr -c 'A-Za-z' x)" "$n")"
+  out="$(doctor "$H")"
+  has "$out" "board name" && ok "board name: a note for '$n'" || bad "board name: no note for '$n': $out"
+  mkdir -p "$H/.moot"; printf 'Fox\n' > "$H/.moot/name"
+  out="$(doctor "$H")"
+  has "$out" "board name" && bad "board name: a note for '$n' despite .moot/name" || ok "board name: none for '$n' once .moot/name exists"
+done
+H="$(moot_host board-plain "Mr Fox")"
+out="$(doctor "$H")"
+has "$out" "board name" && bad "board name: a note for 'Mr Fox': $out" || ok "board name: none for 'Mr Fox'"
+
 printf '\npassed: %d, failed: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || { echo "not ok - host map" >&2; exit 1; }
 echo "ok - host map"
