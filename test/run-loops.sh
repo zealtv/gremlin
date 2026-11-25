@@ -343,5 +343,15 @@ wait_until 10 wrapped_awake
 SEEN="$SEEN $(runner_procs "$H" | tr '\n' ' ')"
 wait_until 5 gone $SEEN || bad "left running after sleep with a wrapped runner: $SEEN"
 
+# 8. If ps fails (a busybox that refuses the options), status says so in one line
+# and fails, rather than printing only ps's own error.
+mkdir -p "$TMP/psfail"
+printf '#!/bin/sh\necho "ps: invalid option" >&2\nexit 1\n' > "$TMP/psfail/ps"
+chmod +x "$TMP/psfail/ps"
+out="$(PATH="$TMP/psfail:$PATH" "$G" status 2>&1)"; rc=$?
+{ [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "ps failed, so I can't say"; } \
+  && ok "with ps failing, status says so in one line and exits non-zero" \
+  || bad "status with a failing ps (rc $rc): $out"
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

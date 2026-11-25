@@ -102,7 +102,7 @@ cmd_wake() {
 # nap `sleep 5` (the minute's last seconds), the lower pid is the tend loop,
 # which run.sh forked first. Reads the process table only; never calls a model.
 runner_parts() {
-  ps -axo pid=,ppid=,command= | awk -v set="$(runner_pids | tr '\n' ' ')" '
+  COLUMNS= ps -A -o pid= -o ppid= -o args= | awk -v set="$(runner_pids | tr '\n' ' ')" '
     BEGIN { n = split(set, a, " "); for (i = 1; i <= n; i++) inrun[a[i]] = 1 }
     {
       pid = $1; ppid[pid] = $2; order[++np] = pid
@@ -156,7 +156,10 @@ cmd_status() {
   local parts tries=0 sup tend tick stray missing="" seen="" name
   name="$(gremlin_name)"
   while :; do
-    parts="$(runner_parts)"
+    if ! parts="$(runner_parts 2>/dev/null)"; then
+      echo "gremlin: ps failed, so I can't say whether $name is awake (status reads the process table)" >&2
+      return 1
+    fi
     # A lone loop that shows no sleep or pass just now may be either: look again.
     case "$parts" in *unsure*) ;; *) break ;; esac
     tries=$((tries + 1))
