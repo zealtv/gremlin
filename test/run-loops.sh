@@ -244,5 +244,58 @@ wait_until 5 gone $SEEN \
   && ok "gremlin sleep stops the runner found by that path" \
   || bad "left running after gremlin sleep: $(for p in $SEEN; do alive "$p" && printf '%s ' "$p"; done)"
 
+# 6. `gremlin status` names the supervisor and each loop, says awake only while all
+# three live, says what is missing otherwise (and that restart brings it back),
+# and says asleep when nothing runs. It reads the process table, nothing more.
+# status_pid <label> <status output>: the pid on that label's line, or nothing.
+status_pid() { printf '%s\n' "$2" | sed -n "s/^  $1  *//p"; }
+H="$(new_host status)"
+G="$H/.gremlin/gremlin"
+out="$("$G" status 2>&1)"
+printf '%s\n' "$out" | grep -q 'is asleep' && ok "status says asleep when nothing runs" || bad "status, nothing running: $out"
+RUN_PID="$("$G" wake 2>&1 | sed -n 's/.*is awake: //p')"
+wait_until 10 two_loops
+wait_until 10 find_tend_loop
+SEEN="$RUN_PID $(descendants "$RUN_PID" | tr '\n' ' ')"
+out="$("$G" status 2>&1)"
+tick="$(ps -axo pid=,ppid= | awk -v p="$RUN_PID" -v t="$(tend_loop)" '$2 == p && $1 != t { print $1 }')"
+{ printf '%s\n' "$out" | grep -q 'is awake' \
+  && [ "$(status_pid supervisor "$out")" = "$RUN_PID" ] \
+  && [ "$(status_pid 'tend loop' "$out")" = "$(tend_loop)" ] \
+  && [ "$(status_pid 'tick loop' "$out")" = "$tick" ]; } \
+  && ok "awake: status names the supervisor, the tend loop and the tick loop by pid" \
+  || bad "awake status did not name the three (run $RUN_PID, tend $(tend_loop), tick $tick): $out"
+
+# The tend loop dies, the supervisor and the tick loop live on.
+loop="$(tend_loop)"
+kill "$loop" 2>/dev/null
+wait_until 5 gone "$loop"
+out="$("$G" status 2>&1)"
+printf '%s\n' "$out" | grep -q 'awake' && bad "status still says awake with no tend loop: $out" || ok "no tend loop: status no longer says awake"
+{ printf '%s\n' "$out" | grep -q 'no tend loop' && ! printf '%s\n' "$out" | grep -q 'no tick loop' \
+  && printf '%s\n' "$out" | grep -q "tick loop $tick" && printf '%s\n' "$out" | grep -q "supervisor $RUN_PID"; } \
+  && ok "and names the tend loop as the one missing, with the others' pids" || bad "missing-loop line: $out"
+printf '%s\n' "$out" | grep -q 'gremlin restart' && ok "and says restart brings it back" || bad "no restart hint: $out"
+
+# restart brings both loops back; then the tick loop dies.
+RUN_PID="$("$G" restart 2>&1 | sed -n 's/.*is awake: //p')"
+wait_until 10 two_loops
+wait_until 10 find_tend_loop
+SEEN="$SEEN $RUN_PID $(descendants "$RUN_PID" | tr '\n' ' ')"
+out="$("$G" status 2>&1)"
+printf '%s\n' "$out" | grep -q 'is awake' && ok "after restart status says awake again" || bad "not awake after restart: $out"
+tick="$(ps -axo pid=,ppid= | awk -v p="$RUN_PID" -v t="$(tend_loop)" '$2 == p && $1 != t { print $1 }')"
+kill "$tick" 2>/dev/null
+wait_until 5 gone "$tick"
+out="$("$G" status 2>&1)"
+{ printf '%s\n' "$out" | grep -q 'no tick loop' && ! printf '%s\n' "$out" | grep -q 'no tend loop' \
+  && ! printf '%s\n' "$out" | grep -q 'awake'; } \
+  && ok "no tick loop: status says so and not awake" || bad "tick loop missing line: $out"
+
+"$G" sleep >/dev/null 2>&1
+wait_until 5 gone $SEEN
+"$G" status 2>&1 | grep -q 'is asleep' && ok "after sleep status says asleep" || bad "not asleep after sleep: $("$G" status 2>&1)"
+RUN_PID=""
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

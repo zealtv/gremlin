@@ -21,7 +21,7 @@ usage() {
 usage:
   ./.gremlin/gremlin wake                     start the loops
   ./.gremlin/gremlin sleep                    stop them
-  ./.gremlin/gremlin status                   awake or asleep?
+  ./.gremlin/gremlin status                   awake, asleep, or what is missing
   ./.gremlin/gremlin restart                  sleep, then wake
   ./.gremlin/gremlin tend                     work the nest once, now
   ./.gremlin/gremlin prompt [--read-only] <message>
@@ -92,15 +92,104 @@ cmd_wake() {
   echo "log: $LOG"
 }
 
+# runner_parts: what the process table shows of the runner, from one snapshot,
+# one part per line: `supervisor <pid>`, `tend <pid>`, `tick <pid>`, `unsure
+# <pid>` (a lone loop that can't be told apart just now) or `stray <pid>` (a
+# runner process with no supervisor). Nothing if no runner process lives.
+# The loops are the supervisor's children, told apart by what each runs or
+# sleeps in: the tend loop runs tend-loop.sh or naps `sleep 5`; the tick loop
+# runs tick-loop.sh or moot-loop.sh, or naps until the next minute. When both
+# nap `sleep 5` (the minute's last seconds), the lower pid is the tend loop,
+# which run.sh forked first. Reads the process table only; never calls a model.
+runner_parts() {
+  ps -axo pid=,ppid=,command= | awk -v set="$(runner_pids | tr '\n' ' ')" '
+    BEGIN { n = split(set, a, " "); for (i = 1; i <= n; i++) inrun[a[i]] = 1 }
+    {
+      pid = $1; ppid[pid] = $2; order[++np] = pid
+      c = $0; sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]+/, "", c); cmd[pid] = c
+    }
+    END {
+      for (i = 1; i <= np; i++) {            # a runner process under a runner process is a loop
+        p = order[i]
+        if (!(p in inrun)) continue
+        if (ppid[p] in inrun) kids[ppid[p]]++; else roots[++nr] = p
+      }
+      sup = ""
+      for (i = 1; i <= nr; i++)
+        if ((roots[i] in kids) && (sup == "" || roots[i] + 0 < sup + 0)) sup = roots[i]
+      for (i = 1; i <= nr; i++) if (roots[i] != sup) print "stray", roots[i]
+      if (sup == "") exit
+      print "supervisor", sup
+      nl = 0
+      for (i = 1; i <= np; i++) {
+        p = order[i]
+        if ((p in inrun) && ppid[p] == sup) loops[++nl] = p
+      }
+      for (l = 1; l <= nl; l++) {
+        kind[l] = ""
+        for (i = 1; i <= np; i++) {
+          c = order[i]
+          if (ppid[c] != loops[l]) continue
+          if (cmd[c] ~ /tend-loop\.sh/) kind[l] = "tend"
+          else if (cmd[c] ~ /(tick|moot)-loop\.sh/) kind[l] = "tick"
+          else if (cmd[c] ~ /^sleep /) { split(cmd[c], w, " "); kind[l] = (w[2] == 5) ? "tend" : "tick" }
+        }
+      }
+      if (nl == 2) {                          # fill in one unseen loop, or fall back to fork order
+        lo = (loops[1] + 0 < loops[2] + 0) ? 1 : 2; hi = 3 - lo
+        if ((kind[lo] == "" && kind[hi] == "") || kind[lo] == kind[hi]) { kind[lo] = "tend"; kind[hi] = "tick" }
+        else if (kind[lo] == "") kind[lo] = (kind[hi] == "tend") ? "tick" : "tend"
+        else if (kind[hi] == "") kind[hi] = (kind[lo] == "tend") ? "tick" : "tend"
+      }
+      for (l = 1; l <= nl; l++) print (kind[l] == "" ? "unsure" : kind[l]), loops[l]
+    }'
+}
+
+# part_pid <part> <runner_parts output>: the pid of that part, or nothing.
+part_pid() { printf '%s\n' "$2" | awk -v k="$1" '$1 == k { print $2; exit }'; }
+
+# status: names the supervisor and each loop with its pid. "awake" only when
+# the supervisor and both loops live; otherwise it says what is missing and how
+# to bring it back (a dead tend loop under a live supervisor and tick loop once
+# read as awake). Always exits 0: the words are the answer.
 cmd_status() {
-  local pids
-  pids="$(runner_pids)"
-  if [ -n "$pids" ]; then
-    echo "$(gremlin_name) is awake:"
-    printf '%s\n' "$pids"
-  else
-    echo "$(gremlin_name) is asleep"
+  local parts tries=0 sup tend tick stray missing="" seen="" name
+  name="$(gremlin_name)"
+  while :; do
+    parts="$(runner_parts)"
+    # A lone loop that shows no sleep or pass just now may be either: look again.
+    case "$parts" in *unsure*) ;; *) break ;; esac
+    tries=$((tries + 1))
+    [ "$tries" -ge 5 ] && break
+    sleep 0.2
+  done
+  if [ -z "$parts" ]; then
+    echo "$name is asleep"
+    return 0
   fi
+  sup="$(part_pid supervisor "$parts")"
+  tend="$(part_pid tend "$parts")"
+  tick="$(part_pid tick "$parts")"
+  stray="$(printf '%s\n' "$parts" | awk '$1 == "stray" { printf "%s ", $2 }')"
+  if [ -n "$sup" ] && [ -n "$tend" ] && [ -n "$tick" ]; then
+    # One write, so a caller's `status | grep -q` can't end it with a SIGPIPE.
+    printf '%s is awake:\n  supervisor  %s\n  tend loop   %s\n  tick loop   %s\n' "$name" "$sup" "$tend" "$tick"
+    return 0
+  fi
+  [ -n "$sup" ] && seen="supervisor $sup"
+  [ -n "$tend" ] && seen="${seen:+$seen, }tend loop $tend"
+  [ -n "$tick" ] && seen="${seen:+$seen, }tick loop $tick"
+  [ -n "$stray" ] && seen="${seen:+$seen, }loop(s) with no supervisor: ${stray% }"
+  if [ -z "$sup" ]; then
+    missing="no supervisor"
+  elif printf '%s\n' "$parts" | grep -q '^unsure'; then
+    missing="one loop is missing, and the other can't be told apart just now"
+  else
+    [ -n "$tend" ] || missing="no tend loop"
+    [ -n "$tick" ] || missing="${missing:+$missing, }no tick loop"
+  fi
+  printf '%s is only partly running: %s%s\n  ./.gremlin/gremlin restart brings it back (just woke? ask again in a moment)\n' \
+    "$name" "$missing" "${seen:+ (seen: $seen)}"
 }
 
 cmd_sleep() {

@@ -66,8 +66,15 @@ done
 "$G" status 2>&1 | grep -q 'asleep' && ok "status says asleep before waking" \
   || bad "status did not report asleep"
 "$G" wake >/dev/null 2>&1
-sleep 1
-"$G" status 2>&1 | grep -q 'awake' && ok "wake starts the loops" || bad "wake did not start the loops"
+# status says awake once the supervisor and both loops live, which takes the
+# runner a moment after wake returns.
+awake=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  awake="$("$G" status 2>&1)"
+  case "$awake" in *'is awake'*) break ;; esac
+  sleep 0.5
+done
+case "$awake" in *'is awake'*) ok "wake starts the loops" ;; *) bad "wake did not start the loops: $awake" ;; esac
 second="$("$G" wake 2>&1)"
 printf '%s' "$second" | grep -q 'already awake' && ok "waking twice is refused, not doubled" \
   || bad "wake did not notice it was already awake: [$second]"
