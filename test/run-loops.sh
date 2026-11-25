@@ -189,16 +189,31 @@ grep -q "a nap's sleep ended early (status 143)" "$H/run.log" \
   && ok "and the line names the sleep's status" || bad "no early-end line names status 143"
 
 # 3. A TERM to run.sh stops everything it started, sleeps included.
-# Snapshot while both loops nap: the tick loop is briefly between naps each
-# minute, and a snapshot then would see one sleep.
-wait_until 10 both_asleep
+# Count the sleeps from ONE ps snapshot of run.sh's descendants, and retry that
+# snapshot until it shows both naps: the tick loop is briefly between naps each
+# minute, and reading the loops and then each pid a moment later could straddle
+# the boundary and see one sleep.
+SNAP=""   # "<sleeps> <descendant pids...>", from one snapshot
+snapshot_sleeps() {
+  SNAP="$(ps -axo pid=,ppid=,command= | awk -v root="$RUN_PID" '
+    { pid[NR] = $1; par[NR] = $2; isleep[NR] = ($3 == "sleep") }
+    END {
+      seen[root] = 1
+      do {
+        grew = 0
+        for (i = 1; i <= NR; i++)
+          if ((par[i] in seen) && !(pid[i] in seen)) {
+            seen[pid[i]] = 1; grew = 1; list = list " " pid[i]; if (isleep[i]) n++
+          }
+      } while (grew)
+      print n + 0 list
+    }')"
+}
+two_sleeps() { snapshot_sleeps; [ "${SNAP%% *}" -ge 2 ]; }
+wait_until 10 two_sleeps && ok "one snapshot shows both naps (tend, tick)" \
+  || bad "no snapshot showed two sleeps within 10 s: last was '$SNAP'"
 early_before="$(early_lines "$H")"
-SEEN="$(descendants "$RUN_PID" | tr '\n' ' ')"
-sleeps=0
-for p in $SEEN; do
-  [ "$(ps -o command= -p "$p" 2>/dev/null | awk '{ print $1 }')" = sleep ] && sleeps=$((sleeps + 1))
-done
-[ "$sleeps" -ge 2 ] && ok "two sleeps were running (tend, tick)" || bad "expected a tend and a tick sleep, saw $sleeps"
+SEEN="${SNAP#* }"
 kill "$RUN_PID" 2>/dev/null
 wait_until 5 gone "$RUN_PID" $SEEN \
   && ok "TERM to run.sh leaves no loop or sleep behind" \
