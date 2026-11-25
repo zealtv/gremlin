@@ -71,12 +71,14 @@ while IFS= read -r src; do
   # carry a dated source such as once/2026-12-27/; re-placing it would install
   # a one-shot that is already in the past.
   case "$rel" in */once/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/*|*/once/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].paused/*) continue ;; esac
-  # A relative once/ date (`once/+26w/`) is resolved now; `anydate` is the same
-  # path with the date as a glob, to recognise an expiry already in place under
-  # whatever date it carries (a human may have re-dated or paused it).
-  anydate=""
+  # A relative once/ date (`once/+26w/`) is resolved now; `anybase` and `anytail`
+  # are the path either side of the date, to recognise an expiry already in place
+  # under whatever date it carries (a human may have re-dated or paused it). Only
+  # the date is globbed, so a host path holding `[`, `*` or `?` matches itself.
+  anybase=""
   if [[ "$rel" =~ ^(.*/once/)\+([0-9]+)([wd])(/.*)$ ]]; then
-    anydate="$HOST_DIR/${BASH_REMATCH[1]}*${BASH_REMATCH[4]}"
+    anybase="$HOST_DIR/${BASH_REMATCH[1]}"
+    anytail="$(dirname "${BASH_REMATCH[4]}")"
     when="$(date_after "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")" || exit 1
     rel="${BASH_REMATCH[1]}$when${BASH_REMATCH[4]}"
   fi
@@ -97,10 +99,10 @@ while IFS= read -r src; do
   present=0
   if [ -e "$dst" ] || [ -e "${parent%.paused}" ] || [ -e "$parent.paused" ]; then
     present=1
-  elif [ -n "$anydate" ]; then
-    adir="$(dirname "$anydate")"
-    compgen -G "$adir" >/dev/null && present=1
-    compgen -G "$adir.paused" >/dev/null && present=1
+  elif [ -n "$anybase" ]; then
+    for adir in "$anybase"*"$anytail" "$anybase"*"$anytail.paused"; do
+      [ -e "$adir" ] && present=1
+    done
   fi
   if [ "$present" = 1 ]; then
     [ "$check_only" = 1 ] || echo "ok $rel already present"

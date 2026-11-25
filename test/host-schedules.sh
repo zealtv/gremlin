@@ -110,6 +110,14 @@ mv "$H/$SCHED/once/2099-01-01.paused/reflect-expire" "$H/$SCHED/once/2099-01-01.
 [ "$(expiries "$H")" = "2099-01-01.paused" ] && ok "a paused expiry job is not reinstalled beside itself" \
   || bad "a paused expiry job was reinstalled: $(expiries "$H" | tr '\n' ' ')"
 
+# 4b. A host path holding glob characters: a re-run a week later still finds the
+# expiry in place (the host path is matched literally, only the date is a glob).
+H="$(new_host "my [proj]")"
+FAKE_TODAY=2030-03-01 PATH="$SHIM:$PATH" "$H/.gremlin/bin/install-host-files.sh" "$H" >/dev/null 2>&1
+FAKE_TODAY=2030-03-08 PATH="$SHIM:$PATH" "$H/.gremlin/bin/install-host-files.sh" "$H" >/dev/null 2>&1
+[ "$(expiries "$H")" = "2030-08-30" ] && ok "a host path with [ ] keeps one expiry across a re-run" \
+  || bad "a host path with [ ] got: $(expiries "$H" | tr '\n' ' ')"
+
 # 6. The expiry still drops the reflect job; running the installer re-arms both.
 H="$(new_host expire)"
 "$H/.gremlin/bin/install-host-files.sh" "$H" >/dev/null 2>&1
