@@ -4,7 +4,7 @@
 #
 # Covers: a fresh host (AGENTS.md created, CLAUDE.md linked, both announced); a
 # host with a hand-written AGENTS.md (block added, preamble kept, announced);
-# an existing real CLAUDE.md (left alone, told about); a re-run (quiet, one ok
+# an existing real CLAUDE.md (left alone, told about once); a re-run (quiet, one ok
 # line); and no primitives (no AGENTS.md, no link, one line saying why).
 #
 # Usage: ./test/host-map.sh
@@ -69,6 +69,9 @@ out="$(doctor "$H")"
   && ok "real CLAUDE.md: left untouched" || bad "real CLAUDE.md: changed"
 has "$out" "CLAUDE.md is a real file" && ok "real CLAUDE.md: doctor mentions it" || bad "real CLAUDE.md: not mentioned: $out"
 has "$out" "linked CLAUDE" && bad "real CLAUDE.md: claimed a link" || ok "real CLAUDE.md: no link claimed"
+out="$(doctor "$H")"
+has "$out" "CLAUDE.md is a real file" && bad "real CLAUDE.md re-run: said it again: $out" || ok "real CLAUDE.md re-run: the note is not repeated"
+has "$out" "ok PRIMITIVES.md + AGENTS.md (regenerated)" && ok "real CLAUDE.md re-run: one ok line" || bad "real CLAUDE.md re-run: no ok line: $out"
 
 # 5. No primitives: no AGENTS.md, no link, one line saying why.
 H="$(new_host bare)"
