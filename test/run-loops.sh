@@ -38,9 +38,16 @@ descendants() {
     }'
 }
 
+# cleanup: stop what a failing case may have left. Besides the pids a case
+# noted, every process whose command line names one of this suite's hosts (a
+# runner a missed `gremlin sleep` left, or one a second `wake` started) gets a
+# TERM, so a runner's trap can take its sleeps with it, then a KILL.
 cleanup() {
-  local p
-  for p in $RUN_PID $SEEN; do kill -9 "$p" 2>/dev/null; done
+  local p left
+  left="$(ps -A -o pid= -o args= 2>/dev/null | HOSTS="$TMP/host-" awk '{ pid = $1; sub(/^[ \t]*[0-9]+[ \t]+/, ""); if (index($0, ENVIRON["HOSTS"])) print pid }')"
+  for p in $left; do kill "$p" 2>/dev/null; done
+  sleep 0.3
+  for p in $RUN_PID $SEEN $left; do kill -9 "$p" 2>/dev/null; done
   rm -rf "${TMP:?}"
 }
 trap cleanup EXIT
