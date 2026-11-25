@@ -281,6 +281,20 @@ tick="$(ps -axo pid=,ppid= | awk -v p="$RUN_PID" -v t="$(tend_loop)" '$2 == p &&
   && ok "awake: status names the supervisor, the tend loop and the tick loop by pid" \
   || bad "awake status did not name the three (run $RUN_PID, tend $(tend_loop), tick $tick): $out"
 
+# Asked from inside the gremlin (here a nest item the tend loop runs, so a
+# descendant of a loop), status still says awake: it must not leave out the loop
+# that runs the caller, which macOS pgrep does.
+d="$TMP/stage-inside"
+mkdir -p "$d"
+printf '#!/bin/sh\n"%s/.gremlin/gremlin" status > "%s/inside.txt"\n' "$H" "$H" > "$d/run.sh"
+chmod +x "$d/run.sh"
+mv "$d" "$H/.nest/in/inside"
+inside_done() { [ -s "$H/inside.txt" ]; }
+wait_until 20 inside_done
+grep -q 'is awake' "$H/inside.txt" 2>/dev/null \
+  && ok "status asked from a nest item inside the gremlin says awake" \
+  || bad "status from inside the gremlin said: $(cat "$H/inside.txt" 2>/dev/null || echo nothing)"
+
 # The tend loop dies, the supervisor and the tick loop live on.
 loop="$(tend_loop)"
 kill "$loop" 2>/dev/null
