@@ -57,6 +57,24 @@ cp -R "$HOST" "$TMP/twin"
 [ "$("$NAME")" = "Roo The Second" ] && ok "rolling the twin leaves the original alone" \
   || bad "the twin renamed the original"
 
+# /name --help (and -h) prints the usage comment, and renames nothing. The text
+# is cut from the script's own header: a stray "# " left on each line (BSD sed
+# has no \? in a basic regex) or one line too many (the `set` line) shows here.
+for flag in --help -h; do
+  help="$("$GREMLIN/commands/name.sh" "$flag" 2>&1)"
+  rc=$?
+  if [ "$rc" = 0 ] && printf '%s\n' "$help" | grep -q '^usage:' \
+     && printf '%s\n' "$help" | grep -q '/name --roll' \
+     && ! printf '%s\n' "$help" | grep -q '^#' \
+     && ! printf '%s\n' "$help" | grep -q 'set -'; then
+    ok "/name $flag prints the usage text, without comment marks or code"
+  else
+    bad "/name $flag: exit $rc, output: $help"
+  fi
+  [ "$("$NAME")" = "Roo The Second" ] && [ "$("$NAME" source)" = "custom" ] \
+    && ok "/name $flag renames nothing" || bad "/name $flag changed the name"
+done
+
 # doctor writes identity.md from the name and links it into the broadcast
 # surface, so the gremlin can say what it is called.
 "$GREMLIN/bin/doctor.sh" >/dev/null 2>&1
