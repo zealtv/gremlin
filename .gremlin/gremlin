@@ -45,7 +45,7 @@ renamed() {
 }
 
 runner_pids() {
-  pgrep -f "$RUNNER" 2>/dev/null || true
+  "$GREMLIN_DIR/bin/runner-pids.sh" 2>/dev/null || true
 }
 
 # Who is this? Falls back to a bare noun for a gremlin that predates names or

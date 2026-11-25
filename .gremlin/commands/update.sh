@@ -193,7 +193,7 @@ if [ -x "$GREMLIN_DIR/bin/index-skills.sh" ]; then
   "$GREMLIN_DIR/bin/index-skills.sh" >/dev/null || echo "warning: skills index refresh failed" >&2
 fi
 
-if [ "$runner_changed" = "1" ] && pgrep -f "$GREMLIN_DIR/bin/run.sh" >/dev/null 2>&1; then
+if [ "$runner_changed" = "1" ] && [ -n "$("$GREMLIN_DIR/bin/runner-pids.sh" 2>/dev/null || true)" ]; then
   echo "↻ bin/run.sh changed: the running loops keep the old one until ./.gremlin/gremlin restart"
 fi
 

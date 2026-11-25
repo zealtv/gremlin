@@ -27,7 +27,8 @@ make_tarball() {  # make_tarball <name> — from $TMP/canon
   tar -czf "$TMP/$1.tar.gz" -C "$TMP" canon
 }
 
-HOST="$TMP/host"
+# A path with regex characters, as the launcher's pgrep -f has to cope with.
+HOST="$TMP/my (host) v2+c.d"
 mkdir -p "$HOST" "$TMP/canon"
 cp -R "$ROOT/.gremlin" "$HOST/.gremlin"
 cp -R "$ROOT/.gremlin" "$TMP/canon/.gremlin"

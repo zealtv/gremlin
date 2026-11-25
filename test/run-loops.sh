@@ -218,5 +218,31 @@ wait_until 5 gone $SEEN \
   || bad "left running after gremlin sleep: $(for p in $SEEN; do alive "$p" && printf '%s ' "$p"; done)"
 RUN_PID=""
 
+# 5. A host path with regex characters is still found: status says awake, a second
+# wake starts no second runner, and sleep stops it (the launcher looks the runner
+# up by its path, which pgrep -f reads as a regex).
+# runner_procs <host>: the pids of that host's run.sh (the runner and its two loops).
+runner_procs() {
+  ps -axo pid=,command= | awk -v s="$1/.gremlin/bin/run.sh" \
+    'index($0, s) && $2 ~ /(^|\/)bash$/ { print $1 }'
+}
+H="$(new_host 'my (host) v2+c.d')"
+three_procs() { [ "$(runner_procs "$H" | wc -l | tr -d ' ')" -ge 3 ]; }
+"$H/.gremlin/gremlin" wake >/dev/null 2>&1
+wait_until 10 three_procs
+SEEN="$(runner_procs "$H" | tr '\n' ' ')"
+three_procs \
+  && ok "gremlin wake started a runner under a path with ( ) + ." || bad "wake did not start a runner: ${SEEN:-none}"
+"$H/.gremlin/gremlin" status 2>&1 | grep -q 'is awake' \
+  && ok "status says awake for that path" || bad "status did not say awake"
+before="$(runner_procs "$H" | wc -l | tr -d ' ')"
+"$H/.gremlin/gremlin" wake >/dev/null 2>&1 && bad "a second wake succeeded" || ok "a second wake is refused"
+[ "$(runner_procs "$H" | wc -l | tr -d ' ')" = "$before" ] \
+  && ok "and starts no second runner" || bad "a second wake started more processes"
+"$H/.gremlin/gremlin" sleep >/dev/null 2>&1
+wait_until 5 gone $SEEN \
+  && ok "gremlin sleep stops the runner found by that path" \
+  || bad "left running after gremlin sleep: $(for p in $SEEN; do alive "$p" && printf '%s ' "$p"; done)"
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
