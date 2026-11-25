@@ -99,7 +99,7 @@ More detail: `bridges/telegram/README.md`.
 ./.gremlin/gremlin tend      # work the nest once, now
 ./.gremlin/gremlin prompt "…" # submit one turn and wait for its response
 ./.gremlin/gremlin prompt --read-only "…"
-./.gremlin/gremlin status    # awake or asleep?
+./.gremlin/gremlin status    # awake, asleep, or what is missing
 ```
 
 `start`, `stop`, `say`, `ask`, and `tell` were replaced by `wake`, `sleep`,

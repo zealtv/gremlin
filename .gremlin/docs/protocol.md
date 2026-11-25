@@ -95,7 +95,7 @@ There is no fallback to a private copy.
 
 ```
 wake     start the loops                    sleep    stop them
-tend     work the nest once, now            status   awake or asleep?
+tend     work the nest once, now            status   awake, asleep, or what is missing
 prompt   submit one turn and wait for its response
 ```
 
