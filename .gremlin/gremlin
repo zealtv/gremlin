@@ -109,10 +109,10 @@ runner_parts() {
       c = $0; sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]+/, "", c); cmd[pid] = c
     }
     END {
-      for (i = 1; i <= np; i++) {            # a runner process under a runner process is a loop
+      for (i = 1; i <= np; i++) {            # a fork of a runner process (same command line) is a loop; a wrapper is not
         p = order[i]
         if (!(p in inrun)) continue
-        if (ppid[p] in inrun) kids[ppid[p]]++; else roots[++nr] = p
+        if ((ppid[p] in inrun) && cmd[ppid[p]] == cmd[p]) kids[ppid[p]]++; else roots[++nr] = p
       }
       sup = ""
       for (i = 1; i <= nr; i++)
@@ -123,7 +123,7 @@ runner_parts() {
       nl = 0
       for (i = 1; i <= np; i++) {
         p = order[i]
-        if ((p in inrun) && ppid[p] == sup) loops[++nl] = p
+        if ((p in inrun) && ppid[p] == sup && cmd[p] == cmd[sup]) loops[++nl] = p
       }
       for (l = 1; l <= nl; l++) {
         kind[l] = ""

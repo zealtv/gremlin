@@ -326,5 +326,22 @@ wait_until 5 gone $SEEN
 "$G" status 2>&1 | grep -q 'is asleep' && ok "after sleep status says asleep" || bad "not asleep after sleep: $("$G" status 2>&1)"
 RUN_PID=""
 
+# 7. A runner started under a wrapper that stays its parent (sh -c in a cron line
+# or a unit, sudo, timeout) still reads awake: the wrapper's command line holds
+# the runner's path too, but it is not a fork of the runner.
+H="$(new_host wrapped)"
+G="$H/.gremlin/gremlin"
+sh -c "cd '$H' && '$H/.gremlin/bin/run.sh' >> '$H/run.log' 2>&1; true" &
+WRAP_PID=$!
+SEEN="$WRAP_PID"
+wrapped_awake() { out="$("$G" status 2>&1)"; case "$out" in *'is awake'*) return 0 ;; esac; return 1; }
+wait_until 10 wrapped_awake
+{ printf '%s\n' "$out" | grep -q 'is awake' && ! printf '%s\n' "$out" | grep -q "supervisor  $WRAP_PID"; } \
+  && ok "a runner under an sh -c wrapper reads awake, and the wrapper is not the supervisor" \
+  || bad "status for a wrapped runner: $out"
+"$G" sleep >/dev/null 2>&1
+SEEN="$SEEN $(runner_procs "$H" | tr '\n' ' ')"
+wait_until 5 gone $SEEN || bad "left running after sleep with a wrapped runner: $SEEN"
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
