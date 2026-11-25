@@ -45,6 +45,12 @@ renamed() {
 }
 
 runner_pids() {
+  # A helper that isn't there must not read as "no runner" (asleep, and a second
+  # wake): say so and fail.
+  [ -x "$GREMLIN_DIR/bin/runner-pids.sh" ] || {
+    echo "missing or not executable: $GREMLIN_DIR/bin/runner-pids.sh (run /update)" >&2
+    exit 1
+  }
   "$GREMLIN_DIR/bin/runner-pids.sh" 2>/dev/null || true
 }
 
@@ -155,6 +161,7 @@ part_pid() { printf '%s\n' "$2" | awk -v k="$1" '$1 == k { print $2; exit }'; }
 cmd_status() {
   local parts tries=0 sup tend tick stray missing="" seen="" name
   name="$(gremlin_name)"
+  runner_pids >/dev/null   # fails, saying why, if the helper is missing
   while :; do
     if ! parts="$(runner_parts 2>/dev/null)"; then
       echo "gremlin: ps failed, so I can't say whether $name is awake (status reads the process table)" >&2

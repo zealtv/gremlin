@@ -353,5 +353,19 @@ out="$(PATH="$TMP/psfail:$PATH" "$G" status 2>&1)"; rc=$?
   && ok "with ps failing, status says so in one line and exits non-zero" \
   || bad "status with a failing ps (rc $rc): $out"
 
+# 9. A missing or non-executable bin/runner-pids.sh is an error, not "asleep":
+# status, wake and sleep say so and fail, and wake starts nothing.
+H="$(new_host nohelper)"
+G="$H/.gremlin/gremlin"
+chmod -x "$H/.gremlin/bin/runner-pids.sh"
+for verb in status wake sleep; do
+  out="$("$G" $verb 2>&1)"; rc=$?
+  { [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'runner-pids.sh'; } \
+    && ok "without the helper, $verb says so and fails" \
+    || bad "without the helper, $verb (rc $rc): $out"
+done
+[ -z "$(runner_procs "$H")" ] && ok "and wake started no runner" \
+  || { bad "wake started a runner without the helper"; SEEN="$(runner_procs "$H" | tr '\n' ' ')"; }
+
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
