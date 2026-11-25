@@ -27,8 +27,15 @@ GREMLIN_DIR="$HOST_DIR/.gremlin"
 # /update cannot reach at all) — never this materialised copy, which is
 # discarded after the tend. The host may have moved the job to another time
 # slot, so find it by name, as `groundhog drop` does; the shipped slot is only
-# the fallback (a run by hand, with no scheduled job to find).
-JOB="$(find "$HOST_DIR/.groundhog/schedule" -type d -name reflect 2>/dev/null | head -n 1 || true)"
+# the fallback (a run by hand, with no scheduled job to find). The first match
+# is used; a second one is named on stderr (stdout stays empty on a quiet tick).
+JOBS="$(find "$HOST_DIR/.groundhog/schedule" -type d -name reflect 2>/dev/null || true)"
+JOB="${JOBS%%$'\n'*}"
+case "$JOBS" in
+  *$'\n'*)
+    others="${JOBS#*$'\n'}"
+    echo "reflect: more than one reflect folder under .groundhog/schedule; using $JOB, not $(printf '%s' "$others" | tr '\n' ' ')" >&2 ;;
+esac
 [ -n "$JOB" ] || JOB="$HOST_DIR/.groundhog/schedule/weekly/sun/22-00/reflect"
 STATE="$JOB/cursor"
 THRESHOLD="${REFLECT_THRESHOLD:-4000}"   # bytes of new transcript before reflecting is worth it

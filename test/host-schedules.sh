@@ -195,6 +195,27 @@ reflect_gate() {  # reflect_gate <bytes per archive file|none> — prints fired,
   && ok "reflect: a missing transcript-archive/ is a quiet tick, not a failure" \
   || bad "reflect: a missing transcript-archive/ ended the job"
 
+# 9. More than one reflect folder: the first is used, and one line on stderr names
+# them all; with one folder there is nothing extra. stdout stays empty either way.
+dup_gate() {  # dup_gate <number of reflect folders> — prints the job's stderr
+  local h="$TMP/dup" n="$1" i
+  rm -rf "${h:?}"
+  mkdir -p "$h/.nest/in/reflect" "$h/.gremlin/tools"
+  : > "$h/.gremlin/transcript.md"
+  for i in $(seq 1 "$n"); do mkdir -p "$h/.groundhog/schedule/weekly/d$i/reflect"; done
+  cp "$ROOT/.gremlin/host/$JOB/run.sh" "$h/.nest/in/reflect/run.sh"
+  bash "$h/.nest/in/reflect/run.sh" 2>&1 >"$h/stdout"
+  [ ! -s "$h/stdout" ] || echo "STDOUT NOT EMPTY"
+}
+err="$(dup_gate 2)"
+[ "$(printf '%s\n' "$err" | wc -l | tr -d ' ')" = 1 ] \
+  && printf '%s' "$err" | grep -qF "weekly/d1/reflect" && printf '%s' "$err" | grep -qF "weekly/d2/reflect" \
+  && ok "reflect: two reflect folders get one stderr line naming both" \
+  || bad "reflect: two folders, stderr was: ${err:-nothing}"
+err="$(dup_gate 1)"
+[ -z "$err" ] && ok "reflect: one reflect folder says nothing extra" \
+  || bad "reflect: one folder, stderr was: $err"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
