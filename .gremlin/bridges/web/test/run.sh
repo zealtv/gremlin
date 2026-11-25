@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# run.sh - the web bridge invariant + M0 acceptance suite.
+# run.sh - the web bridge invariant + acceptance suite.
 #
 # Two halves, both designed so an *elegant betrayal* fails here rather than
 # slipping through review:
 #   1. Static invariants  — grep the source for forbidden write/model paths, and
 #      prove the greps have teeth by catching a deliberately doctored copy.
-#   2. M0 acceptance      — boot the daemon against a throwaway fixture on a free
+#   2. Acceptance         — boot the daemon against a throwaway fixture on a free
 #      port and exercise the real HTTP surface (no real gremlin is touched).
 #
 # Usage: ./.gremlin/bridges/web/test/run.sh
@@ -88,7 +88,7 @@ fi
 rm -f "$betrayal"
 
 # ============================================================================
-echo "== M0 acceptance (live daemon, fixture) =="
+echo "== acceptance: the HTTP surface (live daemon, fixture) =="
 
 FIXTURE="$(mktemp -d)"
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
@@ -174,15 +174,15 @@ else
   bad "<silent> renders nothing, error renders loudly (invariant 12)"
 fi
 
-# M2: the bridge serves embed markup VERBATIM (rendering is client-side; the
+# Embeds: the bridge serves embed markup VERBATIM (rendering is client-side; the
 # transcript markup stays the source of truth — never rewritten).
 if printf '%s' "$poll_json" | grep -q '🖼️ \[the chart\](https://example.test/chart.png)'; then
-  ok "embed markup served verbatim, not rewritten (M2)"
+  ok "embed markup served verbatim, not rewritten (embeds)"
 else
-  bad "embed markup served verbatim, not rewritten (M2)"
+  bad "embed markup served verbatim, not rewritten (embeds)"
 fi
 
-# M2: the renderer asset is served.
+# The renderer asset is served.
 if curl -fsS -o /dev/null -w '%{http_code}' "$URL/render.js" | grep -q 200; then
   ok "GET /render.js → 200"
 else
@@ -296,8 +296,8 @@ fi
 rm -rf "$ROOTFIX"
 
 # ============================================================================
-echo "== M1 send (the chat round-trip) =="
-if have_primitive nestlings "M1 send"; then
+echo "== send (the chat round-trip) =="
+if have_primitive nestlings "send"; then
 
 # A full current-layout fixture: this .gremlin plus a sibling Nest, so the real
 # tender can run with the deterministic `echo` preset, touching no real state.
@@ -325,9 +325,9 @@ export WEB_PORT="$M1PORT"
 web_items() { find "$M1FIX/.nest/in" -maxdepth 1 -name '*-web-*' 2>/dev/null | wc -l | tr -d ' '; }
 
 if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M1URL/"; then
-  ok "M1 daemon boots against fixture"
+  ok "send: daemon boots against fixture"
 else
-  bad "M1 daemon boots against fixture"
+  bad "send: daemon boots against fixture"
   cat "$BRIDGE_DIR/web.log" 2>/dev/null | sed 's/^/  /'
 fi
 
@@ -458,7 +458,7 @@ fi
 
 # Activity indicator (stitch 29) data contract: a claimed .nest/in item surfaces
 # as in-progress>0 in /api/status (the second honest signal; the first — a live
-# .tending.pid ⇒ "thinking" — is covered in the M3 status tests).
+# .tending.pid ⇒ "thinking" — is covered in the inspector status tests).
 touch "$M1FIX/.nest/in/zzz-claim.tending"
 if curl -fsS "$M1URL/api/status" | python3 -c 'import sys,json
 i=[x for x in json.load(sys.stdin)["items"] if x["name"]=="in-progress"][0]
@@ -484,8 +484,8 @@ fi
 fi
 
 # ============================================================================
-echo "== M8 attachments (multipart → item dir; /media jail) =="
-if have_primitive nestlings "M8 attachments"; then
+echo "== attachments (multipart → item dir; /media jail) =="
+if have_primitive nestlings "attachments"; then
 
 M8FIX="$(mktemp -d)"
 M8H="$M8FIX/host"
@@ -530,9 +530,9 @@ m8_cache_entries() {
 }
 
 if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M8URL/"; then
-  ok "M8 daemon boots against fixture"
+  ok "attachments: daemon boots against fixture"
 else
-  bad "M8 daemon boots against fixture"
+  bad "attachments: daemon boots against fixture"
   cat "$BRIDGE_DIR/web.log" 2>/dev/null | sed 's/^/  /'
 fi
 
@@ -662,7 +662,7 @@ unset WEB_MAX_UPLOAD
 fi
 
 # ============================================================================
-echo "== M2 renderer (render.js, pure) =="
+echo "== renderer (render.js, pure) =="
 
 if command -v node >/dev/null 2>&1; then
   if node "$BRIDGE_DIR/test/render.test.js"; then
@@ -681,7 +681,7 @@ else
 fi
 
 # ============================================================================
-echo "== M3 inspector: context / status =="
+echo "== inspector: context / status =="
 
 M3FIX="$(mktemp -d)"
 mkdir -p "$M3FIX/.gremlin/context/system" "$M3FIX/.gremlin/skills"
@@ -700,9 +700,9 @@ export WEB_PORT="$M3PORT"
 m3cleanup() { "$WEB_SH" stop >/dev/null 2>&1 || true; rm -rf "$M3FIX"; }
 
 if "$WEB_SH" start >/dev/null 2>&1 && poll_until 5 curl -fsS -o /dev/null "$M3URL/"; then
-  ok "M3 daemon boots against fixture"
+  ok "inspector: daemon boots against fixture"
 else
-  bad "M3 daemon boots against fixture"
+  bad "inspector: daemon boots against fixture"
 fi
 
 # Context envelope carries path + source, and a context file renders.
@@ -762,7 +762,7 @@ got_hostname="$(printf '%s' "$identity_json" | python3 -c 'import sys,json;print
 m3cleanup
 
 # ============================================================================
-echo "== M5 inspector: glean (index-first) =="
+echo "== inspector: glean (index-first) =="
 
 GFIX="$(mktemp -d)"
 GG="$GFIX/.gremlin"
@@ -855,8 +855,8 @@ done
 gcleanup
 
 # ============================================================================
-echo "== M4 inspector: groundhog (shell out to list/due) =="
-if have_primitive groundhog "M4 groundhog inspector"; then
+echo "== inspector: groundhog (shell out to list/due) =="
+if have_primitive groundhog "groundhog inspector"; then
 
 HFIX="$(mktemp -d)"
 HG="$HFIX/.gremlin"
@@ -918,8 +918,8 @@ hcleanup
 fi
 
 # ============================================================================
-echo "== M6 inspector: loom (reuse loom.sh, preserve tree) =="
-if have_primitive loom "M6 loom inspector"; then
+echo "== inspector: loom (reuse loom.sh, preserve tree) =="
+if have_primitive loom "loom inspector"; then
 
 LMFIX="$(mktemp -d)"
 LMG="$LMFIX/.gremlin"
@@ -974,7 +974,7 @@ lmcleanup
 fi
 
 # ============================================================================
-echo "== M7 inspector: lore (durable, dated; content download) =="
+echo "== inspector: lore (durable, dated; content download) =="
 
 LRFIX="$(mktemp -d)"
 LRH="$LRFIX/host"; LRG="$LRH/.gremlin"
@@ -1041,7 +1041,7 @@ fi
 lrcleanup
 
 # ============================================================================
-echo "== M-: transcript browser (live + archive, read-only) =="
+echo "== transcript browser (live + archive, read-only) =="
 
 TBFIX="$(mktemp -d)"
 TBG="$TBFIX/.gremlin"
