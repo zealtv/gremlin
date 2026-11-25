@@ -222,50 +222,49 @@ pass_of "$H"; rc=$?
 grep -q 'moot: broken' "$TMP/err" && [ ! -s "$TMP/out" ] \
   && ok "stderr is kept and stdout dropped" || bad "stdout [$(cat "$TMP/out")], stderr [$(cat "$TMP/err")]"
 
-# 7. The priming the skill documents, for a room just joined, moves that room's
-# cursor and no other: a mention waiting in a room already heard still arrives.
-# The command is read from skills/moot.md and run as written, <room> and
-# <path-to-room> filled in.
-prime_cmd="$(grep '/dev/null' "$ROOT/.gremlin/skills/moot.md" | grep 'read --new' | head -n 1 \
+# 7. Joining a room the way the skill says needs no priming: a mention waiting in
+# a room already heard still arrives, and the new room's old backlog does not.
+# The command is read from skills/moot.md and run as written, <path-to-room>
+# filled in.
+join_cmd="$(grep 'moot.sh join' "$ROOT/.gremlin/skills/moot.md" | head -n 1 \
   | sed -E 's/^[^`]*`([^`]*)`.*$/\1/')"
-# prime <host> <room>: join the keeper's room and prime it, as the skill says.
-prime() {
+# join_room <host> <room>: join the keeper's room as the skill says.
+join_room() {
   local cmd
-  cmd="$(printf '%s' "$prime_cmd" | sed -e "s|<path-to-room>|$KEEPER/.moot/rooms/$2|g" -e "s|<room>|$2|g")"
-  # A command that does not join does so first, as a step of its own.
-  case "$cmd" in *'moot.sh join'*) ;; *) ( cd "$1" && .moot/moot.sh join "$KEEPER/.moot/rooms/$2" ) >/dev/null 2>&1 ;; esac
+  cmd="$(printf '%s' "$join_cmd" | sed "s|<path-to-room>|$KEEPER/.moot/rooms/$2|g")"
   ( cd "$1" && eval "$cmd" ) >/dev/null 2>&1
 }
-[ -n "$prime_cmd" ] && ok "skills/moot.md documents a priming command" || bad "skills/moot.md documents no priming command"
+[ -n "$join_cmd" ] && ok "skills/moot.md documents a join command" || bad "skills/moot.md documents no join command"
+grep -qi 'prime' "$ROOT/.gremlin/skills/moot.md" "$ROOT/README.md" \
+  && bad "the skill or README still tells the gremlin to prime" || ok "neither the skill nor the README asks for priming"
 
 "$KEEPER/.moot/moot.sh" create side >/dev/null 2>&1
-H="$(new_host primed)"
+H="$(new_host joined)"
 add_moot "$H"
 name="$("$H/.gremlin/bin/name.sh")"
-prime "$H" board
+join_room "$H" board
 "$KEEPER/.moot/moot.sh" post --as alice --room side -m "@$name an old request, before you joined" >/dev/null 2>&1
 sleep 1
 say "@$name a live request, waiting for the next pass"
 sleep 1
-prime "$H" side
-[ -e "$H/.moot/rooms/side" ] && ok "the documented priming joins the second room" || bad "the documented priming did not join the room"
+join_room "$H" side
+[ -e "$H/.moot/rooms/side" ] && ok "the documented join links the second room" || bad "the documented join did not link the room"
 pass_of "$H"
 delivered "$H" | grep -q '^moot-board-' \
-  && ok "a mention waiting in the first room survives priming the second" || bad "the mention waiting in the first room was lost ($(delivered "$H" | tr '\n' ' '))"
+  && ok "a mention waiting in the first room survives joining the second" || bad "the mention waiting in the first room was lost ($(delivered "$H" | tr '\n' ' '))"
 delivered "$H" | grep -q '^moot-side-' \
-  && bad "the second room's backlog was delivered after priming" || ok "and the second room's backlog is not delivered"
+  && bad "the second room's backlog was delivered after joining" || ok "and the second room's backlog is not delivered"
 
 # 8. A board name, @all, a rename and a DM.
 grep -qF '`@MrFox`' "$ROOT/.gremlin/skills/moot.md" && ok "the skill gives the board-name rule" \
   || bad "skills/moot.md does not say how a name looks on the board"
-grep -qi 'renamed' "$ROOT/.gremlin/skills/moot.md" && grep -qi 'renam' "$ROOT/README.md" \
-  && ok "the skill and README say to prime after a rename" || bad "no word on priming after a rename"
+grep -qi 'renamed' "$ROOT/.gremlin/skills/moot.md" && grep -qi 'renamed' "$ROOT/README.md" \
+  && ok "the skill and README say old mentions don't come again after a rename" || bad "no word on a rename"
 clear_delivered() { rm -f "$1"/.nest/in/moot-*; }
 H="$(new_host renamed)"
 add_moot "$H"
-prime "$H" board
+join_room "$H" board
 "$H/.gremlin/bin/name.sh" set "Mr Fox" >/dev/null
-prime "$H" board
 say "@all the build is green"
 sleep 1
 pass_of "$H"
@@ -281,14 +280,14 @@ clear_delivered "$H"
 "$H/.gremlin/bin/name.sh" set "Lady Grey" >/dev/null
 sleep 1
 pass_of "$H"
-[ "$(count_delivered "$H")" -ge 1 ] && ok "unprimed after a rename, old mentions arrive again (why the skill says prime)" \
-  || bad "a rename replayed nothing: the skill's warning may be stale"
-clear_delivered "$H"
-"$H/.gremlin/bin/name.sh" set "Old Moon" >/dev/null
-prime "$H" board
+[ "$(count_delivered "$H")" -eq 0 ] && ok "after a rename, nothing old arrives" \
+  || bad "a rename replayed $(count_delivered "$H") old item(s)"
+say "@LadyGrey a request under the new name"
+sleep 1
 pass_of "$H"
-[ "$(count_delivered "$H")" -eq 0 ] && ok "primed after a rename, nothing old arrives" \
-  || bad "primed after a rename, $(count_delivered "$H") item(s) still arrived"
+[ "$(count_delivered "$H")" -eq 1 ] && ok "and a post made after the rename still arrives" \
+  || bad "a post under the new name: $(count_delivered "$H") item(s)"
+clear_delivered "$H"
 if "$KEEPER/.moot/moot.sh" help 2>&1 | grep -q 'moot.sh dm'; then
   dm="$("$KEEPER/.moot/moot.sh" dm "$H" 2>/dev/null | sed -n 's/.*rooms\/\(dm-[^ ]*\).*/\1/p' | head -n 1)"
   if [ -n "$dm" ]; then
